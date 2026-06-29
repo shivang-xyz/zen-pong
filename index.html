@@ -302,9 +302,114 @@ body{display:flex;align-items:center;justify-content:center;user-select:none}
   cursor:pointer;transition:opacity .2s;
   box-shadow:0 4px 24px rgba(0,0,0,0.16),inset 0 0 5px rgba(0,0,0,0.32)}
 .rbtn:hover{opacity:0.85}
+
+/* ── MOBILE OVERLAY ──────────────────────────────── */
+#mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: transparent;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+
+#mobile-card {
+  position: relative;
+  width: 326px;
+  background: #FFF5E5;
+  border-radius: 48px;
+  padding: 40px 32px 40px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  pointer-events: all;
+}
+
+#mobile-emoji {
+  font-size: 38px;
+  line-height: 1.2;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+#mobile-headline {
+  font-family: 'Basier Circle', sans-serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 18px;
+  line-height: 1.4;
+  text-align: center;
+  letter-spacing: 0.1em;
+  color: #383838;
+  margin-bottom: 24px;
+}
+
+#mobile-divider {
+  width: 100%;
+  height: 1px;
+  background: #C5C5C5;
+  margin-bottom: 24px;
+}
+
+#mobile-body {
+  font-family: 'Basier Circle', sans-serif;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.6;
+  text-align: center;
+  letter-spacing: 0.04em;
+  color: #464646;
+  margin-bottom: 40px;
+}
+
+#mobile-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* show overlay on narrow viewports */
+@media (max-width: 768px) {
+  #mobile-overlay {
+    display: flex;
+  }
+}
 </style>
 </head>
 <body>
+
+<!-- MOBILE OVERLAY -->
+<div id="mobile-overlay">
+  <div id="mobile-card">
+    <div id="mobile-emoji">🚧</div>
+    <div id="mobile-headline">Mobile Experience is underway</div>
+    <div id="mobile-divider"></div>
+    <div id="mobile-body">
+      Greetings Seeker,<br>
+      We are still building out an experience that is worth your while on mobile.<br><br>
+      Until then — please switch to a desktop or iPad to enjoy!<br><br>
+      see you soon
+    </div>
+    <div id="mobile-logo">
+      <svg width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#1E1914"/>
+        <path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#1E1914"/>
+        <path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#1E1914"/>
+        <path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#1E1914"/>
+        <path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#1E1914"/>
+        <path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#1E1914"/>
+        <path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#1E1914"/>
+        <rect width="2" height="27" rx="1" fill="#1E1914"/>
+        <rect x="138" width="2" height="27" rx="1" fill="#1E1914"/>
+        <circle cx="60" cy="14" r="3" fill="#1E1914"/>
+      </svg>
+    </div>
+  </div>
+</div>
 
 <!-- CUSTOM CURSOR -->
 <div id="cursor"></div>
@@ -1204,9 +1309,26 @@ document.getElementById('btn-save').addEventListener('click',()=>{
 document.getElementById('btn-again').addEventListener('click',()=>{showIdle()});
 
 /* ── VIEWPORT SCALING ────────────────────────────── */
-function resize(){const vw=window.innerWidth,vh=window.innerHeight;
-  const s=Math.min(vw/1080,vh/960,1);gc.style.transform='scale('+s+')'}
+function resize() {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let s;
+  if (vw <= 768) {
+    // on mobile: fill the screen so doodle covers full viewport behind overlay
+    s = Math.max(vw / 1000, vh / 630);
+  } else {
+    s = Math.min(vw / 1080, vh / 960, 1);
+  }
+  gc.style.transform = 'scale(' + s + ')';
+}
 window.addEventListener('resize',resize);resize();
+
+/* ── MOBILE OVERLAY DETECTION ────────────────────── */
+function checkMobile() {
+  const isMobile = window.innerWidth <= 768;
+  document.getElementById('mobile-overlay').style.display = isMobile ? 'flex' : 'none';
+}
+window.addEventListener('resize', checkMobile);
+checkMobile();
 
 /* ── BOOT ────────────────────────────────────────── */
 updDots();showIdle();loop();

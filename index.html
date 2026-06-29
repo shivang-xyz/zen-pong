@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zen Pong</title>
+<style>
+@font-face{
+  font-family:'Basier Circle';
+  src:url('fonts/BasierCircle-Regular.woff2') format('woff2');
+  font-weight:400;font-style:normal;font-display:swap}
+@font-face{
+  font-family:'Basier Circle';
+  src:url('fonts/BasierCircle-RegularItalic.woff2') format('woff2');
+  font-weight:400;font-style:italic;font-display:swap}
+@font-face{
+  font-family:'Basier Circle';
+  src:url('fonts/BasierCircle-Medium.woff2') format('woff2');
+  font-weight:500;font-style:normal;font-display:swap}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+*{font-family:'Basier Circle',sans-serif}
+html,body{width:100%;height:100%;overflow:hidden;background:#383838;cursor:none}
+body{display:flex;align-items:center;justify-content:center;user-select:none}
+
+/* ── custom cursor ──────────────────────────────── */
+#cursor{position:fixed;pointer-events:none;z-index:9999;
+  width:24px;height:24px;border:1px solid rgba(200,190,170,0.5);
+  border-radius:50%;transform:translate(-50%,-50%)}
+
+/* ── viewport scaling container ─────────────────── */
+#gc{display:flex;flex-direction:column;align-items:center;
+  transform-origin:center center;will-change:transform}
+
+/* ── state visibility ────────────────────────────── */
+[data-state="idle"] .vis-play,[data-state="idle"] .vis-end{display:none!important}
+[data-state="playing"] .vis-idle,[data-state="playing"] .vis-end{display:none!important}
+[data-state="results"] .vis-idle,[data-state="results"] .vis-play{display:none!important}
+
+/* ── title above canvas — always visible ─────────── */
+#title-above{
+  display:flex;align-items:center;justify-content:center;
+  gap:0;padding:0 0 18px 0;height:45px;width:1000px}
+
+/* tagline + title state visibility */
+[data-state="idle"] #title-above{display:none!important}
+[data-state="idle"] #tagline{display:block!important}
+[data-state="playing"] #title-above{display:flex!important}
+[data-state="playing"] #tagline{display:none!important}
+[data-state="results"] #title-above{display:flex!important}
+[data-state="results"] #tagline{display:none!important}
+#tagline{
+  font-family:'Basier Circle',sans-serif;
+  font-style:italic;
+  font-size:13px;
+  font-weight:400;
+  color:#FFF5E5;
+  letter-spacing:1px;
+  text-align:center;
+  padding-bottom:14px;
+  display:none}
+
+/* ── canvas frame ────────────────────────────────── */
+/* #wrap contains the border-ring div + canvas + paddle divs */
+#wrap{position:relative;width:1000px;height:630px}
+
+/* The visible grey border ring — a div that wraps the canvas */
+#frame{
+  position:absolute;inset:0;
+  border-radius:48px;
+  border:8px solid #888888;
+  box-shadow:0 4px 24px rgba(0,0,0,0.28);
+  pointer-events:none;
+  z-index:2}
+#frame.canvas-glow{
+  box-shadow:0 0 0 4px rgba(255,215,140,0.22),0 0 28px rgba(255,215,140,0.22)!important}
+
+/* The canvas — fills #wrap exactly, rounded to match border ring */
+#c{
+  display:block;
+  position:absolute;
+  inset:0;
+  width:1000px;
+  height:630px;
+  border-radius:48px;
+  z-index:1}
+
+/* ── DOM paddles — positioned outside canvas via absolute CSS ── */
+/* ── DOM PADDLES ─────────────────────────────────────
+   Correct geometry — both bar and dot are OUTSIDE the canvas,
+   in the dark charcoal area. Nothing inside the cream canvas.
+
+   Left paddle (reading left to right):
+   [dot 8px] [gap 4px] [bar 8px] | canvas edge
+
+   Right paddle (reading left to right):
+   canvas edge | [bar 8px] [gap 4px] [dot 8px]
+
+   The paddle-wrap sits to the LEFT of #wrap (left paddle)
+   or to the RIGHT of #wrap (right paddle) using right:100% / left:100%.
+   ─────────────────────────────────────────────────── */
+.paddle-wrap{
+  position:absolute;
+  top:0;
+  pointer-events:none;
+  z-index:4;
+  width:20px}   /* bar(8) + gap(4) + dot(8) = 20px */
+
+/* Left wrap: shift right by bar-width(8px) so bar LEFT edge = canvas left edge.
+   Bar sits half inside canvas, half outside. Dot hangs outside to the left. */
+#paddle-left{ right:calc(100% - 8px) }
+
+/* Right wrap: shift left by bar-width(8px) so bar RIGHT edge = canvas right edge. */
+#paddle-right{ left:calc(100% - 8px) }
+
+/* Bar — inside wrap, absolute */
+.paddle-bar{
+  position:absolute;
+  width:8px;
+  height:64px;
+  border-radius:4px;
+  top:0}
+
+/* Left bar: its RIGHT edge is at x=20 of wrap = touches canvas */
+#paddle-left .paddle-bar{ right:0 }
+
+/* Right bar: its LEFT edge is at x=0 of wrap = touches canvas */
+#paddle-right .paddle-bar{ left:0 }
+
+/* Dot — inside wrap, absolute, vertically centred on bar */
+.paddle-dot{
+  position:absolute;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  top:28px}   /* (64-8)/2 = 28 = vertically centred */
+
+/* Left dot: at x=0 of wrap (far left, away from canvas) */
+#paddle-left .paddle-dot{ left:0 }
+
+/* Right dot: at x=12 of wrap (right:0, far right, away from canvas) */
+#paddle-right .paddle-dot{ right:0 }
+
+#paddle-left .paddle-bar,#paddle-left .paddle-dot{ background:#FF68AE }
+#paddle-right .paddle-bar,#paddle-right .paddle-dot{ background:#689AFF }
+[data-state="results"] .paddle-wrap{ display:none!important }
+@keyframes paddle-flash{
+  0%{filter:brightness(1)}
+  15%{filter:brightness(3.5)}
+  100%{filter:brightness(1)}}
+.paddle-hit{
+  animation:paddle-flash 0.15s ease-out forwards}
+
+/* intro card */
+#intro-card{
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  background:rgba(245,205,142,0.24);
+  backdrop-filter:blur(9px);
+  -webkit-backdrop-filter:blur(9px);
+  border-radius:12px;
+  padding:24px 40px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  box-shadow:0 4px 24px rgba(0,0,0,0.16);
+  pointer-events:all;
+  cursor:pointer;
+  z-index:10;
+  transition:opacity 0.3s ease,transform 0.3s ease}
+.card-sub{
+  font-style:italic;
+  font-size:14px;
+  letter-spacing:1.5px;
+  color:rgba(30,25,16,0.55);
+  text-align:center;
+  font-family:'Basier Circle',sans-serif}
+[data-state="idle"] #intro-card{display:flex!important}
+[data-state="playing"] #intro-card{display:none!important}
+[data-state="results"] #intro-card{display:none!important}
+
+#intro-card.card-hide{
+  opacity:0!important;
+  transform:translate(-50%,-50%) scale(0.96)!important;
+  pointer-events:none}
+
+/* you label — sits further left of the left paddle wrap */
+#you-label{
+  position:absolute;
+  right:calc(100% + 4px);  /* to the left of paddle-left wrap */
+  top:28px;
+  transform:translateY(-50%);
+  font-family:'Basier Circle',sans-serif;
+  font-style:italic;
+  font-size:12px;
+  color:#FF68AE;
+  letter-spacing:1px;
+  pointer-events:none;
+  white-space:nowrap;
+  display:none}
+[data-state="idle"] #you-label{ display:block!important }
+
+/* ── UNIFIED CONTROL ELEVATION ───────────────────────
+   All controls: 48px height, 12px radius, same shadow.
+   This is the CTA Elevation from DESIGN.md applied consistently. */
+.ctrl-chip{
+  height:48px;
+  border-radius:12px;
+  background:#464646;
+  box-shadow:0 4px 24px rgba(0,0,0,0.29),inset 0 0 5px rgba(0,0,0,0.52);
+  display:flex;
+  align-items:center;
+  flex-shrink:0}
+
+/* colour picker pill */
+#pal-pill{
+  padding:0 16px;
+  gap:8px;
+  cursor:default}
+.pdot{
+  width:10px;height:10px;border-radius:50%;flex-shrink:0;
+  cursor:pointer;transition:transform .15s}
+.pdot:hover{transform:scale(1.35)}
+#shuffle-btn{
+  width:18px;height:18px;flex-shrink:0;opacity:.65;
+  cursor:pointer;transition:opacity .2s;margin-left:4px}
+#shuffle-btn:hover{opacity:1}
+
+/* score badge */
+#score-pill{
+  gap:32px;
+  padding:0 24px;
+  justify-content:center}
+#score-you,#score-ai{
+  font-family:'Basier Circle',sans-serif;font-weight:500;font-size:18px;
+  color:#FFFFFF;letter-spacing:0.1em;min-width:20px;text-align:center}
+@keyframes score-pulse{
+  0%{color:#FFFFFF}
+  30%{color:#FFAE68}
+  100%{color:#FFFFFF}}
+.score-pop{
+  animation:score-pulse 0.4s ease-out forwards}
+
+/* icon buttons */
+#restart-pill,#mute-pill{
+  padding:0 14px;
+  gap:0;
+  cursor:pointer;
+  transition:opacity .2s}
+#restart-pill:hover,#mute-pill:hover{opacity:.8}
+#restart-pill svg,#mute-pill svg{width:18px;height:18px;opacity:.8}
+#mute-pill.muted{opacity:.35}
+
+/* ── controls row layout ────────────────────────── */
+#ctrl-row{
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:center;
+  width:1000px;
+  padding:20px 0 0 0;
+  height:68px}
+[data-state="results"] #ctrl-row{display:none!important}
+.ctrl-left{display:flex;align-items:center;justify-content:flex-start}
+.ctrl-center{display:flex;align-items:center;justify-content:center}
+.ctrl-right{display:flex;align-items:center;justify-content:flex-end;gap:12px}
+
+/* idle: centre picker, hide score and icons */
+[data-state="idle"] #ctrl-row{grid-template-columns:1fr;justify-items:center}
+[data-state="idle"] .ctrl-left{justify-content:center}
+[data-state="idle"] .ctrl-right{display:none}
+[data-state="idle"] #score-pill{display:none!important}
+
+/* quote below canvas */
+#quote-below{
+  font-family:'DM Serif Display',serif;
+  font-style:italic;
+  font-size:12px;
+  font-weight:400;
+  letter-spacing:1px;
+  line-height:1.8;
+  color:rgba(245,240,230,0.7);
+  text-align:center;
+  max-width:1000px;
+  margin-top:32px;
+  display:none}
+[data-state="results"] #quote-below{display:block!important}
+
+/* results state canvas — frame ring stays, deepen shadow */
+[data-state="results"] #frame{
+  border-color:transparent!important;
+  box-shadow:inset 0 0 40px rgba(0,0,0,0.10)!important}
+
+
+/* ── results row ─────────────────────────────────── */
+#result-row{display:flex;align-items:center;justify-content:center;
+  gap:16px;padding:24px 0 0 0}
+.rbtn{background:#464646;border:none;border-radius:12px;
+  padding:12px 24px;
+  font-family:'Basier Circle',sans-serif;font-weight:500;font-size:11px;
+  letter-spacing:0.12em;color:#FFFFFF;text-transform:uppercase;
+  cursor:pointer;transition:opacity .2s;
+  box-shadow:0 4px 24px rgba(0,0,0,0.16),inset 0 0 5px rgba(0,0,0,0.32)}
+.rbtn:hover{opacity:0.85}
+</style>
+</head>
+<body>
+
+<!-- CUSTOM CURSOR -->
+<div id="cursor"></div>
+
+<div id="gc" data-state="idle">
+
+  <!-- TITLE — always present, all states -->
+  <div id="title-above">
+    <svg width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
+      <path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
+      <path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
+      <path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFF5E5"/>
+      <path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFF5E5"/>
+      <path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFF5E5"/>
+      <path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFF5E5"/>
+      <rect width="2" height="27" rx="1" fill="#FFF5E5"/>
+      <rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
+      <circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
+    </svg>
+  </div>
+
+  <div id="tagline" class="vis-idle">make uncertainty your play</div>
+
+  <!-- CANVAS -->
+  <div id="wrap">
+    <div id="frame"></div>
+    <canvas id="c" width="1000" height="630"></canvas>
+
+    <!-- DOM paddles — positioned outside canvas with CSS, moved by JS -->
+    <div class="paddle-wrap" id="paddle-left">
+      <div class="paddle-bar"></div>
+      <div class="paddle-dot"></div>
+      <div id="you-label">you</div>
+    </div>
+    <div class="paddle-wrap" id="paddle-right">
+      <div class="paddle-bar"></div>
+      <div class="paddle-dot"></div>
+    </div>
+
+    <!-- CHANGE 2: intro card (dark logo on warm card) -->
+    <div id="intro-card">
+      <svg width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#1E1914"/>
+        <path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#1E1914"/>
+        <path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#1E1914"/>
+        <path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#1E1914"/>
+        <path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#1E1914"/>
+        <path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#1E1914"/>
+        <path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#1E1914"/>
+        <rect width="2" height="27" rx="1" fill="#1E1914"/>
+        <rect x="138" width="2" height="27" rx="1" fill="#1E1914"/>
+        <circle cx="60" cy="14" r="3" fill="#1E1914"/>
+      </svg>
+      <div class="card-sub">space to begin &nbsp;•&nbsp; mouse to move</div>
+    </div>
+
+  </div><!-- end #wrap -->
+
+  <!-- quote shown below canvas in results -->
+  <div id="quote-below"></div>
+
+  <!-- CONTROLS: palette | score | restart+mute -->
+  <div id="ctrl-row">
+    <div class="ctrl-left">
+      <div class="pill ctrl-chip" id="pal-pill">
+        <div class="pdot" id="pd0"></div>
+        <div class="pdot" id="pd1"></div>
+        <div class="pdot" id="pd2"></div>
+        <div class="pdot" id="pd3"></div>
+        <div class="pdot" id="pd4"></div>
+        <svg id="shuffle-btn" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.65)"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 3h5v5"/><path d="M4 20L21 3"/>
+          <path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/>
+        </svg>
+      </div>
+    </div>
+    <div class="vis-play ctrl-chip" id="score-pill">
+      <span id="score-you">0</span>
+      <span id="score-ai">0</span>
+    </div>
+    <div class="ctrl-right">
+      <div class="pill vis-play ctrl-chip" id="restart-pill" title="Restart">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.65)"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+      </div>
+      <div class="pill vis-play ctrl-chip" id="mute-pill" title="Mute">
+        <svg id="ico-von" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.65)"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+          <path d="M19.07 4.93a10 10 0 010 14.14"/>
+          <path d="M15.54 8.46a5 5 0 010 7.07"/>
+        </svg>
+        <svg id="ico-voff" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.65)"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+          <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+          <line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTS BUTTONS -->
+  <div id="result-row" class="vis-end">
+    <button class="rbtn" id="btn-save">Save Artwork</button>
+    <button class="rbtn" id="btn-again">Play Again</button>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   ZEN PONG v5
+═══════════════════════════════════════════════════════ */
+
+const cv=document.getElementById('c'),cx=cv.getContext('2d');
+const gc=document.getElementById('gc');
+const cursorEl=document.getElementById('cursor');
+const frameEl=document.getElementById('frame');
+const youLabel=document.getElementById('you-label');
+const introCard=document.getElementById('intro-card');
+const domPaddleLeft=document.getElementById('paddle-left');
+const domPaddleRight=document.getElementById('paddle-right');
+
+/* ── CONSTANTS ──────────────────────────────────── */
+const W=1000,H=630,PW=8,PH=64,BR=6;
+const CR=40;
+const PX=-PW,AX=W;
+const PAD_MIN=CR,PAD_MAX=H-CR-PH;
+const BASE_SPD=5.2,WIN=3;
+const MAX_SPD=BASE_SPD*2.2;
+const CORNERS=[{cx:CR,cy:CR},{cx:W-CR,cy:CR},{cx:CR,cy:H-CR},{cx:W-CR,cy:H-CR}];
+
+/* ── PALETTE ─────────────────────────────────────── */
+const PALETTE={
+  cols:['#FF68AE','#689AFF','#8CFFB4','#FFAE68','#68D7FF'],
+  pL:'#FF68AE',
+  pR:'#689AFF'
+};
+let colIdx=0;
+function pal(){return PALETTE}
+function nextCol(){const c=pal().cols;colIdx=(colIdx+1)%c.length;return c[colIdx]}
+
+/* ── ZEN QUOTES ──────────────────────────────────── */
+const QUOTES=[
+  'Muddy water is best cleared by leaving it alone. — Alan Watts',
+  'Coming, going, the waterbirds don\'t leave a trace, don\'t follow a path. — Dōgen',
+  'No snowflake ever falls in the wrong place. — Zen proverb',
+  'No thought, no reflection, no analysis, no cultivation, no intention — let it settle itself. — Tilopa',
+  'To study the self is to forget the self. To forget the self is to be enlightened by all things. — Dōgen',
+  'Emptiness is bound to bloom, like hundreds of grasses blossoming. — Dōgen',
+  'Still water has no mind to receive the image of the migrating geese. — Zen proverb',
+  'You are a function of what the whole universe is doing, in the same way that a wave is a function of what the whole ocean is doing. — Alan Watts',
+  'Sitting quietly, doing nothing — spring comes, and the grass grows by itself. — Zenrin Kushū',
+  'When you realize nothing is lacking, the whole world belongs to you. — Lao Tzu'];
+
+/* ── PAPER TEXTURE ───────────────────────────────── */
+const paperCv=document.createElement('canvas');
+paperCv.width=W;paperCv.height=H;
+const pc=paperCv.getContext('2d');
+function buildPaper(){
+  pc.fillStyle='#FFF5E5';pc.fillRect(0,0,W,H);
+  const img=pc.getImageData(0,0,W,H),d=img.data;
+  for(let y=0;y<H;y++){const row=Math.sin(y*0.047)*3;
+    for(let x=0;x<W;x++){const i=(y*W+x)*4;
+      const n=(Math.random()-0.5)*14;
+      const v=(Math.sin(x*0.031+row)+Math.sin(y*0.022))*2.5;
+      d[i]=Math.min(255,Math.max(0,d[i]+n+v));
+      d[i+1]=Math.min(255,Math.max(0,d[i+1]+n*0.88+v*0.9));
+      d[i+2]=Math.min(255,Math.max(0,d[i+2]+n*0.72+v*0.75))}}
+  pc.putImageData(img,0,0);
+  const ew=65;let g;
+  g=pc.createLinearGradient(0,0,0,ew);g.addColorStop(0,'rgba(0,0,0,0.055)');g.addColorStop(1,'rgba(0,0,0,0)');pc.fillStyle=g;pc.fillRect(0,0,W,ew);
+  g=pc.createLinearGradient(0,H,0,H-ew);g.addColorStop(0,'rgba(0,0,0,0.055)');g.addColorStop(1,'rgba(0,0,0,0)');pc.fillStyle=g;pc.fillRect(0,H-ew,W,ew);
+  g=pc.createLinearGradient(0,0,ew,0);g.addColorStop(0,'rgba(0,0,0,0.045)');g.addColorStop(1,'rgba(0,0,0,0)');pc.fillStyle=g;pc.fillRect(0,0,ew,H);
+  g=pc.createLinearGradient(W,0,W-ew,0);g.addColorStop(0,'rgba(0,0,0,0.045)');g.addColorStop(1,'rgba(0,0,0,0)');pc.fillStyle=g;pc.fillRect(W-ew,0,ew,H);
+  pc.save();pc.setLineDash([2,16]);pc.strokeStyle='rgba(140,120,90,0.07)';pc.lineWidth=0.5;
+  pc.beginPath();pc.moveTo(W/2,35);pc.lineTo(W/2,H-35);pc.stroke();pc.restore()}
+buildPaper();
+
+/* ── PERSISTENT CANVAS ───────────────────────────── */
+const drawCv=document.createElement('canvas');drawCv.width=W;drawCv.height=H;
+const dc=drawCv.getContext('2d');
+function initDraw(){dc.clearRect(0,0,W,H);dc.drawImage(paperCv,0,0)}
+initDraw();
+
+/* ── AUDIO CONTEXT ──────────────────────────────── */
+let actx=null,muted=false;
+
+function ac(){
+  if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();
+  if(actx.state==='suspended')actx.resume();
+  return actx}
+
+/* ── BGM ────────────────────────────────────────── */
+let ooAudio=null,ooGain=null,ooSrc=null,bgmStarted=false;
+
+function initOolong(){
+  if(ooAudio)return;
+  try{
+    if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();
+    ooAudio=new Audio('Oolong.mp3');
+    ooAudio.loop=true;
+    ooAudio.crossOrigin='anonymous';
+    ooSrc=actx.createMediaElementSource(ooAudio);
+    ooGain=actx.createGain();
+    ooGain.gain.value=0;
+    ooSrc.connect(ooGain);
+    ooGain.connect(actx.destination)
+  }catch(e){ooAudio=null}}
+
+async function startBGM(){
+  if(muted)return;
+  if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();
+  await actx.resume();
+  initOolong();
+  ooAudio.currentTime=0;
+  ooAudio.play().catch(()=>{});
+  bgmStarted=true;
+  ooGain.gain.cancelScheduledValues(actx.currentTime);
+  ooGain.gain.setValueAtTime(0,actx.currentTime);
+  ooGain.gain.linearRampToValueAtTime(0.55,actx.currentTime+2.5)}
+
+function stopBGM(){
+  if(!ooGain||!actx)return;
+  ooGain.gain.cancelScheduledValues(actx.currentTime);
+  ooGain.gain.setValueAtTime(ooGain.gain.value,actx.currentTime);
+  ooGain.gain.linearRampToValueAtTime(0.38,actx.currentTime+2.0)}
+
+/* ── SFX ────────────────────────────────────────── */
+function tone(p={}){if(muted)return;
+  const{freq=440,type='sine',gain=0.1,dur=0.1,freqEnd=null,attack=0.003,detune=0}=p;
+  try{const a=ac(),o=a.createOscillator(),g=a.createGain();
+  o.connect(g);g.connect(a.destination);o.type=type;
+  o.frequency.setValueAtTime(freq,a.currentTime);o.detune.setValueAtTime(detune,a.currentTime);
+  if(freqEnd)o.frequency.exponentialRampToValueAtTime(freqEnd,a.currentTime+dur);
+  g.gain.setValueAtTime(0,a.currentTime);g.gain.linearRampToValueAtTime(gain,a.currentTime+attack);
+  g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+dur);
+  o.start(a.currentTime);o.stop(a.currentTime+dur+0.02)}catch(e){}}
+
+function nz(p={}){if(muted)return;
+  const{gain=0.06,dur=0.04,freq=800,q=10}=p;
+  try{const a=ac(),buf=a.createBuffer(1,a.sampleRate*dur,a.sampleRate),
+  d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  const src=a.createBufferSource();src.buffer=buf;
+  const f=a.createBiquadFilter();f.type='bandpass';f.frequency.value=freq;f.Q.value=q;
+  const g=a.createGain();src.connect(f);f.connect(g);g.connect(a.destination);
+  g.gain.setValueAtTime(gain,a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+dur);
+  src.start();src.stop(a.currentTime+dur+0.02)}catch(e){}}
+
+function sndScratch(){
+  if(muted)return;
+  try{
+    const a=ac();
+    // Sharp click transient
+    const clickDur=0.018;
+    const cbuf=a.createBuffer(1,Math.ceil(a.sampleRate*clickDur),a.sampleRate);
+    const cd=cbuf.getChannelData(0);
+    for(let i=0;i<cd.length;i++)cd[i]=(Math.random()*2-1)*0.7;
+    const csrc=a.createBufferSource();csrc.buffer=cbuf;
+    const cf=a.createBiquadFilter();cf.type='bandpass';
+    cf.frequency.value=1800;cf.Q.value=0.8;
+    const cg=a.createGain();
+    cg.gain.setValueAtTime(0.49,a.currentTime);
+    cg.gain.exponentialRampToValueAtTime(0.001,a.currentTime+clickDur);
+    csrc.connect(cf);cf.connect(cg);cg.connect(a.destination);
+    csrc.start();csrc.stop(a.currentTime+clickDur+0.005);
+    // Wooden body resonance
+    const o=a.createOscillator(),og=a.createGain();
+    o.connect(og);og.connect(a.destination);
+    o.type='sine';
+    o.frequency.setValueAtTime(420,a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(180,a.currentTime+0.06);
+    og.gain.setValueAtTime(0.36,a.currentTime);
+    og.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.08);
+    o.start(a.currentTime);o.stop(a.currentTime+0.09);
+  }catch(e){}}
+function sndThud(){
+  if(muted)return;
+  try{
+    const a=ac();
+    // Plastic click — broadband noise shaped at ~2kHz
+    const dur=0.038;
+    const buf=a.createBuffer(1,Math.ceil(a.sampleRate*dur),a.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*0.6;
+    const src=a.createBufferSource();src.buffer=buf;
+    const f=a.createBiquadFilter();f.type='bandpass';
+    f.frequency.value=2200;f.Q.value=0.9;
+    const g=a.createGain();
+    g.gain.setValueAtTime(0.29,a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+dur);
+    src.connect(f);f.connect(g);g.connect(a.destination);
+    src.start();src.stop(a.currentTime+dur+0.005);
+    // Short plastic body thump
+    const o=a.createOscillator(),og=a.createGain();
+    o.connect(og);og.connect(a.destination);
+    o.type='sine';
+    o.frequency.setValueAtTime(160,a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(80,a.currentTime+0.035);
+    og.gain.setValueAtTime(0.21,a.currentTime);
+    og.gain.exponentialRampToValueAtTime(0.001,a.currentTime+0.04);
+    o.start(a.currentTime);o.stop(a.currentTime+0.045);
+  }catch(e){}}
+function sndCollide(){
+  if(muted)return;
+  nz({gain:.33,dur:.035,freq:1800,q:5});
+  tone({freq:300,freqEnd:185,type:'triangle',gain:.23,dur:.06})}
+function sndPoint(){
+  if(muted)return;
+  try{
+    const a=ac();
+    const o=a.createOscillator(),g=a.createGain();
+    o.connect(g);g.connect(a.destination);
+    o.type='sine';
+    o.frequency.setValueAtTime(320,a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(318,a.currentTime+1.2);
+    g.gain.setValueAtTime(0,a.currentTime);
+    g.gain.linearRampToValueAtTime(0.23,a.currentTime+0.008);
+    g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+1.4);
+    o.start(a.currentTime);o.stop(a.currentTime+1.5)
+  }catch(e){}}
+function sndLevelUp(){
+  if(muted)return;
+  try{
+    const a=ac();
+    const o=a.createOscillator(),g=a.createGain();
+    o.connect(g);g.connect(a.destination);
+    o.type='sine';
+    o.frequency.setValueAtTime(440,a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(438,a.currentTime+1.0);
+    g.gain.setValueAtTime(0,a.currentTime);
+    g.gain.linearRampToValueAtTime(0.33,a.currentTime+0.008);
+    g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+1.2);
+    o.start(a.currentTime);o.stop(a.currentTime+1.3)
+  }catch(e){}}
+function sndChalk(){
+  if(muted)return;
+  try{
+    const a=ac();
+    const dur=0.055;
+    const buf=a.createBuffer(1,Math.ceil(a.sampleRate*dur),a.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.018;
+    const src=a.createBufferSource();src.buffer=buf;
+    const f=a.createBiquadFilter();f.type='bandpass';
+    f.frequency.value=2800;f.Q.value=2.5;
+    const g=a.createGain();
+    g.gain.setValueAtTime(0.028,a.currentTime);
+    g.gain.linearRampToValueAtTime(0.001,a.currentTime+0.055);
+    src.connect(f);f.connect(g);g.connect(a.destination);
+    src.start();src.stop(a.currentTime+0.06)
+  }catch(e){}}
+function sndGameOver(){
+  if(muted)return;
+  try{
+    const a=ac();
+    const o=a.createOscillator(),g=a.createGain();
+    o.connect(g);g.connect(a.destination);
+    o.type='sine';
+    o.frequency.setValueAtTime(220,a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(218,a.currentTime+2.2);
+    g.gain.setValueAtTime(0,a.currentTime);
+    g.gain.linearRampToValueAtTime(0.23,a.currentTime+0.010);
+    g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+2.5);
+    o.start(a.currentTime);o.stop(a.currentTime+2.6)
+  }catch(e){}}
+
+/* ── CATMULL-ROM ─────────────────────────────────── */
+function traceCR(ctx,pts){
+  if(pts.length<2)return;ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[Math.max(i-1,0)],p1=pts[i],p2=pts[i+1],
+          p3=pts[Math.min(i+2,pts.length-1)],t=.5;
+    ctx.bezierCurveTo(
+      p1.x+(p2.x-p0.x)*t/3,p1.y+(p2.y-p0.y)*t/3,
+      p2.x-(p3.x-p1.x)*t/3,p2.y-(p3.y-p1.y)*t/3,
+      p2.x,p2.y)}}
+
+/* ── STROKE RENDERING ────────────────────────────── */
+function drawStroke(ctx,pts,col,wt,op){
+  if(pts.length<2)return;
+  ctx.save();ctx.globalAlpha=op*0.22;ctx.strokeStyle=col;
+  ctx.lineWidth=wt*2.2;ctx.lineCap='round';ctx.lineJoin='round';
+  traceCR(ctx,pts);ctx.stroke();ctx.restore();
+  ctx.save();ctx.globalAlpha=op*0.88;ctx.strokeStyle=col;
+  ctx.lineWidth=wt*0.75;ctx.lineCap='round';ctx.lineJoin='round';
+  traceCR(ctx,pts);ctx.stroke();ctx.restore()}
+
+function commitStroke(pts,col,wt,op){
+  if(pts.length<2)return;
+  const jp=pts.map((p,i)=>{
+    if(i===0||i===pts.length-1)return p;
+    const nx=pts[Math.min(i+1,pts.length-1)].x-pts[i-1].x;
+    const ny=pts[Math.min(i+1,pts.length-1)].y-pts[i-1].y;
+    const len=Math.hypot(nx,ny)||1;
+    const j=(Math.sin(p.x*0.73+p.y*1.31)*0.5)*1.0;
+    return{x:p.x+(-ny/len)*j,y:p.y+(nx/len)*j}});
+  drawStroke(dc,jp,col,wt,op)}
+
+let prevMY=H/2,padVel=0;
+
+/* mkBall spawns from any of the four edges */
+function mkBall(){
+  const edge=Math.floor(Math.random()*4);
+  let x,y,vx,vy;
+  const s=BASE_SPD+lv*0.18;
+  const a=Math.random()*0.55+0.18;
+  if(edge===0){
+    x=BR+2;y=H/2+(Math.random()-0.5)*200;
+    vx=Math.cos(a)*s;vy=(Math.random()-0.5)*s*0.8;
+  }else if(edge===1){
+    x=W-BR-2;y=H/2+(Math.random()-0.5)*200;
+    vx=-Math.cos(a)*s;vy=(Math.random()-0.5)*s*0.8;
+  }else if(edge===2){
+    x=W/2+(Math.random()-0.5)*400;y=BR+2;
+    vx=(Math.random()-0.5)*s*0.8;vy=Math.cos(a)*s;
+  }else{
+    x=W/2+(Math.random()-0.5)*400;y=H-BR-2;
+    vx=(Math.random()-0.5)*s*0.8;vy=-Math.cos(a)*s;
+  }
+  if(Math.abs(vx)<BASE_SPD*0.3){
+    vx=(Math.random()<0.5?1:-1)*BASE_SPD*0.35}
+  const col=pal().cols[colIdx%pal().cols.length];
+  colIdx++;
+  return{
+    x,y,vx,vy,col,
+    wt:1.0+Math.random()*1.4,
+    op:0.50+Math.random()*0.18,
+    spin:(Math.random()-0.5)*0.18,
+    pts:[],scol:col,alpha:0}}
+
+/* ── PHYSICS ────────────────────────────────────── */
+
+/* ── ROUNDED CORNER COLLISION ────────────────────── */
+function wallHit(b){
+  for(const c of CORNERS){
+    const inX=(c.cx<=CR)?(b.x<c.cx):(b.x>c.cx);
+    const inY=(c.cy<=CR)?(b.y<c.cy):(b.y>c.cy);
+    if(inX&&inY){
+      const dx=b.x-c.cx,dy=b.y-c.cy,dist=Math.hypot(dx,dy);
+      if(dist+BR>CR&&dist>0){
+        const nx=dx/dist,ny=dy/dist;
+        b.x=c.cx+nx*(CR-BR-0.5);b.y=c.cy+ny*(CR-BR-0.5);
+        const dot=b.vx*nx+b.vy*ny;
+        if(dot>0){b.vx-=2*dot*nx;b.vy-=2*dot*ny;return true}}
+      return false}}
+  if(b.y-BR<0){
+    b.y=BR;b.vy=Math.abs(b.vy)*0.92;
+    const spd=Math.hypot(b.vx,b.vy);
+    const ang=Math.atan2(b.vy,b.vx)+(Math.random()-0.5)*0.28;
+    b.vx=Math.cos(ang)*spd;b.vy=Math.sin(ang)*spd;
+    return true}
+  if(b.y+BR>H){
+    b.y=H-BR;b.vy=-Math.abs(b.vy)*0.92;
+    const spd=Math.hypot(b.vx,b.vy);
+    const ang=Math.atan2(b.vy,b.vx)+(Math.random()-0.5)*0.28;
+    b.vx=Math.cos(ang)*spd;b.vy=Math.sin(ang)*spd;
+    return true}
+  return false}
+
+function enforceMinAngle(b){
+  const minA=Math.PI/10;
+  const spd=Math.hypot(b.vx,b.vy);
+  const ang=Math.atan2(b.vy,b.vx);
+  const fromH=Math.min(Math.abs(ang),Math.PI-Math.abs(ang));
+  if(fromH<minA){
+    const sy=b.vy>=0?1:-1;
+    const sx=b.vx>=0?1:-1;
+    b.vx=sx*Math.cos(minA)*spd;
+    b.vy=sy*Math.sin(minA)*spd}}
+
+/* ── PADDLE HIT ──────────────────────────────────── */
+function bspd(b){return Math.hypot(b.vx,b.vy)}
+
+function sweptHit(b){
+  const px0=b.x-b.vx,py0=b.y-b.vy;
+  if(b.vx<0){const face=PX+PW;
+    if(Math.min(px0,b.x)-BR<=face&&Math.max(px0,b.x)+BR>=face){
+      const t=(face-(px0-BR))/(b.x-BR-(px0-BR));
+      const iy=py0+t*(b.y-py0);
+      if(iy>=player.y-BR&&iy<=player.y+PH+BR){
+        const rel=(iy-(player.y+PH/2))/(PH/2);
+        const ang=rel*0.62,s=Math.min(bspd(b)*1.04,MAX_SPD);
+        b.vx=Math.abs(Math.cos(ang)*s);b.vy=Math.sin(ang)*s;
+        b.x=face+BR+1;b.y=iy;
+        const pvSpin=padVel*0.032;
+        const randSpin=(Math.random()-0.5)*0.14;
+        b.spin=pvSpin+randSpin;
+        commitStroke(b.pts,b.scol,b.wt,b.op);
+        b.col=nextCol();b.scol=b.col;b.pts=[{x:b.x,y:b.y}];
+        sndScratch();sndChalk();
+        domPaddleLeft.classList.remove('paddle-hit');
+        void domPaddleLeft.offsetWidth;
+        domPaddleLeft.classList.add('paddle-hit');
+        enforceMinAngle(b);return true}}}
+  if(b.vx>0){const face=AX;
+    if(Math.max(px0,b.x)+BR>=face&&Math.min(px0,b.x)-BR<=face+PW){
+      const t=(face-(px0+BR))/(b.x+BR-(px0+BR));
+      const iy=py0+t*(b.y-py0);
+      if(iy>=ai.y-BR&&iy<=ai.y+PH+BR){
+        const rel=(iy-(ai.y+PH/2))/(PH/2);
+        const ang=rel*0.62,s=Math.min(bspd(b)*1.03,MAX_SPD);
+        b.vx=-Math.abs(Math.cos(ang)*s);b.vy=Math.sin(ang)*s;
+        b.x=face-BR-1;b.y=iy;
+        b.spin=(Math.random()-0.5)*0.20;
+        commitStroke(b.pts,b.scol,b.wt,b.op);
+        b.col=nextCol();b.scol=b.col;b.pts=[{x:b.x,y:b.y}];
+        sndScratch();sndChalk();
+        domPaddleRight.classList.remove('paddle-hit');
+        void domPaddleRight.offsetWidth;
+        domPaddleRight.classList.add('paddle-hit');
+        enforceMinAngle(b);return true}}}
+  return false}
+
+function ballBall(){
+  for(let i=0;i<balls.length;i++)for(let j=i+1;j<balls.length;j++){
+    const a=balls[i],b=balls[j];
+    const dx=b.x-a.x,dy=b.y-a.y,dist=Math.hypot(dx,dy),minD=BR*2+2;
+    if(dist<minD&&dist>0){
+      const nx=dx/dist,ny=dy/dist,ov=(minD-dist)/2;
+      a.x-=nx*ov;a.y-=ny*ov;b.x+=nx*ov;b.y+=ny*ov;
+      const dot=(a.vx-b.vx)*nx+(a.vy-b.vy)*ny;
+      if(dot>0){
+        a.vx-=dot*nx;a.vy-=dot*ny;
+        b.vx+=dot*nx;b.vy+=dot*ny;
+        const s=(Math.random()*0.12+0.06);
+        a.spin+=s;b.spin-=s;
+        sndCollide()}}}}
+
+/* ── AI ──────────────────────────────────────────── */
+function updateAI(){
+  const tgt=balls.filter(b=>b.vx>0).sort((a,b)=>b.x-a.x)[0];
+  const ty=tgt?tgt.y:H/2;
+  const jitter=Math.sin(Date.now()*0.002)*3;
+  const d=ty-(ai.y+PH/2)+jitter;
+  const maxStep=Math.max(aiSpd,4.2);
+  ai.y+=Math.sign(d)*Math.min(Math.abs(d),maxStep);
+  const lag=ty-(ai.y+PH/2);
+  if(Math.abs(lag)>80){ai.y+=Math.sign(lag)*2.5}
+  ai.y=Math.max(PAD_MIN,Math.min(PAD_MAX,ai.y))}
+
+/* ── UPDATE ──────────────────────────────────────── */
+function update(){
+  padVel=mouseY-prevMY;prevMY=mouseY;
+  player.y=Math.max(PAD_MIN,Math.min(PAD_MAX,mouseY-PH/2));
+  updateAI();
+
+  frameCount++;
+
+  balls.forEach(b=>{
+    if(Math.abs(b.spin)>0.0002){
+      const spd=bspd(b)||1;
+      const px=-b.vy/spd;
+      const py= b.vx/spd;
+      b.vx+=px*b.spin;
+      b.vy+=py*b.spin;
+      const newSpd=bspd(b);
+      if(newSpd>0){b.vx=b.vx/newSpd*spd;b.vy=b.vy/newSpd*spd}
+      b.spin*=0.997}
+
+    b.x+=b.vx;b.y+=b.vy;
+
+    if(Math.abs(b.vx)<BASE_SPD*0.45){
+      b.vx=Math.sign(b.vx||1)*BASE_SPD*0.45}
+
+    if(wallHit(b)){
+      b.spin=-b.spin*0.6+(Math.random()-0.5)*0.10;
+      const _spd=Math.hypot(b.vx,b.vy);
+      const _maxVY=_spd*Math.sin(0.96);
+      if(Math.abs(b.vy)>_maxVY){
+        b.vy=Math.sign(b.vy)*_maxVY;
+        b.vx=Math.sign(b.vx||1)*Math.sqrt(_spd*_spd-b.vy*b.vy)}
+      commitStroke(b.pts,b.scol,b.wt,b.op);
+      b.col=nextCol();b.scol=b.col;b.pts=[{x:b.x,y:b.y}];sndThud();enforceMinAngle(b)}
+    sweptHit(b);
+    const cs2=Math.sqrt(b.vx*b.vx+b.vy*b.vy);
+    const capSpd=BASE_SPD*1.6;
+    if(cs2>capSpd){const ratio=capSpd/cs2;b.vx*=ratio;b.vy*=ratio}
+    b.pts.push({x:b.x,y:b.y});
+    if(b.alpha<1)b.alpha=Math.min(1,b.alpha+0.05);
+    if(b.pts.length>500){commitStroke(b.pts,b.scol,b.wt,b.op);b.pts=b.pts.slice(-4)}});
+
+  ballBall();
+
+  balls=balls.filter(b=>{
+    if(b.x<-30){commitStroke(b.pts,b.scol,b.wt,b.op);
+      as++;updScore();sndPoint();checkLv();
+      frameEl.classList.remove('canvas-glow');
+      void frameEl.offsetWidth;
+      frameEl.classList.add('canvas-glow');
+      setTimeout(()=>frameEl.classList.remove('canvas-glow'),700);
+      return false}
+    if(b.x>W+30){commitStroke(b.pts,b.scol,b.wt,b.op);
+      ps++;updScore();sndPoint();checkLv();
+      frameEl.classList.remove('canvas-glow');
+      void frameEl.offsetWidth;
+      frameEl.classList.add('canvas-glow');
+      setTimeout(()=>frameEl.classList.remove('canvas-glow'),700);
+      return false}
+    return true});
+  while(balls.length<maxB&&state==='playing')balls.push(mkBall());
+  if((ps>=WIN||as>=WIN)&&state==='playing'){state='results';setTimeout(showResults,500)}}
+
+function checkLv(){const tot=ps+as;
+  if(tot>0&&tot%2===0){lv++;aiSpd=Math.min(2.6+lv*0.40,7.5);
+    balls.forEach(b=>{const s=Math.min(bspd(b)*1.06,MAX_SPD),
+      a=Math.atan2(b.vy,b.vx);b.vx=Math.cos(a)*s;b.vy=Math.sin(a)*s});sndLevelUp()}}
+
+/* ── DRAW ────────────────────────────────────────── */
+function drawSlits(ctx){
+  if(state==='results')return;
+  const sw=3,sh=16,sr=1.5;
+  const slits=[
+    {x:PX+PW/2-sw/2,y:PAD_MIN-sh},
+    {x:PX+PW/2-sw/2,y:PAD_MAX+PH},
+    {x:AX+PW/2-sw/2,y:PAD_MIN-sh},
+    {x:AX+PW/2-sw/2,y:PAD_MAX+PH}];
+  ctx.save();
+  ctx.fillStyle='rgba(100,95,88,0.50)';
+  slits.forEach(({x,y})=>{
+    ctx.beginPath();
+    ctx.moveTo(x+sr,y);ctx.lineTo(x+sw-sr,y);
+    ctx.quadraticCurveTo(x+sw,y,x+sw,y+sr);
+    ctx.lineTo(x+sw,y+sh-sr);
+    ctx.quadraticCurveTo(x+sw,y+sh,x+sw-sr,y+sh);
+    ctx.lineTo(x+sr,y+sh);ctx.quadraticCurveTo(x,y+sh,x,y+sh-sr);
+    ctx.lineTo(x,y+sr);ctx.quadraticCurveTo(x,y,x+sr,y);
+    ctx.closePath();ctx.fill();});
+  ctx.restore()}
+
+function drawBall(b){
+  cx.save();
+  cx.globalAlpha=0.90*(b.alpha||1);
+  cx.fillStyle=b.col;
+  cx.beginPath();
+  cx.arc(b.x,b.y,BR*0.9,0,Math.PI*2);
+  cx.fill();
+  cx.restore()}
+
+/* ── DOM PADDLES ────────────────────────────────── */
+function updateDOMPaddles(){
+  const p=pal();
+  /* Paddles live inside #wrap which is inside #gc (the scaled container).
+     Canvas logical size = 1000×630. CSS size of #c = 1000×630px.
+     Both are in the same coordinate space inside #gc — no scaling needed. */
+  domPaddleLeft.style.top=player.y+'px';
+  domPaddleRight.style.top=ai.y+'px';
+  /* update colours to match current palette */
+  domPaddleLeft.querySelectorAll('.paddle-bar,.paddle-dot').forEach(el=>el.style.background=p.pL);
+  domPaddleRight.querySelectorAll('.paddle-bar,.paddle-dot').forEach(el=>el.style.background=p.pR)}
+
+/* ── RENDER LOOP ────────────────────────────────── */
+function loop(){
+  cx.drawImage(drawCv,0,0);
+  if(state==='playing'){
+    balls.forEach(b=>{if(b.pts.length>1)drawStroke(cx,b.pts,b.scol,b.wt,b.op)});
+    balls.forEach(drawBall);
+    update()}
+  if(state==='idle'){
+    player.y=Math.max(PAD_MIN,Math.min(PAD_MAX,mouseY-PH/2))}
+  if(state!=='results'){
+    updateDOMPaddles()}
+  drawSlits(cx);
+  requestAnimationFrame(loop)}
+
+/* ── CURSOR ──────────────────────────────────────── */
+document.addEventListener('mousemove',e=>{
+  tryStartBGM();
+  rawMX=e.clientX;rawMY=e.clientY;
+  cursorEl.style.left=rawMX+'px';cursorEl.style.top=rawMY+'px';
+  const r=cv.getBoundingClientRect();
+  mouseX=(e.clientX-r.left)*(W/r.width);
+  mouseY=(e.clientY-r.top)*(H/r.height)});
+
+cv.addEventListener('touchmove',e=>{e.preventDefault();
+  const t=e.touches[0],r=cv.getBoundingClientRect();
+  mouseX=(t.clientX-r.left)*(W/r.width);
+  mouseY=(t.clientY-r.top)*(H/r.height)},{passive:false});
+
+/* CHANGE 8: idle doodle loops continuously */
+let idleTimer=null;
+function startDoodle(){
+  const pts=[];for(let i=0;i<10;i++)pts.push({x:80+Math.random()*(W-160),y:60+Math.random()*(H-120)});
+  const dense=[];
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[Math.max(i-1,0)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(i+2,pts.length-1)];
+    for(let t=0;t<1;t+=.02){const t2=t*t,t3=t2*t;
+      dense.push({
+        x:.5*((-p0.x+3*p1.x-3*p2.x+p3.x)*t3+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+p2.x)*t+2*p1.x),
+        y:.5*((-p0.y+3*p1.y-3*p2.y+p3.y)*t3+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+p2.y)*t+2*p1.y)})}}
+  let idx=0;const cols=pal().cols;let dc0=cols[0],segS=0;
+  const wt=1.1+Math.random()*.6,op=.32;
+  idleTimer=setInterval(()=>{
+    if(state!=='idle'||idx>=dense.length){
+      clearInterval(idleTimer);idleTimer=null;
+      if(state==='idle'){
+        setTimeout(()=>{
+          if(state==='idle'){initDraw();startDoodle()}
+        },600)}
+      return}
+    const end=Math.min(idx+3,dense.length);
+    if(idx>0)drawStroke(dc,dense.slice(Math.max(0,idx-2),end+1),dc0,wt,op);
+    if(idx-segS>80){segS=idx;dc0=cols[(cols.indexOf(dc0)+1)%cols.length]}
+    idx=end},32)}
+
+/* ── STATE MACHINE ──────────────────────────────── */
+let state='idle',ps=0,as=0,maxB=1,lv=1,aiSpd=2.6;
+function tryStartBGM(){
+  try{
+    if(!ooGain){initOolong()}
+  }catch(e){}}
+let frameCount=0;
+let player={y:H/2-PH/2},ai={y:H/2-PH/2};
+let balls=[],mouseX=W/2,mouseY=H/2,rawMX=0,rawMY=0;
+
+function setState(s){state=s;gc.setAttribute('data-state',s)}
+
+function showResults(){
+  sndGameOver();
+  balls.forEach(b=>commitStroke(b.pts,b.scol,b.wt,b.op));
+  balls=[];
+  frameEl.classList.add('canvas-glow');
+  setTimeout(()=>frameEl.classList.remove('canvas-glow'),700);
+  setTimeout(()=>{
+    setState('results');
+    const selectedQuote=QUOTES[Math.floor(Math.random()*QUOTES.length)];
+    document.getElementById('quote-below').textContent=selectedQuote;
+    if(ooGain&&actx&&!muted){
+      ooGain.gain.cancelScheduledValues(actx.currentTime);
+      ooGain.gain.setValueAtTime(ooGain.gain.value,actx.currentTime);
+      ooGain.gain.linearRampToValueAtTime(0.42,actx.currentTime+2.0);
+    }
+    document.getElementById('ctrl-row').style.display='none';
+  },650);
+}
+
+function showIdle(){
+  setState('idle');
+  if(ooGain&&actx&&!muted){
+    ooGain.gain.cancelScheduledValues(actx.currentTime);
+    ooGain.gain.setValueAtTime(ooGain.gain.value,actx.currentTime);
+    ooGain.gain.linearRampToValueAtTime(0.42,actx.currentTime+1.5);
+  }
+  document.getElementById('ctrl-row').style.display='';
+  introCard.classList.remove('card-hide');
+  initDraw();startDoodle();updDots()}
+
+/* CHANGE 3: card fade-out transition on game start */
+function startGame(){
+  ac();
+  startBGM();
+  ps=0;as=0;lv=1;aiSpd=2.6;colIdx=0;frameCount=0;
+  balls=[];initDraw();updScore();
+  if(idleTimer){clearInterval(idleTimer);idleTimer=null}
+  /* CHANGE 4: canvas glow on start */
+  frameEl.classList.add('canvas-glow');
+  setTimeout(()=>frameEl.classList.remove('canvas-glow'),700);
+  if(state==='idle'){
+    introCard.classList.add('card-hide');
+    setTimeout(()=>{
+      document.getElementById('ctrl-row').style.display='';
+      setState('playing');
+      introCard.classList.remove('card-hide');
+      for(let i=0;i<maxB;i++)balls.push(mkBall())
+    },300)
+  }else{
+    document.getElementById('ctrl-row').style.display='';
+    setState('playing');
+    for(let i=0;i<maxB;i++)balls.push(mkBall())}}
+
+/* ── UI HELPERS ──────────────────────────────────── */
+function updScore(){
+  const yu=document.getElementById('score-you');
+  const ai=document.getElementById('score-ai');
+  const prevPs=parseInt(yu.textContent)||0;
+  const prevAs=parseInt(ai.textContent)||0;
+  yu.textContent=ps;
+  ai.textContent=as;
+  if(ps>prevPs){
+    yu.classList.remove('score-pop');
+    void yu.offsetWidth;
+    yu.classList.add('score-pop');
+  }
+  if(as>prevAs){
+    ai.classList.remove('score-pop');
+    void ai.offsetWidth;
+    ai.classList.add('score-pop');
+  }
+}
+function updDots(){
+  const c=pal().cols;
+  for(let i=0;i<5;i++)document.getElementById('pd'+i).style.background=c[i]}
+function shufflePal(){colIdx=0;updDots()}
+
+/* ── EVENT LISTENERS ────────────────────────────── */
+document.addEventListener('touchstart',tryStartBGM,{once:true});
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();
+    if(state==='idle')startGame();
+    else if(state==='results')showIdle()}});
+introCard.addEventListener('click',()=>{if(state==='idle')startGame()});
+cv.addEventListener('click',()=>{if(state==='idle')startGame()});
+document.getElementById('shuffle-btn').addEventListener('click',e=>{e.stopPropagation();shufflePal()});
+document.getElementById('restart-pill').addEventListener('click',()=>{
+  if(state==='playing'){balls.forEach(b=>commitStroke(b.pts,b.scol,b.wt,b.op));startGame()}});
+document.getElementById('mute-pill').addEventListener('click',()=>{
+  muted=!muted;
+  if(muted&&ooGain&&actx){
+    ooGain.gain.cancelScheduledValues(actx.currentTime);
+    ooGain.gain.setValueAtTime(ooGain.gain.value,actx.currentTime);
+    ooGain.gain.linearRampToValueAtTime(0,actx.currentTime+0.3);
+  }else if(!muted&&ooGain&&actx&&bgmStarted){
+    const vol=state==='playing'?0.55:0.38;
+    ooGain.gain.cancelScheduledValues(actx.currentTime);
+    ooGain.gain.setValueAtTime(0,actx.currentTime);
+    ooGain.gain.linearRampToValueAtTime(vol,actx.currentTime+1.0);
+  }
+  document.getElementById('ico-von').style.display=muted?'none':'block';
+  document.getElementById('ico-voff').style.display=muted?'block':'none';
+  document.getElementById('mute-pill').classList.toggle('muted',muted);})
+
+/* ── SAVE ARTWORK ────────────────────────────────── */
+document.getElementById('btn-save').addEventListener('click',()=>{
+  const S=2;
+  const PAD=32;
+  const quoteH=100;
+  const outW=(W+PAD*2)*S;
+  const outH=(H+PAD*2+quoteH)*S;
+  const out=document.createElement('canvas');
+  out.width=outW;out.height=outH;
+  const oc=out.getContext('2d');
+
+  /* background */
+  oc.fillStyle='#383838';
+  oc.fillRect(0,0,outW,outH);
+
+  /* canvas area with rounded corners + shadow */
+  const sx=PAD*S,sy=PAD*S,sw=W*S,sh=H*S,r=48*S;
+  oc.save();
+  oc.shadowColor='rgba(0,0,0,0.45)';
+  oc.shadowBlur=20*S;
+  oc.shadowOffsetY=4*S;
+  oc.beginPath();
+  oc.moveTo(sx+r,sy);oc.lineTo(sx+sw-r,sy);
+  oc.quadraticCurveTo(sx+sw,sy,sx+sw,sy+r);
+  oc.lineTo(sx+sw,sy+sh-r);
+  oc.quadraticCurveTo(sx+sw,sy+sh,sx+sw-r,sy+sh);
+  oc.lineTo(sx+r,sy+sh);
+  oc.quadraticCurveTo(sx,sy+sh,sx,sy+sh-r);
+  oc.lineTo(sx,sy+r);
+  oc.quadraticCurveTo(sx,sy,sx+r,sy);
+  oc.closePath();
+  oc.fillStyle='#FFF5E5';oc.fill();
+  oc.restore();
+
+  /* clip and draw artwork */
+  oc.save();
+  oc.beginPath();
+  oc.moveTo(sx+r,sy);oc.lineTo(sx+sw-r,sy);
+  oc.quadraticCurveTo(sx+sw,sy,sx+sw,sy+r);
+  oc.lineTo(sx+sw,sy+sh-r);
+  oc.quadraticCurveTo(sx+sw,sy+sh,sx+sw-r,sy+sh);
+  oc.lineTo(sx+r,sy+sh);
+  oc.quadraticCurveTo(sx,sy+sh,sx,sy+sh-r);
+  oc.lineTo(sx,sy+r);
+  oc.quadraticCurveTo(sx,sy,sx+r,sy);
+  oc.closePath();
+  oc.clip();
+  oc.drawImage(drawCv,sx,sy,sw,sh);
+  oc.restore();
+
+  /* haiku quote */
+  const quoteText=document.getElementById('quote-below').textContent;
+  oc.font='italic '+(12*S)+'px "Basier Circle",sans-serif';
+  oc.fillStyle='rgba(245,240,230,0.65)';
+  oc.textAlign='center';
+  oc.textBaseline='middle';
+  oc.fillText(quoteText,outW/2,(PAD+H+22)*S);
+
+  /* ZEN•PONG logo text — 16px below haiku */
+  oc.font='500 '+(11*S)+'px "Basier Circle",sans-serif';
+  oc.fillStyle='rgba(245,240,230,0.35)';
+  oc.textAlign='center';
+  oc.textBaseline='middle';
+  oc.fillText('| ZEN \u2022 PONG |',outW/2,(PAD+H+60)*S);
+
+  /* download */
+  const a=document.createElement('a');
+  a.download='zen-pong-'+Date.now()+'.png';
+  a.href=out.toDataURL('image/png');
+  document.body.appendChild(a);a.click();document.body.removeChild(a)});
+
+document.getElementById('btn-again').addEventListener('click',()=>{showIdle()});
+
+/* ── VIEWPORT SCALING ────────────────────────────── */
+function resize(){const vw=window.innerWidth,vh=window.innerHeight;
+  const s=Math.min(vw/1080,vh/960,1);gc.style.transform='scale('+s+')'}
+window.addEventListener('resize',resize);resize();
+
+/* ── BOOT ────────────────────────────────────────── */
+updDots();showIdle();loop();
+</script>
+</body>
+</html>

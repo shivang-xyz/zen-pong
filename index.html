@@ -381,6 +381,10 @@ body{display:flex;align-items:center;justify-content:center;user-select:none}
     display: flex;
   }
 }
+
+body.is-mobile #intro-card {
+  display: none !important;
+}
 </style>
 </head>
 <body>
@@ -1329,7 +1333,7 @@ window.addEventListener('resize',resize);resize();
 function checkMobile() {
   const isMobile = window.innerWidth <= 600;
   document.getElementById('mobile-overlay').style.display = isMobile ? 'flex' : 'none';
-  document.getElementById('intro-card').style.display = isMobile ? 'none' : '';
+  document.body.classList.toggle('is-mobile', isMobile);
   document.getElementById('ctrl-row').style.display = isMobile ? 'none' : '';
 }
 window.addEventListener('resize', checkMobile);

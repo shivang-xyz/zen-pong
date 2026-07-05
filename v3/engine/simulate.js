@@ -58,6 +58,8 @@ export function simulateGame({
   maxPtsPerStroke = 500,
   jitterAmplitude = 0.5,
   palette = DEFAULT_PALETTE,
+  wtRange = [1.0, 2.4],
+  opRange = [0.50, 0.68],
   maxFrames = 120000,
 } = {}) {
   const rng = makeRng(seed);
@@ -77,7 +79,7 @@ export function simulateGame({
   function spawnBall() {
     const col = palette[colState.i % palette.length];
     colState.i++;
-    const b = mkBall(rng, lv, col);
+    const b = mkBall(rng, lv, col, wtRange, opRange);
     b.pts = [{ x: b.x, y: b.y }];
     balls.push(b);
   }

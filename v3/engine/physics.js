@@ -22,8 +22,11 @@ function bspd(b) { return Math.hypot(b.vx, b.vy); }
 /* 4-edge spawn. `a` uses the literal index.html formula (0.55+0.18), which
    does not match either variant documented in root CLAUDE.md §7 — see the
    deviation note at the top of simulate.js. `col` is resolved by the caller
-   (palette/colIdx bookkeeping lives outside physics, see simulate.js). */
-export function mkBall(rng, lv, col) {
+   (palette/colIdx bookkeeping lives outside physics, see simulate.js).
+   `wtRange`/`opRange` externalize the trail width/opacity randomization
+   ranges (defaults equal to the live build) for the lab's calibration
+   sliders. */
+export function mkBall(rng, lv, col, wtRange = [1.0, 2.4], opRange = [0.50, 0.68]) {
   const edge = Math.floor(rng() * 4);
   let x, y, vx, vy;
   const s = BASE_SPD + lv * 0.18;
@@ -46,8 +49,8 @@ export function mkBall(rng, lv, col) {
   }
   return {
     x, y, vx, vy, col, scol: col,
-    wt: 1.0 + rng() * 1.4,
-    op: 0.50 + rng() * 0.18,
+    wt: wtRange[0] + rng() * (wtRange[1] - wtRange[0]),
+    op: opRange[0] + rng() * (opRange[1] - opRange[0]),
     spin: (rng() - 0.5) * 0.18,
   };
 }

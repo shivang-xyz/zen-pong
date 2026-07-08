@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "static-server",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["/private/tmp/claude-501/-Users-shivang-Desktop-Zen-Pong-Zen-Pong-Root-File/7acccf5b-f402-4b75-ab9f-a5d859e277e3/scratchpad/static-server.mjs"],
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8420"],
       "port": 8420
     }
   ]

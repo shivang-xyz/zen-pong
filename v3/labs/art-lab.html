@@ -27,9 +27,23 @@
   #lightbox canvas{max-width:88vw;max-height:78vh;border-radius:8px;background:#FFF5E5}
   #lightbox-caption{color:#ccc;font-size:12px;max-width:70vw;text-align:center;white-space:pre-line}
   #lightbox.open{display:flex}
+  #file-protocol-warning{display:none;background:#4a2020;color:#ffb4b4;padding:14px 20px;font-size:13px;border-bottom:1px solid #6a2c2c}
+  #file-protocol-warning code{background:#2a1414;padding:1px 5px;border-radius:3px}
 </style>
 </head>
 <body>
+
+<div id="file-protocol-warning">
+  This page uses ES module imports, which browsers block under a <code>file://</code> URL
+  (CORS policy — not a bug in this page). Serve it over http instead, e.g. from the repo
+  root run <code>python3 -m http.server</code> and open
+  <code>http://localhost:8000/v3/labs/art-lab.html</code>.
+</div>
+<script>
+  if (location.protocol === 'file:') {
+    document.getElementById('file-protocol-warning').style.display = 'block';
+  }
+</script>
 
 <div id="controls">
   <div class="field">

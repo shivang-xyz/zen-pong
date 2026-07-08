@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Zen Pong — Art Lab</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#202020;color:#ddd;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+  h1{font-size:15px;font-weight:600;color:#fff;margin:0 0 12px}
+  #controls{display:flex;flex-wrap:wrap;gap:16px;padding:16px 20px;background:#282828;border-bottom:1px solid #3a3a3a;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#999}
+  .field input[type=number],.field select{background:#1c1c1c;border:1px solid #444;color:#eee;border-radius:4px;padding:4px 6px;width:72px;font:inherit}
+  .field input[type=range]{width:120px}
+  .field .range-row{display:flex;align-items:center;gap:6px}
+  .field .range-row span{font-size:11px;color:#aaa;width:34px;text-align:right}
+  .palette-row{display:flex;gap:6px}
+  .palette-row input[type=color]{width:28px;height:28px;padding:0;border:none;border-radius:4px;background:none}
+  button{background:#464646;border:none;color:#fff;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer}
+  button:hover{background:#575757}
+  #grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px}
+  .tile{background:#2b2b2b;border-radius:8px;padding:8px;text-align:center;cursor:pointer}
+  .tile canvas{width:100%;height:auto;border-radius:4px;display:block;background:#FFF5E5}
+  .tile .seed-label{margin-top:6px;font-size:11px;color:#999}
+  .tile .metrics{font-size:10px;color:#777;margin-top:2px}
+  #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.86);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:100;cursor:zoom-out}
+  #lightbox canvas{max-width:88vw;max-height:78vh;border-radius:8px;background:#FFF5E5}
+  #lightbox-caption{color:#ccc;font-size:12px;max-width:70vw;text-align:center;white-space:pre-line}
+  #lightbox.open{display:flex}
+  #file-protocol-warning{display:none;background:#4a2020;color:#ffb4b4;padding:14px 20px;font-size:13px;border-bottom:1px solid #6a2c2c}
+  #file-protocol-warning code{background:#2a1414;padding:1px 5px;border-radius:3px}
+</style>
+</head>
+<body>
+
+<div id="file-protocol-warning">
+  This page uses ES module imports, which browsers block under a <code>file://</code> URL
+  (CORS policy — not a bug in this page). Serve it over http instead, e.g. from the repo
+  root run <code>python3 -m http.server</code> and open
+  <code>http://localhost:8000/v3/labs/art-lab.html</code>.
+</div>
+<script>
+  if (location.protocol === 'file:') {
+    document.getElementById('file-protocol-warning').style.display = 'block';
+  }
+</script>
+
+<div id="controls">
+  <div class="field">
+    <label>Base seed</label>
+    <input type="number" id="ctl-seed" value="1">
+  </div>
+  <button id="btn-reroll">Reroll all</button>
+
+  <div class="field">
+    <label>Win score</label>
+    <select id="ctl-winscore">
+      <option value="3">3</option>
+      <option value="5">5</option>
+      <option value="7">7</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label>Pass-1 width mult (<span id="v-p1w">2.2</span>)</label>
+    <input type="range" id="ctl-p1w" min="0.5" max="5" step="0.1" value="2.2">
+  </div>
+  <div class="field">
+    <label>Pass-1 alpha mult (<span id="v-p1a">0.22</span>)</label>
+    <input type="range" id="ctl-p1a" min="0" max="1" step="0.01" value="0.22">
+  </div>
+  <div class="field">
+    <label>Pass-2 width mult (<span id="v-p2w">0.75</span>)</label>
+    <input type="range" id="ctl-p2w" min="0.1" max="2" step="0.05" value="0.75">
+  </div>
+  <div class="field">
+    <label>Pass-2 alpha mult (<span id="v-p2a">0.88</span>)</label>
+    <input type="range" id="ctl-p2a" min="0" max="1" step="0.01" value="0.88">
+  </div>
+  <div class="field">
+    <label>Jitter amplitude (<span id="v-jit">0.5</span>)</label>
+    <input type="range" id="ctl-jit" min="0" max="3" step="0.1" value="0.5">
+  </div>
+
+  <div class="field">
+    <label>Weight range</label>
+    <div class="range-row">
+      <input type="number" id="ctl-wt-min" value="1.0" step="0.1" style="width:52px">
+      <span>–</span>
+      <input type="number" id="ctl-wt-max" value="2.4" step="0.1" style="width:52px">
+    </div>
+  </div>
+  <div class="field">
+    <label>Opacity range</label>
+    <div class="range-row">
+      <input type="number" id="ctl-op-min" value="0.50" step="0.02" style="width:52px">
+      <span>–</span>
+      <input type="number" id="ctl-op-max" value="0.68" step="0.02" style="width:52px">
+    </div>
+  </div>
+
+  <div class="field" style="flex:1;min-width:200px">
+    <label>Density (<span id="v-density">100</span>%)</label>
+    <input type="range" id="ctl-density" min="0" max="100" step="1" value="100" style="width:100%">
+  </div>
+
+  <div class="field">
+    <label>Palette</label>
+    <div class="palette-row" id="ctl-palette"></div>
+  </div>
+
+  <button id="btn-copy">Copy settings</button>
+  <button id="btn-parity">Parity check</button>
+</div>
+
+<div id="grid"></div>
+
+<div id="lightbox">
+  <canvas id="lightbox-canvas"></canvas>
+  <div id="lightbox-caption"></div>
+</div>
+
+<script type="module">
+import { simulateGame, DEFAULT_PALETTE } from '../engine/simulate.js';
+import { renderStroke, DEFAULT_STROKE_PARAMS } from '../engine/strokes.js';
+import { buildSurface } from '../engine/surface.js';
+import { makeRng } from '../engine/rng.js';
+import { W, H } from '../engine/physics.js';
+
+const TILE_COUNT = 12;
+
+const state = {
+  baseSeed: 1,
+  winScore: 3,
+  strokeParams: { ...DEFAULT_STROKE_PARAMS },
+  jitterAmplitude: 0.5,
+  wtRange: [1.0, 2.4],
+  opRange: [0.50, 0.68],
+  palette: [...DEFAULT_PALETTE],
+  density: 100,
+};
+
+const tileData = new Array(TILE_COUNT).fill(null);
+const grid = document.getElementById('grid');
+const tileCanvases = [], tileSeedLabels = [], tileMetricsEls = [];
+
+for (let i = 0; i < TILE_COUNT; i++) {
+  const tile = document.createElement('div');
+  tile.className = 'tile';
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const seedLabel = document.createElement('div');
+  seedLabel.className = 'seed-label';
+  const metricsEl = document.createElement('div');
+  metricsEl.className = 'metrics';
+  tile.appendChild(canvas); tile.appendChild(seedLabel); tile.appendChild(metricsEl);
+  tile.addEventListener('click', () => openLightbox(i));
+  grid.appendChild(tile);
+  tileCanvases.push(canvas); tileSeedLabels.push(seedLabel); tileMetricsEls.push(metricsEl);
+}
+
+function seedFor(i) { return state.baseSeed + i; }
+
+function resimulateTile(i) {
+  const seed = seedFor(i);
+  const result = simulateGame({
+    seed,
+    winScore: state.winScore,
+    jitterAmplitude: state.jitterAmplitude,
+    palette: state.palette,
+    wtRange: state.wtRange,
+    opRange: state.opRange,
+  });
+  const surface = buildSurface(W, H, makeRng(seed));
+  tileData[i] = { strokes: result.strokes, meta: result.meta, surface };
+}
+
+function resimulateAll() {
+  for (let i = 0; i < TILE_COUNT; i++) resimulateTile(i);
+  renderAll();
+}
+
+/* ── metrics (coarse, internal-tool grade) ─────────── */
+const metricCv = document.createElement('canvas');
+metricCv.width = W; metricCv.height = H;
+const metricCx = metricCv.getContext('2d');
+
+function simplifyPts(pts, maxPts) {
+  if (pts.length <= maxPts) return pts;
+  const out = [];
+  for (let k = 0; k < maxPts; k++) {
+    out.push(pts[Math.floor(k * (pts.length - 1) / (maxPts - 1))]);
+  }
+  return out;
+}
+function ccw(a, b, c) { return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x); }
+function segmentsIntersect(p1, p2, p3, p4) {
+  return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
+}
+function countCrossings(simplified) {
+  let c = 0;
+  for (let i = 0; i < simplified.length; i++) {
+    for (let j = i + 1; j < simplified.length; j++) {
+      const a = simplified[i], b = simplified[j];
+      for (let x = 0; x < a.length - 1; x++) {
+        for (let y = 0; y < b.length - 1; y++) {
+          if (segmentsIntersect(a[x], a[x + 1], b[y], b[y + 1])) c++;
+        }
+      }
+    }
+  }
+  return c;
+}
+
+function computeMetrics(strokesSubset) {
+  metricCx.clearRect(0, 0, W, H);
+  strokesSubset.forEach(st => renderStroke(metricCx, st.pts, st.col, st.wt, st.op, state.strokeParams));
+  const img = metricCx.getImageData(0, 0, W, H).data;
+  let ink = 0, sampled = 0;
+  const step = 4; // quarter-resolution per axis
+  for (let y = 0; y < H; y += step) {
+    for (let x = 0; x < W; x += step) {
+      if (img[(y * W + x) * 4 + 3] > 10) ink++;
+      sampled++;
+    }
+  }
+  const coverage = sampled ? (ink / sampled * 100) : 0;
+  const simplified = strokesSubset.map(st => simplifyPts(st.pts, 12));
+  const crossings = countCrossings(simplified);
+  return { strokeCount: strokesSubset.length, coverage, crossings };
+}
+
+/* ── rendering ──────────────────────────────────────── */
+function renderTile(i) {
+  const data = tileData[i];
+  if (!data) return;
+  const ctx = tileCanvases[i].getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(data.surface, 0, 0);
+  const cutoff = Math.ceil(data.strokes.length * (state.density / 100));
+  const subset = data.strokes.slice(0, cutoff);
+  subset.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
+
+  tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
+  const m = computeMetrics(subset);
+  tileMetricsEls[i].textContent =
+    `${m.strokeCount} strokes · ${m.coverage.toFixed(1)}% ink · ~${m.crossings} crossings`;
+}
+
+function renderAll() { for (let i = 0; i < TILE_COUNT; i++) renderTile(i); }
+
+/* ── lightbox ───────────────────────────────────────── */
+const lightbox = document.getElementById('lightbox');
+const lbCanvas = document.getElementById('lightbox-canvas');
+const lbCaption = document.getElementById('lightbox-caption');
+lbCanvas.width = W; lbCanvas.height = H;
+lightbox.addEventListener('click', () => lightbox.classList.remove('open'));
+
+function openLightbox(i) {
+  const data = tileData[i];
+  if (!data) return;
+  const ctx = lbCanvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(tileCanvases[i], 0, 0);
+  lbCaption.textContent = `seed ${seedFor(i)} — score ${data.meta.score.ps}–${data.meta.score.as} — ${data.meta.frames} frames`;
+  lightbox.classList.add('open');
+}
+
+/* ── parity check (brief Task 7) ─────────────────────
+   Renders one game at the live build's exact defaults, ignoring whatever
+   the sliders are currently set to, so it's always a stable reference.
+   No screenshot of a real finished game has been supplied yet — this is a
+   self-review against the reference map in v3/CLAUDE.md until one is. */
+document.getElementById('btn-parity').addEventListener('click', () => {
+  const seed = state.baseSeed;
+  const result = simulateGame({ seed });
+  const surface = buildSurface(W, H, makeRng(seed));
+  const ctx = lbCanvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(surface, 0, 0);
+  result.strokes.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, DEFAULT_STROKE_PARAMS));
+  lbCaption.textContent =
+    `PARITY CHECK — seed ${seed}, default params only\n` +
+    `score ${result.meta.score.ps}–${result.meta.score.as}, ${result.meta.frames} frames, ${result.strokes.length} strokes\n` +
+    `Self-reviewed against v3/CLAUDE.md reference map (no reference screenshot supplied yet).`;
+  lightbox.classList.add('open');
+});
+
+/* ── controls wiring ─────────────────────────────────── */
+const paletteRow = document.getElementById('ctl-palette');
+state.palette.forEach((hex, i) => {
+  const input = document.createElement('input');
+  input.type = 'color'; input.value = hex;
+  input.addEventListener('input', () => {
+    state.palette[i] = input.value;
+    resimulateAll();
+  });
+  paletteRow.appendChild(input);
+});
+
+document.getElementById('ctl-seed').addEventListener('change', e => {
+  state.baseSeed = parseInt(e.target.value, 10) || 0;
+  resimulateAll();
+});
+document.getElementById('btn-reroll').addEventListener('click', () => {
+  state.baseSeed = Math.floor(Math.random() * 1_000_000);
+  document.getElementById('ctl-seed').value = state.baseSeed;
+  resimulateAll();
+});
+document.getElementById('ctl-winscore').addEventListener('change', e => {
+  state.winScore = parseInt(e.target.value, 10);
+  resimulateAll();
+});
+
+function bindSlider(id, labelId, onChange) {
+  const el = document.getElementById(id);
+  const label = document.getElementById(labelId);
+  el.addEventListener('input', () => {
+    label.textContent = el.value;
+    onChange(parseFloat(el.value));
+  });
+}
+bindSlider('ctl-p1w', 'v-p1w', v => { state.strokeParams.pass1WidthMult = v; renderAll(); });
+bindSlider('ctl-p1a', 'v-p1a', v => { state.strokeParams.pass1AlphaMult = v; renderAll(); });
+bindSlider('ctl-p2w', 'v-p2w', v => { state.strokeParams.pass2WidthMult = v; renderAll(); });
+bindSlider('ctl-p2a', 'v-p2a', v => { state.strokeParams.pass2AlphaMult = v; renderAll(); });
+bindSlider('ctl-jit', 'v-jit', v => { state.jitterAmplitude = v; resimulateAll(); });
+bindSlider('ctl-density', 'v-density', v => { state.density = v; renderAll(); });
+
+function bindRange(minId, maxId, apply) {
+  const minEl = document.getElementById(minId), maxEl = document.getElementById(maxId);
+  const update = () => { apply(parseFloat(minEl.value), parseFloat(maxEl.value)); resimulateAll(); };
+  minEl.addEventListener('change', update);
+  maxEl.addEventListener('change', update);
+}
+bindRange('ctl-wt-min', 'ctl-wt-max', (lo, hi) => { state.wtRange = [lo, hi]; });
+bindRange('ctl-op-min', 'ctl-op-max', (lo, hi) => { state.opRange = [lo, hi]; });
+
+document.getElementById('btn-copy').addEventListener('click', () => {
+  const json = JSON.stringify(state, null, 2);
+  navigator.clipboard.writeText(json).catch(() => {});
+});
+
+/* ── boot ─────────────────────────────────────────────── */
+state.baseSeed = Math.floor(Math.random() * 1_000_000);
+document.getElementById('ctl-seed').value = state.baseSeed;
+resimulateAll();
+</script>
+</body>
+</html>

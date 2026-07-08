@@ -119,10 +119,10 @@
 </div>
 
 <div id="enhancements">
-  <h2>Enhancements (all off by default — pure render-time overlays, no re-sim needed)</h2>
+  <h2>Enhancements (pure render-time overlays, no re-sim needed)</h2>
 
   <div class="enh-group">
-    <label class="enh-toggle"><input type="checkbox" id="enh-agefade-on">Age fade</label>
+    <label class="enh-toggle"><input type="checkbox" id="enh-agefade-on" checked>Age fade</label>
     <div class="field">
       <label>Newest (<span id="v-agefade-newest">1.0</span>)</label>
       <input type="range" id="enh-agefade-newest" min="0" max="1.5" step="0.05" value="1.0">
@@ -144,25 +144,6 @@
       <input type="range" id="enh-speedwt-maxw" min="0.5" max="4" step="0.05" value="2.0">
     </div>
   </div>
-
-  <div class="enh-group">
-    <label class="enh-toggle"><input type="checkbox" id="enh-bloom-on">Ink bloom</label>
-    <div class="field">
-      <label>Radius (<span id="v-bloom-radius">40</span>)</label>
-      <input type="range" id="enh-bloom-radius" min="10" max="100" step="2" value="40">
-    </div>
-    <div class="field">
-      <label>Alpha (<span id="v-bloom-alpha">0.12</span>)</label>
-      <input type="range" id="enh-bloom-alpha" min="0" max="0.4" step="0.01" value="0.12">
-    </div>
-    <div class="field">
-      <label>Color mode</label>
-      <select id="enh-bloom-colormode">
-        <option value="hitColor">Hit color</option>
-        <option value="blend">Blend</option>
-      </select>
-    </div>
-  </div>
 </div>
 
 <div id="grid"></div>
@@ -179,7 +160,7 @@ import { buildSurface } from '../engine/surface.js';
 import { makeRng } from '../engine/rng.js';
 import { W, H } from '../engine/physics.js';
 import {
-  DEFAULT_ENHANCEMENTS, ageFadeMultiplier, speedWeightMultiplier, renderBloom,
+  DEFAULT_ENHANCEMENTS, ageFadeMultiplier, speedWeightMultiplier,
 } from '../engine/enhancements.js';
 
 const TILE_COUNT = 12;
@@ -228,7 +209,7 @@ function resimulateTile(i) {
     opRange: state.opRange,
   });
   const surface = buildSurface(W, H, makeRng(seed));
-  tileData[i] = { strokes: result.strokes, blooms: result.blooms, meta: result.meta, surface };
+  tileData[i] = { strokes: result.strokes, meta: result.meta, surface };
 }
 
 function resimulateAll() {
@@ -268,9 +249,8 @@ function countCrossings(simplified) {
   return c;
 }
 
-function computeMetrics(strokesSubset, bloomsSubset = []) {
+function computeMetrics(strokesSubset) {
   metricCx.clearRect(0, 0, W, H);
-  bloomsSubset.forEach(bl => renderBloom(metricCx, bl, state.enh.bloom));
   strokesSubset.forEach(st => renderStroke(metricCx, st.pts, st.col, st.wt, st.op, state.strokeParams));
   const img = metricCx.getImageData(0, 0, W, H).data;
   let ink = 0, sampled = 0;
@@ -302,15 +282,11 @@ function renderTile(i) {
     wt: state.enh.speedWeight.enabled ? st.wt * speedWeightMultiplier(st.speed, state.enh.speedWeight) : st.wt,
     op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
   }));
-  const visibleBlooms = state.enh.bloom.enabled
-    ? data.blooms.filter(bl => bl.strokeIndex < cutoff)
-    : [];
 
-  visibleBlooms.forEach(bl => renderBloom(ctx, bl, state.enh.bloom));
   resolved.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
 
   tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
-  const m = computeMetrics(resolved, visibleBlooms);
+  const m = computeMetrics(resolved);
   tileMetricsEls[i].textContent =
     `${m.strokeCount} strokes · ${m.coverage.toFixed(1)}% ink · ~${m.crossings} crossings`;
 }
@@ -419,14 +395,6 @@ bindEnhSlider('enh-agefade-oldest', 'v-agefade-oldest', v => { state.enh.ageFade
 bindEnhCheckbox('enh-speedwt-on', v => { state.enh.speedWeight.enabled = v; });
 bindEnhSlider('enh-speedwt-minw', 'v-speedwt-minw', v => { state.enh.speedWeight.minW = v; });
 bindEnhSlider('enh-speedwt-maxw', 'v-speedwt-maxw', v => { state.enh.speedWeight.maxW = v; });
-
-bindEnhCheckbox('enh-bloom-on', v => { state.enh.bloom.enabled = v; });
-bindEnhSlider('enh-bloom-radius', 'v-bloom-radius', v => { state.enh.bloom.radius = v; });
-bindEnhSlider('enh-bloom-alpha', 'v-bloom-alpha', v => { state.enh.bloom.alpha = v; });
-document.getElementById('enh-bloom-colormode').addEventListener('change', e => {
-  state.enh.bloom.colorMode = e.target.value;
-  renderAll();
-});
 
 document.getElementById('btn-copy').addEventListener('click', () => {
   const json = JSON.stringify(state, null, 2);

@@ -65,7 +65,6 @@ export function simulateGame({
 } = {}) {
   const rng = makeRng(seed);
   const strokes = [];
-  const blooms = [];
 
   const paddleL = { y: H / 2 - PH / 2 };
   const paddleR = { y: H / 2 - PH / 2 };
@@ -125,19 +124,11 @@ export function simulateGame({
     balls.forEach(b => {
       const events = advanceBall(b, paddleL, paddleR, padVelL, rng);
       events.forEach(ev => {
-        const hadStroke = b.pts.length >= 2;
         commit(b, ev.type);
-        const hitCol = b.scol;
         if (ev.type === 'paddleHit') paddleHits++;
         b.col = nextCol(palette, colState);
         b.scol = b.col;
         b.pts = [{ x: b.x, y: b.y }];
-        if (ev.type === 'paddleHit' && hadStroke) {
-          blooms.push({
-            x: ev.x, y: ev.y, hitCol, blendCol: b.col,
-            strokeIndex: strokes.length - 1,
-          });
-        }
       });
       b.pts.push({ x: b.x, y: b.y });
       if (b.pts.length > maxPtsPerStroke) {
@@ -163,7 +154,6 @@ export function simulateGame({
 
   return {
     strokes,
-    blooms,
     meta: {
       seed, score: { ps, as }, rallies: paddleHits, frames: frameCount,
       truncated: frameCount >= maxFrames,

@@ -16,6 +16,13 @@ const MASK_SCALE = 2;       // downsample factor from canvas resolution
 const WALL_RADIUS = 2;      // mask-px half-width of the rasterized stroke wall
 const SAMPLE_STEP_PX = 1;   // ~mask-px spacing between curve samples
 
+/* Canvas-px distance from a stroke centreline out to the detection region
+   boundary. A detected region's edge sits this far inside the stroke that
+   bounds it (the flood fill can't enter the rasterized WALL_RADIUS wall), so
+   a wash filling only the raw region stops short of the visible stroke by
+   this much. The lab uses it to size the pre-blur dilation (brief 06). */
+export const WALL_RADIUS_CANVAS_PX = WALL_RADIUS * MASK_SCALE; // 4
+
 export const DEFAULT_FILL = {
   enabled: false, style: 0, opacity: 0.32,
   maxCount: 6, minAreaFrac: 0.004, maxAreaFrac: 0.08,

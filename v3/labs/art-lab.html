@@ -196,7 +196,7 @@ import {
 } from '../engine/enhancements.js';
 import {
   DEFAULT_FILL, detectRegions, selectFillRegions, assignRegionColors, dilateMask, hexToRgb,
-  quadrantCounts,
+  quadrantCounts, WALL_RADIUS_CANVAS_PX,
 } from '../engine/fill.js';
 
 const TILE_COUNT = 12;
@@ -300,8 +300,14 @@ function recomputeFillsAll() {
    lands at or past the boundary instead of short of it. */
 function renderFillWash(ctx, region, opacity, style) {
   const blurPx = 1 + style * 5;
-  const wideStrokeHalfWidth = (state.wtRange[1] * state.strokeParams.pass1WidthMult) / 2;
-  const dilateAmount = Math.max(wideStrokeHalfWidth, blurPx * 1.2);
+  /* Brief 06: the detected region boundary sits WALL_RADIUS_CANVAS_PX (4px)
+     inside the stroke centreline, so a raw wash stops ~4px short of the
+     bounding stroke; blur then recedes its effective edge inward by roughly
+     another blur radius. Dilating by wall + blur pushes the wash out to (and
+     just under) the stroke, closing the paper ring. Brief 05's stroke-half-
+     width formula only reached ~2px and left a measured 1-2px gap (max 5px);
+     over-fill tucked under the stroke is fine since strokes draw on top. */
+  const dilateAmount = WALL_RADIUS_CANVAS_PX + blurPx;
   const dilated = dilateMask(region, dilateAmount);
   const { mask, maskBounds, bounds, centroid } = dilated;
   const { w: mw, h: mh } = maskBounds;

@@ -1,0 +1,72 @@
+# PROJECT-LOG.md — Zen Pong v3 Living State
+
+Newest entries at top. Each session appends where it left off. A fresh chat
+reads this to know exactly where the project stands.
+
+---
+
+## 2026-07-09 — Fill built, needs aesthetic revision (Brief 03 done, NOT merged)
+
+### Done & merged to main
+- **Brief 01 (art-lab):** Engine extracted from root index.html into pure ES
+  modules — `v3/engine/rng.js, physics.js, strokes.js, surface.js, simulate.js`.
+  Seedable/deterministic. `v3/labs/art-lab.html` renders 12 headless-simulated
+  artworks in a grid with metrics (strokes / ink% / crossings), density
+  scrubber, palette, copy-settings. Faithful to live build. Merged.
+- **Brief 02 (stroke enhancements):** Age fade (defaults newest 1.0 / oldest
+  0.55, ON) and speed weight (min 0.8 / max 2.0, OFF) added as render-time
+  overlays with lab controls, off-by-default discipline. Ink bloom was built
+  then CUT — hit-triggered placement put all blooms on left/right edges
+  (predictable, useless). Merged.
+
+### Built but NOT merged — on branch `feature/fill-regions`, needs revision
+- **Brief 03 (fill regions):** Raster flood-fill region detection in pure
+  `v3/engine/fill.js` (headless, zero DOM — detection returns data; wash
+  painting lives lab-side in art-lab.html). Detection works well. Lab "Fill"
+  group added, off by default.
+- **Shivang's verdict: mechanism great, aesthetic wrong. Four problems:**
+  1. Fills render near-OPAQUE (lab default opacity 0.8 — should be ~0.3; spec
+     said 0.32). This is the biggest issue — reads as flat digital shape, not
+     the specced translucent pigment wash. "Same hand as the strokes" violated.
+  2. Fills inset from stroke edges → ugly paper halo/gap (half-res mask + blur
+     eating the boundary; needs mask dilation and/or full-res detection).
+  3. Single colour — every fill is blend(palette[0],palette[1]). Shivang wants
+     each region a DISTINCT palette colour, assigned with variety.
+  4. Clustering — spacing rule too weak; fills bunch, leaving canvas halves
+     empty. Needs stronger spread / quadrant balancing.
+- **Decision: do NOT drop fill. One focused revision pass (Brief 04) first.**
+  Judged at its worst preset (opaque/mono/inset/clustered). Target: translucent
+  ~0.3 washes, each a distinct palette hue, filling clean to stroke edges,
+  evenly spread, grain+lines showing through. Then re-decide keep/drop with
+  real evidence.
+
+### Housekeeping pending
+- Delete stale `feature/art-lab` branch (merged long ago, never cleaned).
+- Doc-drift cleanup commit (do together, low priority): DESIGN.md §12 rule 12
+  still says BGM via fetch+decodeAudioData (WRONG — it's new Audio()+
+  createMediaElementSource, per CLAUDE.md §4); root CLAUDE.md §7 spawn-angle
+  formula doesn't match live index.html (live is Math.random()*0.55+0.18);
+  root CLAUDE.md getImageData "two loops → merge" note is stale (already one).
+
+### Calibration locked (Shivang's taste, in numbers)
+Preferred compositions: ~28–50 strokes, ~10–17% ink, crossings under ~470.
+Sweet spot ~30–35 strokes / 10–12% ink. Real preference is SPARSER than
+intuition — high end is "acceptable," low 30s / ~11% is "beautiful." Implication:
+5/7-point games overshoot the good zone → density scrubber is essential, and
+suggested-moment tick target is ~10–13% ink primary, out to ~17% secondary.
+
+### NEXT UP (start of next chat)
+1. Write & run **Brief 04 — fill aesthetic revision** (the 4 fixes above).
+   This is the priority; fill is the feature Shivang was most excited about.
+2. After fill resolves (keep or drop with evidence), candidate next briefs:
+   - Composition-aware ink bloom (bloom at dense intersection knots, not paddle
+     hits — needs the region-analysis machinery fill already built).
+   - Surfaces: chalkboard + canvas renderers (category change, likely the next
+     big "wow" lever alongside fill).
+   - Shivang's own ideas, logged & endorsed: spin-shape drops (heavy-spin ball
+     drops a mark that makes player skill legible in the art — attacks
+     convergence), swerve/loop ball physics (crank spin magnitude/decay, find
+     the unhittable ceiling in the lab).
+3. Open product items still pending Shivang: font decision (index.html already
+   self-hosts Basier Circle — real Q is keep vs Google Font), 12 palette hex
+   values, onboarding State-1 surface-selector sketch, share-page spec.

@@ -158,11 +158,7 @@
     </div>
     <div class="field">
       <label>Opacity (<span id="v-fill-opacity">0.32</span>)</label>
-      <input type="range" id="fill-opacity" min="0" max="0.8" step="0.02" value="0.32">
-    </div>
-    <div class="field">
-      <label>Blend A↔B (<span id="v-fill-blend">0.50</span>)</label>
-      <input type="range" id="fill-blend" min="0" max="1" step="0.05" value="0.5">
+      <input type="range" id="fill-opacity" min="0" max="0.5" step="0.02" value="0.32">
     </div>
   </div>
   <div class="enh-group">
@@ -198,7 +194,7 @@ import {
   DEFAULT_ENHANCEMENTS, ageFadeMultiplier, speedWeightMultiplier,
 } from '../engine/enhancements.js';
 import {
-  DEFAULT_FILL, detectRegions, selectFillRegions, blendColors,
+  DEFAULT_FILL, detectRegions, selectFillRegions, assignRegionColors, dilateMask, hexToRgb,
 } from '../engine/fill.js';
 
 const TILE_COUNT = 12;
@@ -270,7 +266,8 @@ function recomputeFillsForTile(i) {
   const cutoff = Math.ceil(total * (state.density / 100));
   const subset = data.strokes.slice(0, cutoff);
   const regions = detectRegions(subset, W, H);
-  data.fillRegions = selectFillRegions(regions, state.fill, W, H);
+  const selected = selectFillRegions(regions, state.fill, W, H);
+  data.fillRegions = assignRegionColors(selected, state.palette, makeRng(seedFor(i)));
 }
 function recomputeFillsAll() {
   for (let i = 0; i < TILE_COUNT; i++) recomputeFillsForTile(i);
@@ -281,12 +278,23 @@ function recomputeFillsAll() {
    needs canvas/ImageData/blur — fill.js's detection stays canvas-free.
    style 0->1 drives blur radius (softness) and an added soft radial
    brightening toward the centroid (denser "pooled" center at higher
-   style); at style=0 the result is a flat, evenly translucent wash. */
-function renderFillWash(ctx, region, rgb, opacity, style) {
-  const { mask, maskBounds, bounds, centroid } = region;
+   style); at style=0 the result is a flat, evenly translucent wash.
+
+   Dilates the mask before blurring by ~1.2x the blur radius (brief 04
+   task 2) — canvas blur redistributes alpha roughly symmetrically across
+   the original edge, so an un-dilated mask's effectively-opaque interior
+   recedes inward from the true detected boundary by about half the blur
+   radius, leaving a visible cream gap between the wash and the stroke
+   that bounds it. Dilating first means that recession lands at or past
+   the original boundary instead of short of it. */
+function renderFillWash(ctx, region, opacity, style) {
+  const blurPx = 1 + style * 5;
+  const dilated = dilateMask(region, blurPx * 1.2);
+  const { mask, maskBounds, bounds, centroid } = dilated;
   const { w: mw, h: mh } = maskBounds;
   if (mw <= 0 || mh <= 0) return;
 
+  const rgb = hexToRgb(region.color);
   const img = new ImageData(mw, mh);
   for (let p = 0; p < mw * mh; p++) {
     img.data[p * 4] = rgb.r; img.data[p * 4 + 1] = rgb.g; img.data[p * 4 + 2] = rgb.b;
@@ -297,7 +305,6 @@ function renderFillWash(ctx, region, rgb, opacity, style) {
   tmp.getContext('2d').putImageData(img, 0, 0);
 
   const boundsW = bounds.x1 - bounds.x0, boundsH = bounds.y1 - bounds.y0;
-  const blurPx = 1 + style * 5;
 
   ctx.save();
   ctx.filter = `blur(${blurPx}px)`;
@@ -377,8 +384,7 @@ function renderTile(i) {
   ctx.drawImage(data.surface, 0, 0);
 
   if (state.fill.enabled && data.fillRegions && data.fillRegions.length) {
-    const rgb = blendColors(state.palette[0], state.palette[1], state.fill.blend);
-    data.fillRegions.forEach(r => renderFillWash(ctx, r, rgb, state.fill.opacity, state.fill.style));
+    data.fillRegions.forEach(r => renderFillWash(ctx, r, state.fill.opacity, state.fill.style));
   }
 
   const total = data.strokes.length;
@@ -506,16 +512,17 @@ bindEnhCheckbox('enh-speedwt-on', v => { state.enh.speedWeight.enabled = v; });
 bindEnhSlider('enh-speedwt-minw', 'v-speedwt-minw', v => { state.enh.speedWeight.minW = v; });
 bindEnhSlider('enh-speedwt-maxw', 'v-speedwt-maxw', v => { state.enh.speedWeight.maxW = v; });
 
-/* Fill controls: style/opacity/blend are pure render params (live, via
-   'input', reusing cached regions); enable/maxCount/area-fracs affect
-   DETECTION so they recompute on 'change' (release), per the brief. */
+/* Fill controls: style/opacity are pure render params (live, via 'input',
+   reusing cached regions); enable/maxCount/area-fracs affect DETECTION
+   so they recompute on 'change' (release), per the brief. (fill.blend was
+   dropped in brief 04 — each region gets its own distinct color now via
+   assignRegionColors, so a single palette-A/B blend no longer applies.) */
 document.getElementById('fill-on').addEventListener('change', e => {
   state.fill.enabled = e.target.checked;
   if (state.fill.enabled) recomputeFillsAll(); else renderAll();
 });
 bindEnhSlider('fill-style', 'v-fill-style', v => { state.fill.style = v; renderAll(); });
 bindEnhSlider('fill-opacity', 'v-fill-opacity', v => { state.fill.opacity = v; renderAll(); });
-bindEnhSlider('fill-blend', 'v-fill-blend', v => { state.fill.blend = v; renderAll(); });
 
 function bindFillDetectionInput(id, apply) {
   document.getElementById(id).addEventListener('change', e => {

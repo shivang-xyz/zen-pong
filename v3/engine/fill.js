@@ -226,31 +226,26 @@ export function selectFillRegions(regions, params = {}, W = CANVAS_W, H = CANVAS
   const candidates = regions.filter(r => r.areaFraction >= minAreaFrac && r.areaFraction <= maxAreaFrac);
   if (candidates.length <= maxCount) return candidates;
 
-  const GRID = 3;
-  const cellW = W / GRID, cellH = H / GRID;
-  const cellIndex = c => {
-    const cx = Math.min(GRID - 1, Math.max(0, Math.floor(c.centroid.x / cellW)));
-    const cy = Math.min(GRID - 1, Math.max(0, Math.floor(c.centroid.y / cellH)));
-    return cy * GRID + cx;
+  const midX = W / 2, midY = H / 2;
+  const quadrantOf = c => {
+    const top = c.centroid.y < midY, left = c.centroid.x < midX;
+    return top ? (left ? 'tl' : 'tr') : (left ? 'bl' : 'br');
   };
 
-  const byCell = new Map();
-  candidates.forEach(c => {
-    const idx = cellIndex(c);
-    if (!byCell.has(idx)) byCell.set(idx, []);
-    byCell.get(idx).push(c); // candidates arrives area-descending, preserved per cell
-  });
-  const cellKeys = [...byCell.keys()].sort((a, b) => byCell.get(b)[0].areaFraction - byCell.get(a)[0].areaFraction);
+  const byQuadrant = { tl: [], tr: [], bl: [], br: [] };
+  candidates.forEach(c => byQuadrant[quadrantOf(c)].push(c)); // area-descending preserved per quadrant
+  const quadrantKeys = ['tl', 'tr', 'bl', 'br'].filter(k => byQuadrant[k].length > 0)
+    .sort((a, b) => byQuadrant[b][0].areaFraction - byQuadrant[a][0].areaFraction);
 
   const picked = [];
   for (let round = 0; picked.length < maxCount; round++) {
     let addedThisRound = false;
-    for (const key of cellKeys) {
+    for (const key of quadrantKeys) {
       if (picked.length >= maxCount) break;
-      const list = byCell.get(key);
+      const list = byQuadrant[key];
       if (round < list.length) { picked.push(list[round]); addedThisRound = true; }
     }
-    if (!addedThisRound) break; // every cell's candidates exhausted
+    if (!addedThisRound) break; // every quadrant's candidates exhausted
   }
   return picked;
 }

@@ -29,6 +29,11 @@
   #lightbox.open{display:flex}
   #file-protocol-warning{display:none;background:#4a2020;color:#ffb4b4;padding:14px 20px;font-size:13px;border-bottom:1px solid #6a2c2c}
   #file-protocol-warning code{background:#2a1414;padding:1px 5px;border-radius:3px}
+  #enhancements{display:flex;flex-wrap:wrap;gap:24px;padding:14px 20px;background:#24262c;border-bottom:1px solid #3a3a3a;align-items:flex-end}
+  #enhancements h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8ab4ff;margin:0;width:100%}
+  .enh-group{display:flex;gap:14px;align-items:flex-end;background:#2c2f38;border-radius:8px;padding:10px 14px}
+  .enh-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:#ddd;white-space:nowrap}
+  .enh-toggle input{width:15px;height:15px}
 </style>
 </head>
 <body>
@@ -113,6 +118,34 @@
   <button id="btn-parity">Parity check</button>
 </div>
 
+<div id="enhancements">
+  <h2>Enhancements (pure render-time overlays, no re-sim needed)</h2>
+
+  <div class="enh-group">
+    <label class="enh-toggle"><input type="checkbox" id="enh-agefade-on" checked>Age fade</label>
+    <div class="field">
+      <label>Newest (<span id="v-agefade-newest">1.0</span>)</label>
+      <input type="range" id="enh-agefade-newest" min="0" max="1.5" step="0.05" value="1.0">
+    </div>
+    <div class="field">
+      <label>Oldest (<span id="v-agefade-oldest">0.55</span>)</label>
+      <input type="range" id="enh-agefade-oldest" min="0" max="1.5" step="0.05" value="0.55">
+    </div>
+  </div>
+
+  <div class="enh-group">
+    <label class="enh-toggle"><input type="checkbox" id="enh-speedwt-on">Speed weight</label>
+    <div class="field">
+      <label>Min × (<span id="v-speedwt-minw">0.8</span>)</label>
+      <input type="range" id="enh-speedwt-minw" min="0.2" max="2" step="0.05" value="0.8">
+    </div>
+    <div class="field">
+      <label>Max × (<span id="v-speedwt-maxw">2.0</span>)</label>
+      <input type="range" id="enh-speedwt-maxw" min="0.5" max="4" step="0.05" value="2.0">
+    </div>
+  </div>
+</div>
+
 <div id="grid"></div>
 
 <div id="lightbox">
@@ -126,6 +159,9 @@ import { renderStroke, DEFAULT_STROKE_PARAMS } from '../engine/strokes.js';
 import { buildSurface } from '../engine/surface.js';
 import { makeRng } from '../engine/rng.js';
 import { W, H } from '../engine/physics.js';
+import {
+  DEFAULT_ENHANCEMENTS, ageFadeMultiplier, speedWeightMultiplier,
+} from '../engine/enhancements.js';
 
 const TILE_COUNT = 12;
 
@@ -138,6 +174,7 @@ const state = {
   opRange: [0.50, 0.68],
   palette: [...DEFAULT_PALETTE],
   density: 100,
+  enh: JSON.parse(JSON.stringify(DEFAULT_ENHANCEMENTS)),
 };
 
 const tileData = new Array(TILE_COUNT).fill(null);
@@ -237,12 +274,19 @@ function renderTile(i) {
   const ctx = tileCanvases[i].getContext('2d');
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(data.surface, 0, 0);
-  const cutoff = Math.ceil(data.strokes.length * (state.density / 100));
-  const subset = data.strokes.slice(0, cutoff);
-  subset.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
+
+  const total = data.strokes.length;
+  const cutoff = Math.ceil(total * (state.density / 100));
+  const resolved = data.strokes.slice(0, cutoff).map(st => ({
+    pts: st.pts, col: st.col,
+    wt: state.enh.speedWeight.enabled ? st.wt * speedWeightMultiplier(st.speed, state.enh.speedWeight) : st.wt,
+    op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
+  }));
+
+  resolved.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
 
   tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
-  const m = computeMetrics(subset);
+  const m = computeMetrics(resolved);
   tileMetricsEls[i].textContent =
     `${m.strokeCount} strokes · ${m.coverage.toFixed(1)}% ink · ~${m.crossings} crossings`;
 }
@@ -335,6 +379,22 @@ function bindRange(minId, maxId, apply) {
 }
 bindRange('ctl-wt-min', 'ctl-wt-max', (lo, hi) => { state.wtRange = [lo, hi]; });
 bindRange('ctl-op-min', 'ctl-op-max', (lo, hi) => { state.opRange = [lo, hi]; });
+
+function bindEnhCheckbox(id, apply) {
+  document.getElementById(id).addEventListener('change', e => { apply(e.target.checked); renderAll(); });
+}
+function bindEnhSlider(id, labelId, apply) {
+  const el = document.getElementById(id), label = document.getElementById(labelId);
+  el.addEventListener('input', () => { label.textContent = el.value; apply(parseFloat(el.value)); renderAll(); });
+}
+
+bindEnhCheckbox('enh-agefade-on', v => { state.enh.ageFade.enabled = v; });
+bindEnhSlider('enh-agefade-newest', 'v-agefade-newest', v => { state.enh.ageFade.newest = v; });
+bindEnhSlider('enh-agefade-oldest', 'v-agefade-oldest', v => { state.enh.ageFade.oldest = v; });
+
+bindEnhCheckbox('enh-speedwt-on', v => { state.enh.speedWeight.enabled = v; });
+bindEnhSlider('enh-speedwt-minw', 'v-speedwt-minw', v => { state.enh.speedWeight.minW = v; });
+bindEnhSlider('enh-speedwt-maxw', 'v-speedwt-maxw', v => { state.enh.speedWeight.maxW = v; });
 
 document.getElementById('btn-copy').addEventListener('click', () => {
   const json = JSON.stringify(state, null, 2);

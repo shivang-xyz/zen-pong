@@ -40,6 +40,7 @@ import {
   mkBall, advanceBall, ballBall, levelUp, pickTargetY, updatePaddleAI,
 } from './physics.js';
 import { jitterPath } from './strokes.js';
+import { computeMeanSpeed } from './enhancements.js';
 
 export const DEFAULT_PALETTE = ['#FF68AE', '#689AFF', '#8CFFB4', '#FFAE68', '#68D7FF'];
 
@@ -89,6 +90,7 @@ export function simulateGame({
     strokes.push({
       pts: jitterPath(ball.pts, jitterAmplitude),
       col: ball.scol, wt: ball.wt, op: ball.op, event: eventType,
+      speed: computeMeanSpeed(ball.pts), index: strokes.length,
     });
   }
 

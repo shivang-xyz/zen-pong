@@ -17,7 +17,7 @@ const WALL_RADIUS = 2;      // mask-px half-width of the rasterized stroke wall
 const SAMPLE_STEP_PX = 1;   // ~mask-px spacing between curve samples
 
 export const DEFAULT_FILL = {
-  enabled: false, style: 0, opacity: 0.32, blend: 0.5,
+  enabled: false, style: 0, opacity: 0.32,
   maxCount: 6, minAreaFrac: 0.004, maxAreaFrac: 0.08,
 };
 
@@ -161,43 +161,141 @@ export function detectRegions(strokes, W = CANVAS_W, H = CANVAS_H) {
   return findEnclosedRegions(mask, outside, maskW, maskH);
 }
 
-/* Filters to the min/max area band, then caps to maxCount. When more
-   candidates pass the band filter than maxCount, walks them largest-first
-   and greedily accepts only ones whose centroid is far enough (>= 15% of
-   the shorter canvas dimension) from every already-accepted centroid —
-   biases toward larger regions (walk order) while avoiding an all-fills-
-   in-one-corner result. If spacing rejects too many, a second relaxed pass
-   fills remaining slots from the largest leftovers regardless of spacing. */
+/* Filters to the min/max area band, then caps to maxCount using a 3x3
+   quadrant-grid spread rule (brief 04 task 4 — replaces brief 03's
+   spacing-greedy cap, which could still leave whole canvas halves empty).
+
+   Selection rule (documented plainly, this is a taste decision):
+   1. Bucket the area-filtered candidates into a 3x3 grid by centroid.
+   2. Order the occupied cells by their own largest candidate's area,
+      richest cell first.
+   3. Round-robin across occupied cells: pass 0 takes the single best
+      (largest) candidate from every occupied cell; if maxCount isn't
+      filled yet, pass 1 takes each occupied cell's second-best, and so
+      on. This guarantees every occupied quadrant contributes before any
+      quadrant gets a second pick. Empty cells just don't participate —
+      that's the "fall back to area-ranking if a quadrant is empty" case,
+      it falls out of the rotation with no special-case code needed.
+   No rng() involved: it's a deterministic area/position rule with no
+   meaningful ties to randomize, so determinism holds trivially. */
 export function selectFillRegions(regions, params = {}, W = CANVAS_W, H = CANVAS_H) {
   const { minAreaFrac = DEFAULT_FILL.minAreaFrac, maxAreaFrac = DEFAULT_FILL.maxAreaFrac, maxCount = DEFAULT_FILL.maxCount } = params;
   const candidates = regions.filter(r => r.areaFraction >= minAreaFrac && r.areaFraction <= maxAreaFrac);
   if (candidates.length <= maxCount) return candidates;
 
-  const minSpacing = 0.15 * Math.min(W, H);
-  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-  const picked = [], skipped = [];
-  for (const c of candidates) {
-    if (picked.length >= maxCount) break;
-    if (picked.every(p => dist(p.centroid, c.centroid) >= minSpacing)) picked.push(c);
-    else skipped.push(c);
-  }
-  for (const c of skipped) {
-    if (picked.length >= maxCount) break;
-    picked.push(c);
+  const GRID = 3;
+  const cellW = W / GRID, cellH = H / GRID;
+  const cellIndex = c => {
+    const cx = Math.min(GRID - 1, Math.max(0, Math.floor(c.centroid.x / cellW)));
+    const cy = Math.min(GRID - 1, Math.max(0, Math.floor(c.centroid.y / cellH)));
+    return cy * GRID + cx;
+  };
+
+  const byCell = new Map();
+  candidates.forEach(c => {
+    const idx = cellIndex(c);
+    if (!byCell.has(idx)) byCell.set(idx, []);
+    byCell.get(idx).push(c); // candidates arrives area-descending, preserved per cell
+  });
+  const cellKeys = [...byCell.keys()].sort((a, b) => byCell.get(b)[0].areaFraction - byCell.get(a)[0].areaFraction);
+
+  const picked = [];
+  for (let round = 0; picked.length < maxCount; round++) {
+    let addedThisRound = false;
+    for (const key of cellKeys) {
+      if (picked.length >= maxCount) break;
+      const list = byCell.get(key);
+      if (round < list.length) { picked.push(list[round]); addedThisRound = true; }
+    }
+    if (!addedThisRound) break; // every cell's candidates exhausted
   }
   return picked;
 }
 
-function hexToRgb(hex) {
+/* Hex "#rrggbb" -> {r,g,b} (0-255 each). Exported since the lab needs it to
+   turn a region's assigned hex color into ImageData/rgba() components. */
+export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
-/* Blend of two hex colors, t=0 -> hexA, t=1 -> hexB. Returns {r,g,b} (0-255
-   each) rather than a formatted string since callers need the components
-   for both ImageData writes and rgba() strings. Pure arithmetic. */
-export function blendColors(hexA, hexB, t = 0.5) {
-  const a = hexToRgb(hexA), b = hexToRgb(hexB);
-  const mix = k => Math.round(a[k] + (b[k] - a[k]) * t);
-  return { r: mix('r'), g: mix('g'), b: mix('b') };
+const COLOR_PROXIMITY_PX = 220; // canvas px; "nearby" regions avoid repeating a color
+
+/* One distinct palette color per region (brief 04 task 3 — replaces
+   brief 03's single blend(palette[0],palette[1]) used everywhere).
+   Assignment rule (documented plainly):
+   1. Fisher-Yates shuffle the full active palette via rng() — once per
+      artwork, so color order varies by seed but is reproducible.
+   2. Walk regions in their existing area-descending order, cycling
+      through the shuffled palette.
+   3. If the cyclic pick would repeat a color already used by a region
+      whose centroid is within COLOR_PROXIMITY_PX, advance to the next
+      palette color (wrapping) until a non-conflicting one is found or
+      the whole palette has been tried once (falls back to the cyclic
+      pick rather than looping forever — with few colors and many close
+      regions, some repeats are unavoidable).
+   Deterministic: same seed -> same rng() sequence -> same shuffle -> same
+   assignment. Returns new region objects with a `color` (hex) field;
+   does not mutate the input. */
+export function assignRegionColors(regions, palette, rng) {
+  const shuffled = [...palette];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const assigned = [];
+  return regions.map((r, i) => {
+    let idx = i % shuffled.length;
+    for (let tries = 0; tries < shuffled.length; tries++) {
+      const candidate = shuffled[idx];
+      const conflict = assigned.some(a => a.color === candidate
+        && Math.hypot(a.centroid.x - r.centroid.x, a.centroid.y - r.centroid.y) < COLOR_PROXIMITY_PX);
+      if (!conflict) break;
+      idx = (idx + 1) % shuffled.length;
+    }
+    const color = shuffled[idx];
+    assigned.push({ centroid: r.centroid, color });
+    return { ...r, color };
+  });
+}
+
+/* Grows a region's local mask circularly, by nCanvasPx of canvas-space
+   dilation (converted internally to mask-px so callers don't need to know
+   about MASK_SCALE) (brief 04 task 2 — compensates for the render-time
+   blur's inward edge recession so the wash reaches/tucks under the
+   bounding stroke instead of stopping short of it). Pure array math;
+   expands mask/maskBounds/bounds accordingly. Does not mutate the input. */
+export function dilateMask(region, nCanvasPx) {
+  const n = Math.round(nCanvasPx / MASK_SCALE);
+  if (n <= 0) return region;
+  const { x0, y0, w, h } = region.maskBounds;
+  const newW = w + 2 * n, newH = h + 2 * n;
+  const src = region.mask;
+  const dst = new Uint8Array(newW * newH);
+  const n2 = n * n;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!src[y * w + x]) continue;
+      for (let dy = -n; dy <= n; dy++) {
+        const ny = y + n + dy;
+        if (ny < 0 || ny >= newH) continue;
+        for (let dx = -n; dx <= n; dx++) {
+          if (dx * dx + dy * dy > n2) continue;
+          const nx = x + n + dx;
+          if (nx < 0 || nx >= newW) continue;
+          dst[ny * newW + nx] = 1;
+        }
+      }
+    }
+  }
+  return {
+    ...region,
+    mask: dst,
+    maskBounds: { x0: x0 - n, y0: y0 - n, w: newW, h: newH },
+    bounds: {
+      x0: region.bounds.x0 - n * MASK_SCALE, y0: region.bounds.y0 - n * MASK_SCALE,
+      x1: region.bounds.x1 + n * MASK_SCALE, y1: region.bounds.y1 + n * MASK_SCALE,
+    },
+  };
 }

@@ -285,16 +285,24 @@ function recomputeFillsAll() {
    brightening toward the centroid (denser "pooled" center at higher
    style); at style=0 the result is a flat, evenly translucent wash.
 
-   Dilates the mask before blurring by ~1.2x the blur radius (brief 04
-   task 2) — canvas blur redistributes alpha roughly symmetrically across
-   the original edge, so an un-dilated mask's effectively-opaque interior
-   recedes inward from the true detected boundary by about half the blur
-   radius, leaving a visible cream gap between the wash and the stroke
-   that bounds it. Dilating first means that recession lands at or past
-   the original boundary instead of short of it. */
+   Dilates the mask before blurring (brief 05 task 1 — brief 04's dilation
+   was tied only to blur radius, ~1.2-7.2px depending on style; at the
+   default style=0 that's only ~1.2px, too little because the WIDE pass
+   (0.22 alpha, wt*pass1WidthMult, up to ~5.3px at max weight) is visibly
+   wider than that. Dilation is now `max` of two terms: half the current
+   max wide-pass stroke width (covers the widest stroke regardless of
+   style) and the old blur-based term (kept as a floor so the
+   already-correct high-style/high-blur case, verified gap-free in brief
+   04, doesn't regress now that the stroke-width term dominates at
+   style=0). Canvas blur still redistributes alpha roughly symmetrically
+   across the original edge, receding the wash's effective interior
+   inward from the true boundary — dilating first means that recession
+   lands at or past the boundary instead of short of it. */
 function renderFillWash(ctx, region, opacity, style) {
   const blurPx = 1 + style * 5;
-  const dilated = dilateMask(region, blurPx * 1.2);
+  const wideStrokeHalfWidth = (state.wtRange[1] * state.strokeParams.pass1WidthMult) / 2;
+  const dilateAmount = Math.max(wideStrokeHalfWidth, blurPx * 1.2);
+  const dilated = dilateMask(region, dilateAmount);
   const { mask, maskBounds, bounds, centroid } = dilated;
   const { w: mw, h: mh } = maskBounds;
   if (mw <= 0 || mh <= 0) return;

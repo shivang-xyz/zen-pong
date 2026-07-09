@@ -1,0 +1,418 @@
+{
+  "washThreshold": 8,
+  "note": "gap width in canvas px = PAPER pixels between where the wash ends and the bounding stroke begins, measured along 360 rays out from each region centroid. Wash edge = last pixel where fillOn-fillOff exceeds the wash threshold (a pure wash signal; identical grain/strokes cancel). Stroke = alpha>10 in an exact re-render of the lab stroke layer.",
+  "passIfWorstGapP90LE": 1,
+  "seeds": [
+    {
+      "seed": 1,
+      "selectedRegions": 6,
+      "worstGapMax": 5,
+      "worstGapP90": 1,
+      "regions": [
+        {
+          "regionIndex": 0,
+          "areaFraction": 0.00985,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.15,
+          "fracRaysGapGT1": 0.028
+        },
+        {
+          "regionIndex": 1,
+          "areaFraction": 0.0098,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.09,
+          "fracRaysGapGT1": 0.014
+        },
+        {
+          "regionIndex": 2,
+          "areaFraction": 0.00884,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.04,
+          "fracRaysGapGT1": 0.003
+        },
+        {
+          "regionIndex": 3,
+          "areaFraction": 0.00697,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 1,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.03,
+          "fracRaysGapGT1": 0
+        },
+        {
+          "regionIndex": 4,
+          "areaFraction": 0.00888,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 5,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.27,
+          "fracRaysGapGT1": 0.044
+        },
+        {
+          "regionIndex": 5,
+          "areaFraction": 0.00626,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 5,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.37,
+          "fracRaysGapGT1": 0.075
+        }
+      ]
+    },
+    {
+      "seed": 2,
+      "selectedRegions": 3,
+      "worstGapMax": 2,
+      "worstGapP90": 0,
+      "regions": [
+        {
+          "regionIndex": 0,
+          "areaFraction": 0.005,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 1,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.02,
+          "fracRaysGapGT1": 0
+        },
+        {
+          "regionIndex": 1,
+          "areaFraction": 0.00422,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.03,
+          "fracRaysGapGT1": 0.008
+        },
+        {
+          "regionIndex": 2,
+          "areaFraction": 0.00412,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 1,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.09,
+          "fracRaysGapGT1": 0
+        }
+      ]
+    },
+    {
+      "seed": 3,
+      "selectedRegions": 6,
+      "worstGapMax": 4,
+      "worstGapP90": 2,
+      "regions": [
+        {
+          "regionIndex": 0,
+          "areaFraction": 0.00698,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.22,
+          "fracRaysGapGT1": 0.039
+        },
+        {
+          "regionIndex": 1,
+          "areaFraction": 0.00566,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 4,
+          "gapP90": 2,
+          "gapMedian": 0,
+          "gapMean": 0.44,
+          "fracRaysGapGT1": 0.103
+        },
+        {
+          "regionIndex": 2,
+          "areaFraction": 0.00474,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.02,
+          "fracRaysGapGT1": 0.006
+        },
+        {
+          "regionIndex": 3,
+          "areaFraction": 0.00458,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.29,
+          "fracRaysGapGT1": 0.058
+        },
+        {
+          "regionIndex": 4,
+          "areaFraction": 0.00613,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.09,
+          "fracRaysGapGT1": 0.014
+        },
+        {
+          "regionIndex": 5,
+          "areaFraction": 0.00443,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.12,
+          "fracRaysGapGT1": 0.025
+        }
+      ]
+    },
+    {
+      "seed": 4,
+      "selectedRegions": 6,
+      "worstGapMax": 4,
+      "worstGapP90": 1,
+      "regions": [
+        {
+          "regionIndex": 0,
+          "areaFraction": 0.01704,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.3,
+          "fracRaysGapGT1": 0.083
+        },
+        {
+          "regionIndex": 1,
+          "areaFraction": 0.01011,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.15,
+          "fracRaysGapGT1": 0.011
+        },
+        {
+          "regionIndex": 2,
+          "areaFraction": 0.0101,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.18,
+          "fracRaysGapGT1": 0.033
+        },
+        {
+          "regionIndex": 3,
+          "areaFraction": 0.00725,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 1,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.03,
+          "fracRaysGapGT1": 0
+        },
+        {
+          "regionIndex": 4,
+          "areaFraction": 0.01468,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 4,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.04,
+          "fracRaysGapGT1": 0.006
+        },
+        {
+          "regionIndex": 5,
+          "areaFraction": 0.00982,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.09,
+          "fracRaysGapGT1": 0.011
+        }
+      ]
+    },
+    {
+      "seed": 5,
+      "selectedRegions": 6,
+      "worstGapMax": 3,
+      "worstGapP90": 1,
+      "regions": [
+        {
+          "regionIndex": 0,
+          "areaFraction": 0.01222,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.37,
+          "fracRaysGapGT1": 0.092
+        },
+        {
+          "regionIndex": 1,
+          "areaFraction": 0.00947,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.05,
+          "fracRaysGapGT1": 0.003
+        },
+        {
+          "regionIndex": 2,
+          "areaFraction": 0.00692,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.07,
+          "fracRaysGapGT1": 0.003
+        },
+        {
+          "regionIndex": 3,
+          "areaFraction": 0.00541,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.02,
+          "fracRaysGapGT1": 0.003
+        },
+        {
+          "regionIndex": 4,
+          "areaFraction": 0.0102,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 0,
+          "gapMedian": 0,
+          "gapMean": 0.05,
+          "fracRaysGapGT1": 0.008
+        },
+        {
+          "regionIndex": 5,
+          "areaFraction": 0.00669,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.27,
+          "fracRaysGapGT1": 0.053
+        }
+      ]
+    },
+    {
+      "seed": 6,
+      "selectedRegions": 6,
+      "worstGapMax": 4,
+      "worstGapP90": 1,
+      "regions": [
+        {
+          "regionIndex": 0,
+          "areaFraction": 0.01224,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.28,
+          "fracRaysGapGT1": 0.067
+        },
+        {
+          "regionIndex": 1,
+          "areaFraction": 0.00903,
+          "boundedRays": 359,
+          "openRays": 1,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.26,
+          "fracRaysGapGT1": 0.028
+        },
+        {
+          "regionIndex": 2,
+          "areaFraction": 0.00854,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 4,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.23,
+          "fracRaysGapGT1": 0.039
+        },
+        {
+          "regionIndex": 3,
+          "areaFraction": 0.00585,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.34,
+          "fracRaysGapGT1": 0.086
+        },
+        {
+          "regionIndex": 4,
+          "areaFraction": 0.00579,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 3,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.27,
+          "fracRaysGapGT1": 0.031
+        },
+        {
+          "regionIndex": 5,
+          "areaFraction": 0.00887,
+          "boundedRays": 360,
+          "openRays": 0,
+          "gapMax": 2,
+          "gapP90": 1,
+          "gapMedian": 0,
+          "gapMean": 0.23,
+          "fracRaysGapGT1": 0.036
+        }
+      ]
+    }
+  ]
+}

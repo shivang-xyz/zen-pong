@@ -23,6 +23,7 @@
   .tile canvas{width:100%;height:auto;border-radius:4px;display:block;background:#FFF5E5}
   .tile .seed-label{margin-top:6px;font-size:11px;color:#999}
   .tile .metrics{font-size:10px;color:#777;margin-top:2px}
+  .tile .quadrant-debug{color:#e0a869;font-family:monospace}
   #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.86);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:100;cursor:zoom-out}
   #lightbox canvas{max-width:88vw;max-height:78vh;border-radius:8px;background:#FFF5E5}
   #lightbox-caption{color:#ccc;font-size:12px;max-width:70vw;text-align:center;white-space:pre-line}
@@ -195,6 +196,7 @@ import {
 } from '../engine/enhancements.js';
 import {
   DEFAULT_FILL, detectRegions, selectFillRegions, assignRegionColors, dilateMask, hexToRgb,
+  quadrantCounts,
 } from '../engine/fill.js';
 
 const TILE_COUNT = 12;
@@ -214,7 +216,7 @@ const state = {
 
 const tileData = new Array(TILE_COUNT).fill(null);
 const grid = document.getElementById('grid');
-const tileCanvases = [], tileSeedLabels = [], tileMetricsEls = [];
+const tileCanvases = [], tileSeedLabels = [], tileMetricsEls = [], tileQuadrantEls = [];
 
 for (let i = 0; i < TILE_COUNT; i++) {
   const tile = document.createElement('div');
@@ -225,10 +227,12 @@ for (let i = 0; i < TILE_COUNT; i++) {
   seedLabel.className = 'seed-label';
   const metricsEl = document.createElement('div');
   metricsEl.className = 'metrics';
-  tile.appendChild(canvas); tile.appendChild(seedLabel); tile.appendChild(metricsEl);
+  const quadrantEl = document.createElement('div');
+  quadrantEl.className = 'metrics quadrant-debug';
+  tile.appendChild(canvas); tile.appendChild(seedLabel); tile.appendChild(metricsEl); tile.appendChild(quadrantEl);
   tile.addEventListener('click', () => openLightbox(i));
   grid.appendChild(tile);
-  tileCanvases.push(canvas); tileSeedLabels.push(seedLabel); tileMetricsEls.push(metricsEl);
+  tileCanvases.push(canvas); tileSeedLabels.push(seedLabel); tileMetricsEls.push(metricsEl); tileQuadrantEls.push(quadrantEl);
 }
 
 function seedFor(i) { return state.baseSeed + i; }
@@ -268,6 +272,7 @@ function recomputeFillsForTile(i) {
   const regions = detectRegions(subset, W, H);
   const selected = selectFillRegions(regions, state.fill, W, H);
   data.fillRegions = assignRegionColors(selected, state.palette, makeRng(seedFor(i)));
+  data.quadrantDebug = quadrantCounts(regions, state.fill, W, H);
 }
 function recomputeFillsAll() {
   for (let i = 0; i < TILE_COUNT; i++) recomputeFillsForTile(i);
@@ -402,6 +407,14 @@ function renderTile(i) {
   const fillNote = state.fill.enabled ? ` · ${data.fillRegions ? data.fillRegions.length : 0} fills` : '';
   tileMetricsEls[i].textContent =
     `${m.strokeCount} strokes · ${m.coverage.toFixed(1)}% ink · ~${m.crossings} crossings${fillNote}`;
+
+  /* brief 05 task 2: read-only diagnostic, candidates by quadrant */
+  if (state.fill.enabled && data.quadrantDebug) {
+    const q = data.quadrantDebug;
+    tileQuadrantEls[i].textContent = `candidates TL:${q.tl} TR:${q.tr} BL:${q.bl} BR:${q.br} (of ${q.total})`;
+  } else {
+    tileQuadrantEls[i].textContent = '';
+  }
 }
 
 function renderAll() { for (let i = 0; i < TILE_COUNT; i++) renderTile(i); }

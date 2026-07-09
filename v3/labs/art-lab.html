@@ -34,6 +34,8 @@
   .enh-group{display:flex;gap:14px;align-items:flex-end;background:#2c2f38;border-radius:8px;padding:10px 14px}
   .enh-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:#ddd;white-space:nowrap}
   .enh-toggle input{width:15px;height:15px}
+  #fillgroup{display:flex;flex-wrap:wrap;gap:24px;padding:14px 20px;background:#2a2420;border-bottom:1px solid #3a3a3a;align-items:flex-end}
+  #fillgroup h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#e0a869;margin:0;width:100%}
 </style>
 </head>
 <body>
@@ -146,6 +148,39 @@
   </div>
 </div>
 
+<div id="fillgroup">
+  <h2>Fill (post-game pigment wash — off by default, recomputes on release)</h2>
+  <div class="enh-group">
+    <label class="enh-toggle"><input type="checkbox" id="fill-on">Enable</label>
+    <div class="field">
+      <label>Style wash↔painterly (<span id="v-fill-style">0.00</span>)</label>
+      <input type="range" id="fill-style" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label>Opacity (<span id="v-fill-opacity">0.32</span>)</label>
+      <input type="range" id="fill-opacity" min="0" max="0.8" step="0.02" value="0.32">
+    </div>
+    <div class="field">
+      <label>Blend A↔B (<span id="v-fill-blend">0.50</span>)</label>
+      <input type="range" id="fill-blend" min="0" max="1" step="0.05" value="0.5">
+    </div>
+  </div>
+  <div class="enh-group">
+    <div class="field">
+      <label>Max count</label>
+      <input type="number" id="fill-maxcount" value="6" min="1" max="12" step="1" style="width:52px">
+    </div>
+    <div class="field">
+      <label>Min area frac</label>
+      <input type="number" id="fill-minarea" value="0.004" min="0" max="0.05" step="0.001" style="width:64px">
+    </div>
+    <div class="field">
+      <label>Max area frac</label>
+      <input type="number" id="fill-maxarea" value="0.08" min="0.01" max="0.3" step="0.005" style="width:64px">
+    </div>
+  </div>
+</div>
+
 <div id="grid"></div>
 
 <div id="lightbox">
@@ -162,6 +197,9 @@ import { W, H } from '../engine/physics.js';
 import {
   DEFAULT_ENHANCEMENTS, ageFadeMultiplier, speedWeightMultiplier,
 } from '../engine/enhancements.js';
+import {
+  DEFAULT_FILL, detectRegions, selectFillRegions, blendColors,
+} from '../engine/fill.js';
 
 const TILE_COUNT = 12;
 
@@ -175,6 +213,7 @@ const state = {
   palette: [...DEFAULT_PALETTE],
   density: 100,
   enh: JSON.parse(JSON.stringify(DEFAULT_ENHANCEMENTS)),
+  fill: JSON.parse(JSON.stringify(DEFAULT_FILL)),
 };
 
 const tileData = new Array(TILE_COUNT).fill(null);
@@ -209,12 +248,74 @@ function resimulateTile(i) {
     opRange: state.opRange,
   });
   const surface = buildSurface(W, H, makeRng(seed));
-  tileData[i] = { strokes: result.strokes, meta: result.meta, surface };
+  tileData[i] = { strokes: result.strokes, meta: result.meta, surface, fillRegions: null };
+  if (state.fill.enabled) recomputeFillsForTile(i);
 }
 
 function resimulateAll() {
   for (let i = 0; i < TILE_COUNT; i++) resimulateTile(i);
   renderAll();
+}
+
+/* ── fill regions (brief 03) ─────────────────────────
+   Detection (detectRegions/selectFillRegions) is comparatively heavy vs.
+   the render-time overlays, so it's recomputed on control RELEASE
+   ('change' events / explicit calls), not on every slider tick — density
+   scrubbing still updates strokes live via 'input', but fills catch up
+   once scrubbing stops, per the brief's explicit allowance. */
+function recomputeFillsForTile(i) {
+  const data = tileData[i];
+  if (!data) return;
+  const total = data.strokes.length;
+  const cutoff = Math.ceil(total * (state.density / 100));
+  const subset = data.strokes.slice(0, cutoff);
+  const regions = detectRegions(subset, W, H);
+  data.fillRegions = selectFillRegions(regions, state.fill, W, H);
+}
+function recomputeFillsAll() {
+  for (let i = 0; i < TILE_COUNT; i++) recomputeFillsForTile(i);
+  renderAll();
+}
+
+/* Paints one region's translucent wash. Lives here (not fill.js) since it
+   needs canvas/ImageData/blur — fill.js's detection stays canvas-free.
+   style 0->1 drives blur radius (softness) and an added soft radial
+   brightening toward the centroid (denser "pooled" center at higher
+   style); at style=0 the result is a flat, evenly translucent wash. */
+function renderFillWash(ctx, region, rgb, opacity, style) {
+  const { mask, maskBounds, bounds, centroid } = region;
+  const { w: mw, h: mh } = maskBounds;
+  if (mw <= 0 || mh <= 0) return;
+
+  const img = new ImageData(mw, mh);
+  for (let p = 0; p < mw * mh; p++) {
+    img.data[p * 4] = rgb.r; img.data[p * 4 + 1] = rgb.g; img.data[p * 4 + 2] = rgb.b;
+    img.data[p * 4 + 3] = mask[p] ? 255 : 0;
+  }
+  const tmp = document.createElement('canvas');
+  tmp.width = mw; tmp.height = mh;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+
+  const boundsW = bounds.x1 - bounds.x0, boundsH = bounds.y1 - bounds.y0;
+  const blurPx = 1 + style * 5;
+
+  ctx.save();
+  ctx.filter = `blur(${blurPx}px)`;
+  ctx.globalAlpha = opacity;
+  ctx.drawImage(tmp, bounds.x0, bounds.y0, boundsW, boundsH);
+  ctx.restore();
+
+  if (style > 0) {
+    ctx.save();
+    ctx.filter = `blur(${(blurPx * 0.6).toFixed(2)}px)`;
+    const grad = ctx.createRadialGradient(
+      centroid.x, centroid.y, 0, centroid.x, centroid.y, Math.max(boundsW, boundsH) / 2);
+    grad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},${opacity * style * 0.5})`);
+    grad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(bounds.x0, bounds.y0, boundsW, boundsH);
+    ctx.restore();
+  }
 }
 
 /* ── metrics (coarse, internal-tool grade) ─────────── */
@@ -275,6 +376,11 @@ function renderTile(i) {
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(data.surface, 0, 0);
 
+  if (state.fill.enabled && data.fillRegions && data.fillRegions.length) {
+    const rgb = blendColors(state.palette[0], state.palette[1], state.fill.blend);
+    data.fillRegions.forEach(r => renderFillWash(ctx, r, rgb, state.fill.opacity, state.fill.style));
+  }
+
   const total = data.strokes.length;
   const cutoff = Math.ceil(total * (state.density / 100));
   const resolved = data.strokes.slice(0, cutoff).map(st => ({
@@ -287,8 +393,9 @@ function renderTile(i) {
 
   tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
   const m = computeMetrics(resolved);
+  const fillNote = state.fill.enabled ? ` · ${data.fillRegions ? data.fillRegions.length : 0} fills` : '';
   tileMetricsEls[i].textContent =
-    `${m.strokeCount} strokes · ${m.coverage.toFixed(1)}% ink · ~${m.crossings} crossings`;
+    `${m.strokeCount} strokes · ${m.coverage.toFixed(1)}% ink · ~${m.crossings} crossings${fillNote}`;
 }
 
 function renderAll() { for (let i = 0; i < TILE_COUNT; i++) renderTile(i); }
@@ -370,6 +477,9 @@ bindSlider('ctl-p2w', 'v-p2w', v => { state.strokeParams.pass2WidthMult = v; ren
 bindSlider('ctl-p2a', 'v-p2a', v => { state.strokeParams.pass2AlphaMult = v; renderAll(); });
 bindSlider('ctl-jit', 'v-jit', v => { state.jitterAmplitude = v; resimulateAll(); });
 bindSlider('ctl-density', 'v-density', v => { state.density = v; renderAll(); });
+document.getElementById('ctl-density').addEventListener('change', () => {
+  if (state.fill.enabled) recomputeFillsAll();
+});
 
 function bindRange(minId, maxId, apply) {
   const minEl = document.getElementById(minId), maxEl = document.getElementById(maxId);
@@ -395,6 +505,27 @@ bindEnhSlider('enh-agefade-oldest', 'v-agefade-oldest', v => { state.enh.ageFade
 bindEnhCheckbox('enh-speedwt-on', v => { state.enh.speedWeight.enabled = v; });
 bindEnhSlider('enh-speedwt-minw', 'v-speedwt-minw', v => { state.enh.speedWeight.minW = v; });
 bindEnhSlider('enh-speedwt-maxw', 'v-speedwt-maxw', v => { state.enh.speedWeight.maxW = v; });
+
+/* Fill controls: style/opacity/blend are pure render params (live, via
+   'input', reusing cached regions); enable/maxCount/area-fracs affect
+   DETECTION so they recompute on 'change' (release), per the brief. */
+document.getElementById('fill-on').addEventListener('change', e => {
+  state.fill.enabled = e.target.checked;
+  if (state.fill.enabled) recomputeFillsAll(); else renderAll();
+});
+bindEnhSlider('fill-style', 'v-fill-style', v => { state.fill.style = v; renderAll(); });
+bindEnhSlider('fill-opacity', 'v-fill-opacity', v => { state.fill.opacity = v; renderAll(); });
+bindEnhSlider('fill-blend', 'v-fill-blend', v => { state.fill.blend = v; renderAll(); });
+
+function bindFillDetectionInput(id, apply) {
+  document.getElementById(id).addEventListener('change', e => {
+    apply(parseFloat(e.target.value));
+    if (state.fill.enabled) recomputeFillsAll();
+  });
+}
+bindFillDetectionInput('fill-maxcount', v => { state.fill.maxCount = v; });
+bindFillDetectionInput('fill-minarea', v => { state.fill.minAreaFrac = v; });
+bindFillDetectionInput('fill-maxarea', v => { state.fill.maxAreaFrac = v; });
 
 document.getElementById('btn-copy').addEventListener('click', () => {
   const json = JSON.stringify(state, null, 2);

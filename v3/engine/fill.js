@@ -193,9 +193,11 @@ function hexToRgb(hex) {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
-/* Blend of two hex colors, t=0 -> hexA, t=1 -> hexB. Pure arithmetic. */
+/* Blend of two hex colors, t=0 -> hexA, t=1 -> hexB. Returns {r,g,b} (0-255
+   each) rather than a formatted string since callers need the components
+   for both ImageData writes and rgba() strings. Pure arithmetic. */
 export function blendColors(hexA, hexB, t = 0.5) {
   const a = hexToRgb(hexA), b = hexToRgb(hexB);
   const mix = k => Math.round(a[k] + (b[k] - a[k]) * t);
-  return `rgb(${mix('r')},${mix('g')},${mix('b')})`;
+  return { r: mix('r'), g: mix('g'), b: mix('b') };
 }

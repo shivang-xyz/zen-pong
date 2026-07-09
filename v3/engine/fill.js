@@ -161,21 +161,64 @@ export function detectRegions(strokes, W = CANVAS_W, H = CANVAS_H) {
   return findEnclosedRegions(mask, outside, maskW, maskH);
 }
 
-/* Filters to the min/max area band, then caps to maxCount using a 3x3
-   quadrant-grid spread rule (brief 04 task 4 — replaces brief 03's
-   spacing-greedy cap, which could still leave whole canvas halves empty).
+/* Brief 05 task 2 diagnostic (read-only, no behavior change): counts how
+   many area-band-filtered candidates (min/maxAreaFrac applied, same
+   population selectFillRegions calls "candidates" — NOT the raw
+   detectRegions() output, which is dominated by sub-pixel noise slivers
+   from stroke crossings and wouldn't tell us anything about viable fill
+   candidates) fall in each canvas quadrant, via a simple 2x2 split. This
+   is what distinguishes "good candidates exist in a quadrant but aren't
+   picked" (selection bug) from "few/no candidates exist there" (a
+   property of where enclosed regions of a fillable size actually form). */
+export function quadrantCounts(regions, params = {}, W = CANVAS_W, H = CANVAS_H) {
+  const { minAreaFrac = DEFAULT_FILL.minAreaFrac, maxAreaFrac = DEFAULT_FILL.maxAreaFrac } = params;
+  const candidates = regions.filter(r => r.areaFraction >= minAreaFrac && r.areaFraction <= maxAreaFrac);
+  const midX = W / 2, midY = H / 2;
+  const counts = { tl: 0, tr: 0, bl: 0, br: 0, total: candidates.length };
+  candidates.forEach(r => {
+    const top = r.centroid.y < midY, left = r.centroid.x < midX;
+    if (top && left) counts.tl++;
+    else if (top && !left) counts.tr++;
+    else if (!top && left) counts.bl++;
+    else counts.br++;
+  });
+  return counts;
+}
+
+/* Filters to the min/max area band, then caps to maxCount using a 2x2
+   quadrant spread rule (brief 05 task 3 — replaces brief 04's 3x3-grid
+   version, which had a real selection bug: brief 05's task 2 diagnostic
+   showed candidates reasonably distributed across all four quadrants in
+   most seeds, yet whole quadrants often ended up with zero selected
+   fills despite having several viable candidates. Root cause: the 3x3
+   grid's round-robin ordered its 9 CELLS by each cell's best candidate's
+   area and broke out of the loop the moment maxCount was reached — with
+   maxCount=6 and up to 9 occupied cells, that meant only the 6 richest
+   CELLS (which can easily all cluster in 2-3 of the four true quadrants,
+   e.g. a busy center) ever got picked, silently starving whole quadrants
+   that had smaller-but-still-valid candidates. This was a genuine
+   selection bug, not a candidate-availability limit — confirmed by
+   comparing quadrantCounts()'s per-quadrant candidate totals against
+   what selectFillRegions actually picked across a spread of seeds.
 
    Selection rule (documented plainly, this is a taste decision):
-   1. Bucket the area-filtered candidates into a 3x3 grid by centroid.
-   2. Order the occupied cells by their own largest candidate's area,
-      richest cell first.
-   3. Round-robin across occupied cells: pass 0 takes the single best
-      (largest) candidate from every occupied cell; if maxCount isn't
-      filled yet, pass 1 takes each occupied cell's second-best, and so
-      on. This guarantees every occupied quadrant contributes before any
-      quadrant gets a second pick. Empty cells just don't participate —
-      that's the "fall back to area-ranking if a quadrant is empty" case,
-      it falls out of the rotation with no special-case code needed.
+   1. Bucket the area-filtered candidates into the SAME four quadrants
+      quadrantCounts() reports on (2x2 split), not a finer 3x3 grid — so
+      the round-robin operates at the granularity the spread guarantee
+      actually needs to hold.
+   2. Round-robin across occupied quadrants (ordered by each quadrant's
+      own best candidate's area, richest first, only as a tie-breaker for
+      which quadrant's *extra* picks come first): pass 0 takes the single
+      best candidate from every occupied quadrant; since there are only
+      four quadrants and maxCount defaults to 6, pass 0 completes for
+      every occupied quadrant before pass 1 ever starts — guaranteeing
+      full quadrant coverage whenever every quadrant has at least one
+      valid candidate. Only once every quadrant has its pick does a
+      second pass draw a second candidate per quadrant, and so on.
+   3. A quadrant with zero area-filtered candidates simply can't
+      contribute — that's the genuine "candidate-availability limit"
+      case Task 3 also anticipates, and no selection rule can invent a
+      fill where detection found nothing fillable.
    No rng() involved: it's a deterministic area/position rule with no
    meaningful ties to randomize, so determinism holds trivially. */
 export function selectFillRegions(regions, params = {}, W = CANVAS_W, H = CANVAS_H) {

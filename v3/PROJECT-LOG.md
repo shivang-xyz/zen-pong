@@ -5,6 +5,34 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-12 — Chalkboard surface built (Brief 07 done, NOT merged)
+
+### Built but NOT merged — on branch `feature/chalkboard-surface` (off main)
+- **Brief 07 (chalkboard surface):** New `v3/engine/chalkboard.js` adds a second
+  surface style alongside paper, fully additive — `surface.js`/`strokes.js`/root
+  `index.html` untouched, and Paper renders byte-identical to main (hash-verified
+  across seeds 1-6). Branched off `main`, independent of fill.
+  - `buildChalkboardSurface(w,h,rng)`: near-black `#1A1A1E` base, 5-12 rng cloudy
+    smudge blobs, subtle neutral grain (amp 8), darkened edge vignette. No dashed
+    centre-line, no dust speckle.
+  - `renderChalkStroke(...)`: smooth Catmull-Rom two-pass (soft halo + clean
+    core) on a per-stroke bbox offscreen, fixed-seed grain punched into the halo
+    for a dusty chalk edge; `chalkWidthMult` scales width only.
+  - Tri palette `CHALK_PALETTE` `['#3E8EF7','#E8478E','#F5C518']`; white mode
+    `WHITE_CHALK_HEX` `#EFEAE0`. All starting points — Shivang eyeball-tunes.
+  - Lab: Surface selector (Paper/Chalkboard) + Chalk group (mode White/3-Colour,
+    width slider 0.5-3). Chalk reuses the existing age-fade/speed-weight resolved
+    wt/op. Determinism hash-verified.
+- **Awaiting Shivang's eye in the lab before merge** (same gate as fill). Likely
+  tuning: smudge intensity/count, exact tri hexes, white warmth, chalk edge
+  roughness, default width.
+
+### Still open from before (unchanged)
+- `feature/fill-regions`: Briefs 03-06 done (edge gap + spread fixed and
+  pixel-verified in Brief 06), NOT merged — awaiting Shivang's review.
+
+---
+
 ## 2026-07-09 — Fill built, needs aesthetic revision (Brief 03 done, NOT merged)
 
 ### Done & merged to main

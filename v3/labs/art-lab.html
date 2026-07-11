@@ -68,8 +68,21 @@
     <label>Surface</label>
     <select id="ctl-surface">
       <option value="paper">Paper</option>
+      <option value="chalkboard">Chalkboard</option>
       <option value="paint">Paint</option>
     </select>
+  </div>
+
+  <div class="field" id="chalk-group" style="display:none">
+    <label>Chalk mode</label>
+    <select id="ctl-chalk-mode">
+      <option value="white">White</option>
+      <option value="tri">3-Colour</option>
+    </select>
+  </div>
+  <div class="field" id="chalk-width-group" style="display:none">
+    <label>Chalk width (<span id="v-chalk-width">1.0</span>)</label>
+    <input type="range" id="ctl-chalk-width" min="0.5" max="3" step="0.1" value="1.0">
   </div>
 
   <div class="field">
@@ -222,6 +235,9 @@ import {
 import { buildPalette, GROUND_LIBRARY } from '../engine/palette.js';
 import { buildPaintSurface, buildPatchGround, renderPaintStroke, PAINT_WIDTH_BASE } from '../engine/paint.js';
 import { buildSplatter, buildIntersectionBlotches, renderSplatterMark, renderBlotchCluster } from '../engine/splatter.js';
+import {
+  buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE, WHITE_CHALK_HEX,
+} from '../engine/chalkboard.js';
 
 const TILE_COUNT = 12;
 
@@ -235,8 +251,12 @@ const state = {
   palette: [...DEFAULT_PALETTE],
   density: 37, // brief 16: approved default scrubber position — density stays a live control, not frozen
   enh: JSON.parse(JSON.stringify(DEFAULT_ENHANCEMENTS)),
-  surfaceMode: 'paper', // 'paper' | 'paint' — no 'chalkboard' option: chalk lives only on
-                         // feature/chalkboard-surface (unmerged), this branch never touches it
+  // 'paper' | 'chalkboard' | 'paint' — brief 17 rebase merges chalk (its own
+  // 'surface' field, values 'paper'|'chalkboard') onto paint's 'surfaceMode'
+  // naming. Standardised on 'surfaceMode' everywhere; three values now.
+  surfaceMode: 'paper',
+  chalkMode: 'white',      // 'white' | 'tri'
+  chalkWidthMult: 1.0,     // chalk stroke thickness knob (0.5–3)
   paint: {
     scheme: 'random',       // one of SCHEMES' keys, or 'random' => undefined => rng-drawn
     groundHex: GROUND_LIBRARY[0].hex,
@@ -319,6 +339,19 @@ function resimulateTile(i) {
       { sizeMult: state.paint.blotchSizeMult },
     );
     tileData[i] = { strokes: result.strokes, meta: result.meta, surface, palette, splatter, blotches };
+  } else if (state.surfaceMode === 'chalkboard') {
+    // Chalkboard always simulates with CHALK_PALETTE so switching White<->Tri
+    // never forces a reroll; White mode overrides colour at render time.
+    const result = simulateGame({
+      seed,
+      winScore: state.winScore,
+      jitterAmplitude: state.jitterAmplitude,
+      palette: CHALK_PALETTE,
+      wtRange: state.wtRange,
+      opRange: state.opRange,
+    });
+    const surface = buildChalkboardSurface(W, H, makeRng(seed));
+    tileData[i] = { strokes: result.strokes, meta: result.meta, surface };
   } else {
     const result = simulateGame({
       seed,
@@ -450,13 +483,22 @@ function renderTile(i) {
       + `${data.palette.scheme} · base ${data.palette.baseIndex}`;
     renderSwatches(i, data.palette);
   } else {
+    // Same resolved wt/op (age-fade / speed-weight) feed both renderers — no
+    // second age/opacity system. Chalk white mode overrides colour per stroke.
     const resolved = data.strokes.slice(0, cutoff).map(st => ({
       pts: st.pts, col: st.col,
       wt: state.enh.speedWeight.enabled ? st.wt * speedWeightMultiplier(st.speed, state.enh.speedWeight) : st.wt,
       op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
     }));
 
-    resolved.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
+    if (state.surfaceMode === 'chalkboard') {
+      resolved.forEach(st => {
+        const col = state.chalkMode === 'white' ? WHITE_CHALK_HEX : st.col;
+        renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult);
+      });
+    } else {
+      resolved.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
+    }
 
     tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
     const m = computeMetrics(resolved);
@@ -492,14 +534,22 @@ function openLightbox(i) {
    self-review against the reference map in v3/CLAUDE.md until one is. */
 document.getElementById('btn-parity').addEventListener('click', () => {
   const seed = state.baseSeed;
-  const result = simulateGame({ seed });
-  const surface = buildSurface(W, H, makeRng(seed));
+  const chalk = state.surfaceMode === 'chalkboard';
+  const result = simulateGame({ seed, palette: chalk ? CHALK_PALETTE : undefined });
+  const surface = chalk ? buildChalkboardSurface(W, H, makeRng(seed)) : buildSurface(W, H, makeRng(seed));
   const ctx = lbCanvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(surface, 0, 0);
-  result.strokes.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, DEFAULT_STROKE_PARAMS));
+  if (chalk) {
+    result.strokes.forEach(st => {
+      const col = state.chalkMode === 'white' ? WHITE_CHALK_HEX : st.col;
+      renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult);
+    });
+  } else {
+    result.strokes.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, DEFAULT_STROKE_PARAMS));
+  }
   lbCaption.textContent =
-    `PARITY CHECK — seed ${seed}, default params only\n` +
+    `PARITY CHECK — seed ${seed}, ${chalk ? 'chalkboard (' + state.chalkMode + ')' : 'default params only'}\n` +
     `score ${result.meta.score.ps}–${result.meta.score.as}, ${result.meta.frames} frames, ${result.strokes.length} strokes\n` +
     `Self-reviewed against v3/CLAUDE.md reference map (no reference screenshot supplied yet).`;
   lightbox.classList.add('open');
@@ -591,12 +641,30 @@ function updatePaperOnlyInertness() {
   });
 }
 
+/* ── surface / chalk controls (brief 07) ─────────────── */
+const chalkGroup = document.getElementById('chalk-group');
+const chalkWidthGroup = document.getElementById('chalk-width-group');
+function syncChalkControls() {
+  const show = state.surfaceMode === 'chalkboard' ? 'flex' : 'none';
+  chalkGroup.style.display = show;
+  chalkWidthGroup.style.display = show;
+}
+
+// Single change listener drives all three surfaces' control visibility —
+// paint's paper-only inertness, chalk's own control group, and paint's
+// control group all key off the same state.surfaceMode.
 document.getElementById('ctl-surface').addEventListener('change', e => {
   state.surfaceMode = e.target.value;
   document.getElementById('paint-controls').classList.toggle('visible', state.surfaceMode === 'paint');
   updatePaperOnlyInertness();
-  resimulateAll();
+  syncChalkControls();
+  resimulateAll();               // surface switch changes palette + surface
 });
+document.getElementById('ctl-chalk-mode').addEventListener('change', e => {
+  state.chalkMode = e.target.value;
+  renderAll();                   // white overrides colour at render — no resim
+});
+bindSlider('ctl-chalk-width', 'v-chalk-width', v => { state.chalkWidthMult = v; renderAll(); });
 
 const paintGroundSel = document.getElementById('paint-ground');
 GROUND_LIBRARY.forEach(g => {
@@ -638,6 +706,7 @@ document.getElementById('btn-copy').addEventListener('click', () => {
 state.baseSeed = Math.floor(Math.random() * 1_000_000);
 document.getElementById('ctl-seed').value = state.baseSeed;
 updatePaperOnlyInertness();
+syncChalkControls();
 resimulateAll();
 </script>
 </body>

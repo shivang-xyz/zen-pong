@@ -114,6 +114,26 @@
     <div class="palette-row" id="ctl-palette"></div>
   </div>
 
+  <div class="field">
+    <label>Surface</label>
+    <select id="ctl-surface">
+      <option value="paper">Paper</option>
+      <option value="chalkboard">Chalkboard</option>
+    </select>
+  </div>
+
+  <div class="field" id="chalk-group" style="display:none">
+    <label>Chalk mode</label>
+    <select id="ctl-chalk-mode">
+      <option value="white">White</option>
+      <option value="tri">3-Colour</option>
+    </select>
+  </div>
+  <div class="field" id="chalk-width-group" style="display:none">
+    <label>Chalk width (<span id="v-chalk-width">1.0</span>)</label>
+    <input type="range" id="ctl-chalk-width" min="0.5" max="3" step="0.1" value="1.0">
+  </div>
+
   <button id="btn-copy">Copy settings</button>
   <button id="btn-parity">Parity check</button>
 </div>
@@ -162,6 +182,9 @@ import { W, H } from '../engine/physics.js';
 import {
   DEFAULT_ENHANCEMENTS, ageFadeMultiplier, speedWeightMultiplier,
 } from '../engine/enhancements.js';
+import {
+  buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE, WHITE_CHALK_HEX,
+} from '../engine/chalkboard.js';
 
 const TILE_COUNT = 12;
 
@@ -175,6 +198,9 @@ const state = {
   palette: [...DEFAULT_PALETTE],
   density: 100,
   enh: JSON.parse(JSON.stringify(DEFAULT_ENHANCEMENTS)),
+  surface: 'paper',        // 'paper' | 'chalkboard'
+  chalkMode: 'white',      // 'white' | 'tri'
+  chalkWidthMult: 1.0,     // chalk stroke thickness knob (0.5–3)
 };
 
 const tileData = new Array(TILE_COUNT).fill(null);
@@ -200,15 +226,20 @@ function seedFor(i) { return state.baseSeed + i; }
 
 function resimulateTile(i) {
   const seed = seedFor(i);
+  const chalk = state.surface === 'chalkboard';
   const result = simulateGame({
     seed,
     winScore: state.winScore,
     jitterAmplitude: state.jitterAmplitude,
-    palette: state.palette,
+    // Chalkboard always simulates with CHALK_PALETTE so switching White<->Tri
+    // never forces a reroll; White mode overrides colour at render time.
+    palette: chalk ? CHALK_PALETTE : state.palette,
     wtRange: state.wtRange,
     opRange: state.opRange,
   });
-  const surface = buildSurface(W, H, makeRng(seed));
+  const surface = chalk
+    ? buildChalkboardSurface(W, H, makeRng(seed))
+    : buildSurface(W, H, makeRng(seed));
   tileData[i] = { strokes: result.strokes, meta: result.meta, surface };
 }
 
@@ -283,7 +314,16 @@ function renderTile(i) {
     op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
   }));
 
-  resolved.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
+  // Same resolved wt/op (age-fade / speed-weight) feed both renderers — no
+  // second age/opacity system. Chalk white mode overrides colour per stroke.
+  if (state.surface === 'chalkboard') {
+    resolved.forEach(st => {
+      const col = state.chalkMode === 'white' ? WHITE_CHALK_HEX : st.col;
+      renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult);
+    });
+  } else {
+    resolved.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
+  }
 
   tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
   const m = computeMetrics(resolved);
@@ -317,14 +357,22 @@ function openLightbox(i) {
    self-review against the reference map in v3/CLAUDE.md until one is. */
 document.getElementById('btn-parity').addEventListener('click', () => {
   const seed = state.baseSeed;
-  const result = simulateGame({ seed });
-  const surface = buildSurface(W, H, makeRng(seed));
+  const chalk = state.surface === 'chalkboard';
+  const result = simulateGame({ seed, palette: chalk ? CHALK_PALETTE : undefined });
+  const surface = chalk ? buildChalkboardSurface(W, H, makeRng(seed)) : buildSurface(W, H, makeRng(seed));
   const ctx = lbCanvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(surface, 0, 0);
-  result.strokes.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, DEFAULT_STROKE_PARAMS));
+  if (chalk) {
+    result.strokes.forEach(st => {
+      const col = state.chalkMode === 'white' ? WHITE_CHALK_HEX : st.col;
+      renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult);
+    });
+  } else {
+    result.strokes.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, DEFAULT_STROKE_PARAMS));
+  }
   lbCaption.textContent =
-    `PARITY CHECK — seed ${seed}, default params only\n` +
+    `PARITY CHECK — seed ${seed}, ${chalk ? 'chalkboard (' + state.chalkMode + ')' : 'default params only'}\n` +
     `score ${result.meta.score.ps}–${result.meta.score.as}, ${result.meta.frames} frames, ${result.strokes.length} strokes\n` +
     `Self-reviewed against v3/CLAUDE.md reference map (no reference screenshot supplied yet).`;
   lightbox.classList.add('open');
@@ -395,6 +443,25 @@ bindEnhSlider('enh-agefade-oldest', 'v-agefade-oldest', v => { state.enh.ageFade
 bindEnhCheckbox('enh-speedwt-on', v => { state.enh.speedWeight.enabled = v; });
 bindEnhSlider('enh-speedwt-minw', 'v-speedwt-minw', v => { state.enh.speedWeight.minW = v; });
 bindEnhSlider('enh-speedwt-maxw', 'v-speedwt-maxw', v => { state.enh.speedWeight.maxW = v; });
+
+/* ── surface / chalk controls (brief 07) ─────────────── */
+const chalkGroup = document.getElementById('chalk-group');
+const chalkWidthGroup = document.getElementById('chalk-width-group');
+function syncChalkControls() {
+  const show = state.surface === 'chalkboard' ? 'flex' : 'none';
+  chalkGroup.style.display = show;
+  chalkWidthGroup.style.display = show;
+}
+document.getElementById('ctl-surface').addEventListener('change', e => {
+  state.surface = e.target.value;
+  syncChalkControls();
+  resimulateAll();               // surface switch changes palette + surface
+});
+document.getElementById('ctl-chalk-mode').addEventListener('change', e => {
+  state.chalkMode = e.target.value;
+  renderAll();                   // white overrides colour at render — no resim
+});
+bindSlider('ctl-chalk-width', 'v-chalk-width', v => { state.chalkWidthMult = v; renderAll(); });
 
 document.getElementById('btn-copy').addEventListener('click', () => {
   const json = JSON.stringify(state, null, 2);

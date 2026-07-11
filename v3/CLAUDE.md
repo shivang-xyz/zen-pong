@@ -54,3 +54,7 @@ accumulate into a painting. The game is the brush; the artwork is the product.
 - Plan mode for any extraction or refactor session.
 - Small commits with clear messages. Do not reformat code you aren't changing.
 - Keep this file under 100 lines. Update it only when a decision is settled.
+- Architect chat: every brief handed to Shivang follows the same two-step
+  process, every time, no exceptions, don't wait to be asked — (1) write/
+  save the brief file into `v3/briefs/`, (2) then give the exact Claude
+  Code prompt to run it.

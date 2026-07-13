@@ -104,11 +104,15 @@ export const WHITE_CHALK_HEX = '#EFEAE0';
    Technique (documented per brief): draw onto a small per-stroke bbox-sized
    offscreen so texturing can't leak onto the rest of the canvas, then
    1. a wide, low-alpha soft "dust" halo (the edge),
-   2. punch a seeded static grain into the halo via destination-out — this is
-      what gives the dusty, slightly broken chalk edge without any tiling
-      artefact bleeding across strokes,
-   3. lay a clean, narrower core on TOP (ungrained) so the line stays
-      continuous and readable.
+   2. punch a seeded static grain into the halo via destination-out at FULL
+      strength — the dusty, broken chalk edge, near the ampersand's ragged
+      intensity, without any tiling artefact bleeding across strokes,
+   3. lay a chunky core on top (CORE_MULT ~1.0, wider than paper's 0.75 core
+      so chalk's resting line reads visibly heavier than a paper stroke),
+   4. punch the SAME grain into the core but at reduced strength
+      (CORE_GRAIN_STRENGTH) so the texture is visible on the line itself while
+      the core stays mostly solid/continuous — this is what makes it read as
+      "chalk" rather than "clean vector + faint halo" (brief 08 task 1).
    Grain is a fixed-seed makeRng() tile built once and reused, so it costs
    nothing per stroke beyond one createPattern + fillRect over a small rect —
    cheap enough to run per committed stroke in the live game later. The bbox
@@ -120,8 +124,9 @@ export const WHITE_CHALK_HEX = '#EFEAE0';
    function never touches opacity or age logic itself. col is whatever the
    caller passes (white-mode override or the ball's tri-palette colour); mode
    selection lives in the caller, not here. */
-const HALO_MULT = 1.9, HALO_ALPHA = 0.20;
-const CORE_MULT = 0.75, CORE_ALPHA = 0.92;
+const HALO_MULT = 2.1, HALO_ALPHA = 0.20;
+const CORE_MULT = 1.0, CORE_ALPHA = 0.92;
+const CORE_GRAIN_STRENGTH = 0.5; // fraction of the grain tile punched into the core
 const GRAIN_TILE_SEED = 0x5eed; // fixed => deterministic grain across runs
 let _grainTile = null;         // shared static tile, built once on first stroke
 
@@ -138,8 +143,9 @@ export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0) {
     const img = tcx.createImageData(s, s);
     const grng = makeRng(GRAIN_TILE_SEED);
     for (let i = 0; i < s * s; i++) {
-      // sparse black specks with low alpha => subtle chalk "holes" in the halo
-      const hole = grng() < 0.42 ? grng() * grng() * 150 : 0; // biased faint
+      // black specks => chalk "holes"; a bit denser/stronger than a fine film
+      // grain so the texture reads as coarse chalk, not noise (brief 08)
+      const hole = grng() < 0.5 ? grng() * grng() * 195 : 0; // biased faint, some bite
       img.data[i * 4] = 0; img.data[i * 4 + 1] = 0; img.data[i * 4 + 2] = 0;
       img.data[i * 4 + 3] = hole;
     }
@@ -178,10 +184,21 @@ export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0) {
   o.fillRect(0, 0, bw, bh);
   o.restore(); // restores transform + source-over + globalAlpha
 
-  // 3. clean core on top (untextured => continuous, readable line)
+  // 3. chunky core on top (wider than paper's core => heavier resting line)
   o.globalAlpha = op * CORE_ALPHA;
   o.lineWidth = wt * wMul * CORE_MULT;
   traceCR(o, pts); o.stroke();
+
+  // 4. lighter grain punch over the core so the LINE itself reads as chalk
+  //    (reduced globalAlpha => only a fraction of each hole bites, keeping the
+  //    core mostly solid rather than breaking up the way the halo does)
+  o.save();
+  o.setTransform(1, 0, 0, 1, 0, 0);
+  o.globalCompositeOperation = 'destination-out';
+  o.globalAlpha = CORE_GRAIN_STRENGTH;
+  o.fillStyle = o.createPattern(_grainTile, 'repeat');
+  o.fillRect(0, 0, bw, bh);
+  o.restore();
 
   ctx.drawImage(off, ox, oy);
 }

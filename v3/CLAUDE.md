@@ -38,6 +38,14 @@ accumulate into a painting. The game is the brush; the artwork is the product.
 - Chalk SFX fires exactly once per paddle hit, inside the paddle-hit branch.
   Never on a frame clock.
 
+## Lab controls are calibration instruments, not product UI
+- Every lab control (stroke width, chalk width, age fade + newest/oldest,
+  weight/opacity ranges, palette pickers, density scrubber, surface/mode
+  toggles) is a calibration instrument for reaching a locked default — NONE of
+  it ships as end-user-facing UI in the live game. Once a surface/mode is
+  approved in the lab, its tuned values get frozen into fixed constants when
+  ported to the product. The sliders themselves never ship.
+
 ## Reference map (current live build, repo-root index.html)
 - Constants: W=1000 H=630 PW=8 PH=64 BR=6 CR=40, BASE_SPD=5.2, MAX_SPD=2.2x, WIN=3
 - Physics: mkBall (4-edge spawn), wallHit (rounded-corner reflect + jitter),

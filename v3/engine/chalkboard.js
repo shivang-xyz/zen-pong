@@ -233,87 +233,91 @@ export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0, a
   ctx.drawImage(off, ox, oy);
 }
 
-/* ── Task 2 — intersection smudge ────────────────────────────────────────
-   findStrokeIntersections is PURE/headless (no DOM, no rng — matches fill.js's
-   pure-detection precedent): it finds where committed strokes cross so the
-   lab can drop a little chalk-dust smudge there, like a new stroke kicking up
-   dust as it drags across an existing one.
-
-   Perf: each stroke is strided to <=28 points (strokes are near-straight
-   between bounces, so a coarse polyline is plenty for placing an atmospheric
-   smudge), and every stroke PAIR is bbox-culled before any segment testing —
-   that cull is what keeps a busy artwork from going quadratic-and-slow.
-   Coincident crossings are collapsed onto an 8px grid so a busy knot yields
-   one smudge, not a stack of them (keeps it atmosphere, not a bright blob). */
+/* ── Task 3 — density-based ambient smudge (brief 10, replaces brief 09's
+   intersection smudge) ───────────────────────────────────────────────────
+   Per Shivang: smudge is a general, roughly-random dust feel driven by local
+   LINE DENSITY across the canvas — not precise per-crossing placement, and
+   nothing tied to individual stroke/ball events. The old intersection approach
+   also concretely MISSED clustered areas (coincident crossings collapsed onto
+   one 8px point, and dense bundles of near-parallel strokes that rarely cross
+   produced almost none), so a visibly busy region could get no dust. Density
+   fixes that at the root: any dense region gets dust, crossings or not. */
 function stridePts(pts, maxPts) {
   if (pts.length <= maxPts) return pts;
   const out = [], step = (pts.length - 1) / (maxPts - 1);
   for (let k = 0; k < maxPts; k++) out.push(pts[Math.round(k * step)]);
   return out;
 }
-function bboxOf(pts) {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const p of pts) {
-    if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
-    if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
-  }
-  return { x0, y0, x1, y1 };
-}
-function segIntersect(p1, p2, p3, p4) {
-  const d1x = p2.x - p1.x, d1y = p2.y - p1.y, d2x = p4.x - p3.x, d2y = p4.y - p3.y;
-  const denom = d1x * d2y - d1y * d2x;
-  if (denom === 0) return null;                     // parallel / degenerate
-  const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / denom;
-  const u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / denom;
-  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
-  return { x: p1.x + t * d1x, y: p1.y + t * d1y };
-}
 
-export function findStrokeIntersections(strokes, cellSize = 8) {
-  const polys = strokes.map(s => {
+/* PURE/headless and deterministic by construction (no rng — purely geometric):
+   a coarse line-density grid. Each stroke's strided segments deposit weight
+   (scaled by its wt) into every cell they pass through, sampled along the
+   segment, so a cell that more/heavier line runs through accumulates more
+   density. Reuses the stride machinery from the old intersection pass. */
+export function computeLineDensity(strokes, W, H, cellSize = 28) {
+  const cols = Math.ceil(W / cellSize), rows = Math.ceil(H / cellSize);
+  const cells = new Float32Array(cols * rows);
+  for (const s of strokes) {
     const pts = stridePts(s.pts, 28);
-    return { pts, wt: s.wt || 1, box: bboxOf(pts) };
-  });
-  const cells = new Map(); // grid key -> merged {x,y,wt}
-  for (let i = 0; i < polys.length; i++) {
-    for (let j = i + 1; j < polys.length; j++) {
-      const A = polys[i], B = polys[j];
-      if (A.box.x0 > B.box.x1 || B.box.x0 > A.box.x1
-        || A.box.y0 > B.box.y1 || B.box.y0 > A.box.y1) continue; // bbox cull
-      for (let a = 0; a < A.pts.length - 1; a++) {
-        for (let b = 0; b < B.pts.length - 1; b++) {
-          const p = segIntersect(A.pts[a], A.pts[a + 1], B.pts[b], B.pts[b + 1]);
-          if (!p) continue;
-          const wt = (A.wt + B.wt) / 2;
-          const key = Math.round(p.x / cellSize) + ':' + Math.round(p.y / cellSize);
-          const ex = cells.get(key);
-          if (ex) { if (wt > ex.wt) ex.wt = wt; }
-          else cells.set(key, { x: p.x, y: p.y, wt });
-        }
+    const wt = s.wt || 1;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const steps = Math.max(1, Math.ceil(len / (cellSize * 0.5)));
+      for (let k = 0; k <= steps; k++) {
+        const t = k / steps;
+        const cx = Math.floor((a.x + (b.x - a.x) * t) / cellSize);
+        const cy = Math.floor((a.y + (b.y - a.y) * t) / cellSize);
+        if (cx >= 0 && cy >= 0 && cx < cols && cy < rows) cells[cy * cols + cx] += wt;
       }
     }
   }
-  return [...cells.values()];
+  return { cols, rows, cellSize, cells };
 }
 
-/* Composites the intersection smudges — a render function (canvas allowed,
-   same carve-out as the other two). Reuses the background's soft-radial-blob
-   "medium": a pale neutral chalk-dust tone (NOT a blend of the two crossing
-   colours, which reads garish) at low opacity, radius scaled off the local
-   stroke width so heavier crossings kick up a touch more dust. */
-const SMUDGE_TONE = '232,228,219';   // pale neutral chalk dust
-const SMUDGE_ALPHA = 0.05;
-const SMUDGE_RADIUS_MULT = 3.2, SMUDGE_RADIUS_BASE = 3;
+const SMUDGE_TONE = '232,228,219'; // pale neutral chalk dust
+const SMUDGE_ALPHA = 0.055;        // per-blob base opacity (density scales it up)
+const DENSITY_FLOOR = 0.16;        // normalized density below which no dust falls
+const SMUDGE_PROB = 0.45;          // per-cell smudge chance at max local density
 
-export function renderIntersectionSmudges(ctx, points, chalkWidthMult = 1.0) {
+/* PURE (rng injected, no DOM): scatter ambient smudge blobs, placement chance /
+   size / opacity all weighted by each cell's normalized local density. Fixed-
+   seed makeRng() from the caller (same discipline as the grain tile) keeps it
+   deterministic; the randomness only makes it read as ambient dust rather than
+   a mechanical grid. Dense knots reliably get dust; sub-floor cells get none. */
+export function scatterDensitySmudges(grid, rng, chalkWidthMult = 1.0) {
+  const { cols, rows, cellSize, cells } = grid;
+  let max = 0;
+  for (let i = 0; i < cells.length; i++) if (cells[i] > max) max = cells[i];
+  if (max <= 0) return [];
+  const out = [];
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      const d = cells[cy * cols + cx] / max; // 0..1 normalized density
+      if (d < DENSITY_FLOOR) continue;
+      if (rng() >= SMUDGE_PROB * d) continue; // denser => more likely to smudge
+      const x = (cx + rng()) * cellSize;
+      const y = (cy + rng()) * cellSize;
+      const r = (6 + d * 10) * chalkWidthMult; // denser => bigger dust
+      const a = SMUDGE_ALPHA * (0.5 + 0.5 * d); // denser => stronger dust
+      out.push({ x, y, r, a });
+    }
+  }
+  return out;
+}
+
+/* Composites the smudge blobs — a render function (canvas allowed, same carve-
+   out as the other two). Reuses the background's soft-radial-blob "medium": a
+   pale neutral chalk-dust tone at low opacity. Only the WHERE changed from
+   brief 09 (density, not crossings); the visual language is unchanged. */
+export function renderSmudges(ctx, points) {
   ctx.save();
   for (const pt of points) {
-    const r = pt.wt * chalkWidthMult * SMUDGE_RADIUS_MULT + SMUDGE_RADIUS_BASE;
-    const g = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, r);
-    g.addColorStop(0, `rgba(${SMUDGE_TONE},${SMUDGE_ALPHA})`);
+    const g = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, pt.r);
+    g.addColorStop(0, `rgba(${SMUDGE_TONE},${pt.a})`);
     g.addColorStop(1, `rgba(${SMUDGE_TONE},0)`);
     ctx.fillStyle = g;
-    ctx.fillRect(pt.x - r, pt.y - r, r * 2, r * 2);
+    ctx.fillRect(pt.x - pt.r, pt.y - pt.r, pt.r * 2, pt.r * 2);
   }
   ctx.restore();
 }

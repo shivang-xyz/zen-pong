@@ -225,6 +225,7 @@ import { buildPaintSurface, buildPatchGround, renderPaintStroke, PAINT_WIDTH_BAS
 import { buildSplatter, buildIntersectionBlotches, renderSplatterMark, renderBlotchCluster } from '../engine/splatter.js';
 import {
   buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE, WHITE_CHALK_HEX,
+  findStrokeIntersections, renderIntersectionSmudges,
 } from '../engine/chalkboard.js';
 
 const TILE_COUNT = 12;
@@ -484,6 +485,8 @@ function renderTile(i) {
         const col = state.chalkMode === 'white' ? WHITE_CHALK_HEX : st.col;
         renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult);
       });
+      // chalk dust where strokes cross — composited after all strokes are down
+      renderIntersectionSmudges(ctx, findStrokeIntersections(resolved), state.chalkWidthMult);
     } else {
       resolved.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
     }
@@ -533,6 +536,7 @@ document.getElementById('btn-parity').addEventListener('click', () => {
       const col = state.chalkMode === 'white' ? WHITE_CHALK_HEX : st.col;
       renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult);
     });
+    renderIntersectionSmudges(ctx, findStrokeIntersections(result.strokes), state.chalkWidthMult);
   } else {
     result.strokes.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, DEFAULT_STROKE_PARAMS));
   }

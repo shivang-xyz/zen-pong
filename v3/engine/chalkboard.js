@@ -216,3 +216,88 @@ export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0, a
 
   ctx.drawImage(off, ox, oy);
 }
+
+/* ── Task 2 — intersection smudge ────────────────────────────────────────
+   findStrokeIntersections is PURE/headless (no DOM, no rng — matches fill.js's
+   pure-detection precedent): it finds where committed strokes cross so the
+   lab can drop a little chalk-dust smudge there, like a new stroke kicking up
+   dust as it drags across an existing one.
+
+   Perf: each stroke is strided to <=28 points (strokes are near-straight
+   between bounces, so a coarse polyline is plenty for placing an atmospheric
+   smudge), and every stroke PAIR is bbox-culled before any segment testing —
+   that cull is what keeps a busy artwork from going quadratic-and-slow.
+   Coincident crossings are collapsed onto an 8px grid so a busy knot yields
+   one smudge, not a stack of them (keeps it atmosphere, not a bright blob). */
+function stridePts(pts, maxPts) {
+  if (pts.length <= maxPts) return pts;
+  const out = [], step = (pts.length - 1) / (maxPts - 1);
+  for (let k = 0; k < maxPts; k++) out.push(pts[Math.round(k * step)]);
+  return out;
+}
+function bboxOf(pts) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) {
+    if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
+    if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
+  }
+  return { x0, y0, x1, y1 };
+}
+function segIntersect(p1, p2, p3, p4) {
+  const d1x = p2.x - p1.x, d1y = p2.y - p1.y, d2x = p4.x - p3.x, d2y = p4.y - p3.y;
+  const denom = d1x * d2y - d1y * d2x;
+  if (denom === 0) return null;                     // parallel / degenerate
+  const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / denom;
+  const u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / denom;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { x: p1.x + t * d1x, y: p1.y + t * d1y };
+}
+
+export function findStrokeIntersections(strokes, cellSize = 8) {
+  const polys = strokes.map(s => {
+    const pts = stridePts(s.pts, 28);
+    return { pts, wt: s.wt || 1, box: bboxOf(pts) };
+  });
+  const cells = new Map(); // grid key -> merged {x,y,wt}
+  for (let i = 0; i < polys.length; i++) {
+    for (let j = i + 1; j < polys.length; j++) {
+      const A = polys[i], B = polys[j];
+      if (A.box.x0 > B.box.x1 || B.box.x0 > A.box.x1
+        || A.box.y0 > B.box.y1 || B.box.y0 > A.box.y1) continue; // bbox cull
+      for (let a = 0; a < A.pts.length - 1; a++) {
+        for (let b = 0; b < B.pts.length - 1; b++) {
+          const p = segIntersect(A.pts[a], A.pts[a + 1], B.pts[b], B.pts[b + 1]);
+          if (!p) continue;
+          const wt = (A.wt + B.wt) / 2;
+          const key = Math.round(p.x / cellSize) + ':' + Math.round(p.y / cellSize);
+          const ex = cells.get(key);
+          if (ex) { if (wt > ex.wt) ex.wt = wt; }
+          else cells.set(key, { x: p.x, y: p.y, wt });
+        }
+      }
+    }
+  }
+  return [...cells.values()];
+}
+
+/* Composites the intersection smudges — a render function (canvas allowed,
+   same carve-out as the other two). Reuses the background's soft-radial-blob
+   "medium": a pale neutral chalk-dust tone (NOT a blend of the two crossing
+   colours, which reads garish) at low opacity, radius scaled off the local
+   stroke width so heavier crossings kick up a touch more dust. */
+const SMUDGE_TONE = '232,228,219';   // pale neutral chalk dust
+const SMUDGE_ALPHA = 0.05;
+const SMUDGE_RADIUS_MULT = 3.2, SMUDGE_RADIUS_BASE = 3;
+
+export function renderIntersectionSmudges(ctx, points, chalkWidthMult = 1.0) {
+  ctx.save();
+  for (const pt of points) {
+    const r = pt.wt * chalkWidthMult * SMUDGE_RADIUS_MULT + SMUDGE_RADIUS_BASE;
+    const g = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, r);
+    g.addColorStop(0, `rgba(${SMUDGE_TONE},${SMUDGE_ALPHA})`);
+    g.addColorStop(1, `rgba(${SMUDGE_TONE},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(pt.x - r, pt.y - r, r * 2, r * 2);
+  }
+  ctx.restore();
+}

@@ -5,6 +5,35 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-13 — Chalkboard calibration + density smudge (Brief 10 done, NOT merged)
+
+Intended last chalk brief before the review gate.
+- **Task 0 (on `main`, pushed):** Recorded the calibration-instrument rule in
+  `v3/CLAUDE.md` — every lab control exists to reach a locked default; none
+  ships as end-user UI, values get frozen to constants when ported.
+  `feature/chalkboard-surface` was rebased on top of it.
+- **Task 1 — evaluate at native res.** Lightbox was CSS-upscaling the 1000x630
+  bitmap (88vw/78vh), softening the grain under review. Capped at native:
+  `max-width/height: min(1000px,96vw)/min(630px,86vh)` — shrinks on small
+  screens, never exceeds native. Verified by measured rendered size (1000x630
+  large viewport, 983x619 at 1280w). Noted the `#gc` doc-drift in the brief,
+  did not chase it.
+- **Task 2 — wide strokes read as chalk, not glow.** At native, wide strokes
+  glowed. Halo changed from width-proportional to a ~constant dust fringe
+  (core + `HALO_DUST` 3px); grain pattern now scales with stroke width
+  (`grainScale = sqrt(width/1.6)`, cap 1.8) so texture stays proportional.
+  Final: `HALO_ALPHA` 0.26, `HALO_DUST` 3.0, `CORE_MULT` 1.0,
+  `CORE_GRAIN_STRENGTH` 0.6, `GRAIN_REF_WIDTH` 1.6.
+- **Task 3 — density-based ambient smudge** replaces intersection smudge (which
+  missed clustered/near-parallel bundles). Pure `computeLineDensity` (28px grid,
+  wt-weighted) + `scatterDensitySmudges` (fixed-seed rng, placement/size/opacity
+  by local density, `DENSITY_FLOOR` 0.16) + reused radial-blob `renderSmudges`.
+  Verified: 0 smudges below floor, denser seeds get more; dead intersection code
+  removed.
+- Verified: paper byte-identical to main, chalkboard deterministic (smudges
+  included), chalkboard.js density funcs pure. Still NOT merged — review gate is
+  next, then canvas/paint.
+
 ## 2026-07-12 — Chalkboard final polish (Brief 09 done, NOT merged)
 
 On `feature/chalkboard-surface`, the last chalk brief before Shivang's review:

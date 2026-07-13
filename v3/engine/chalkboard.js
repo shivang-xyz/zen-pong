@@ -124,32 +124,46 @@ export const WHITE_CHALK_HEX = '#EFEAE0';
    opacity or age logic itself. col is whatever the
    caller passes (white-mode override or the ball's tri-palette colour); mode
    selection lives in the caller, not here. */
-const HALO_MULT = 2.1, HALO_ALPHA = 0.20;
+const HALO_MULT = 2.1, HALO_ALPHA = 0.24; // brief 09: ~20% up from 0.20
 const CORE_MULT = 1.0, CORE_ALPHA = 0.92;
-const CORE_GRAIN_STRENGTH = 0.5; // fraction of the grain tile punched into the core
+const CORE_GRAIN_STRENGTH = 0.6; // brief 09: ~20% up from 0.5; core grain fraction
+const AGE_GRAIN_BOOST = 0.7;     // oldest strokes get up to +70% core grain (task 3)
+const AGE_HALO_BOOST = 0.5;      // and a dustier halo, so age costs crispness not just op
 const GRAIN_TILE_SEED = 0x5eed; // fixed => deterministic grain across runs
 let _grainTile = null;         // shared static tile, built once on first stroke
 
-export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0) {
+export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0, ageFrac = 0) {
   if (pts.length < 2) return;
   const wMul = chalkWidthMult;
+  // Age (0 = newest, 1 = oldest) costs crispness, not just opacity (task 3):
+  // older strokes get more core grain and a dustier halo. ageFrac is 0 when
+  // Age Fade is off, so every stroke sits at the flat task-1 baseline then.
+  const haloAlpha = HALO_ALPHA * (1 + AGE_HALO_BOOST * ageFrac);
+  const coreGrain = Math.min(0.85, CORE_GRAIN_STRENGTH * (1 + AGE_GRAIN_BOOST * ageFrac));
 
   // Lazily build the shared grain tile (fixed seed => identical every run).
   if (!_grainTile) {
-    const s = 96;
+    const s = 128;
     const tile = document.createElement('canvas');
     tile.width = s; tile.height = s;
     const tcx = tile.getContext('2d');
-    const img = tcx.createImageData(s, s);
     const grng = makeRng(GRAIN_TILE_SEED);
-    for (let i = 0; i < s * s; i++) {
-      // black specks => chalk "holes"; a bit denser/stronger than a fine film
-      // grain so the texture reads as coarse chalk, not noise (brief 08)
-      const hole = grng() < 0.5 ? grng() * grng() * 195 : 0; // biased faint, some bite
-      img.data[i * 4] = 0; img.data[i * 4 + 1] = 0; img.data[i * 4 + 2] = 0;
-      img.data[i * 4 + 3] = hole;
+    tcx.fillStyle = '#000';
+    // MULTI-PIXEL blob holes, not per-pixel specks: a 1px speck in the
+    // 1000x630 canvas averages away when the tile is shown at ~312px (a 3.2x
+    // browser downscale), which is why brief 07/08 read clean at a glance even
+    // though they looked textured zoomed in. Blobs ~1.4-4px survive that
+    // downscale, so the chalk grain is actually visible at display size.
+    const nDots = 300;
+    for (let i = 0; i < nDots; i++) {
+      const x = grng() * s, y = grng() * s;
+      const r = 1.4 + grng() * grng() * 2.8;   // biased small, up to ~4px
+      tcx.globalAlpha = 0.35 + grng() * 0.55;  // per-hole bite
+      for (let dx = -s; dx <= s; dx += s)      // 9x draw => seamless tiling
+        for (let dy = -s; dy <= s; dy += s) {
+          tcx.beginPath(); tcx.arc(x + dx, y + dy, r, 0, Math.PI * 2); tcx.fill();
+        }
     }
-    tcx.putImageData(img, 0, 0);
     _grainTile = tile;
   }
 
@@ -170,8 +184,8 @@ export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0) {
   o.translate(-ox, -oy);
   o.lineCap = 'round'; o.lineJoin = 'round'; o.strokeStyle = col;
 
-  // 1. wide soft dust halo (the edge)
-  o.globalAlpha = op * HALO_ALPHA;
+  // 1. wide soft dust halo (the edge) — dustier for older strokes
+  o.globalAlpha = op * haloAlpha;
   o.lineWidth = wt * wMul * HALO_MULT;
   traceCR(o, pts); o.stroke();
 
@@ -195,7 +209,7 @@ export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0) {
   o.save();
   o.setTransform(1, 0, 0, 1, 0, 0);
   o.globalCompositeOperation = 'destination-out';
-  o.globalAlpha = CORE_GRAIN_STRENGTH;
+  o.globalAlpha = coreGrain;
   o.fillStyle = o.createPattern(_grainTile, 'repeat');
   o.fillRect(0, 0, bw, bh);
   o.restore();

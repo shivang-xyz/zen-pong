@@ -24,7 +24,14 @@
   .tile .seed-label{margin-top:6px;font-size:11px;color:#999}
   .tile .metrics{font-size:10px;color:#777;margin-top:2px}
   #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.86);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:100;cursor:zoom-out}
-  #lightbox canvas{max-width:88vw;max-height:78vh;border-radius:8px;background:#FFF5E5}
+  /* Lightbox is capped at NATIVE 1000x630 (brief 10 task 1). The live canvas
+     (#wrap in root index.html) is a fixed 1000x630 with no CSS scale, so that
+     is the only resolution that matters — an upscaled "enlarge" view softens
+     the fine chalk grain under browser interpolation and misleads review. The
+     min(...) terms let it shrink to fit small screens but NEVER exceed native;
+     do not reintroduce vw/vh-only sizing that upscales past 1000x630 (applies
+     to canvas/paint surfaces too, not just chalk). */
+  #lightbox canvas{max-width:min(1000px,96vw);max-height:min(630px,86vh);border-radius:8px;background:#FFF5E5}
   #lightbox-caption{color:#ccc;font-size:12px;max-width:70vw;text-align:center;white-space:pre-line}
   #lightbox.open{display:flex}
   #file-protocol-warning{display:none;background:#4a2020;color:#ffb4b4;padding:14px 20px;font-size:13px;border-bottom:1px solid #6a2c2c}

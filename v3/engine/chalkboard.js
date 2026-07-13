@@ -124,9 +124,14 @@ export const WHITE_CHALK_HEX = '#EFEAE0';
    opacity or age logic itself. col is whatever the
    caller passes (white-mode override or the ball's tri-palette colour); mode
    selection lives in the caller, not here. */
-const HALO_MULT = 2.1, HALO_ALPHA = 0.24; // brief 09: ~20% up from 0.20
+const HALO_ALPHA = 0.26;   // dust-fringe opacity
+const HALO_DUST = 3.0;     // brief 10: the halo is a ~CONSTANT dust fringe beyond
+                           // the core (px), NOT a width-proportional band — so a
+                           // wide stroke keeps a tight dusty edge instead of the
+                           // soft translucent glow a proportional halo produced.
 const CORE_MULT = 1.0, CORE_ALPHA = 0.92;
-const CORE_GRAIN_STRENGTH = 0.6; // brief 09: ~20% up from 0.5; core grain fraction
+const CORE_GRAIN_STRENGTH = 0.6; // brief 09: core grain fraction
+const GRAIN_REF_WIDTH = 1.6;     // stroke width at which grain tile is 1:1 (brief 10)
 const AGE_GRAIN_BOOST = 0.7;     // oldest strokes get up to +70% core grain (task 3)
 const AGE_HALO_BOOST = 0.5;      // and a dustier halo, so age costs crispness not just op
 const GRAIN_TILE_SEED = 0x5eed; // fixed => deterministic grain across runs
@@ -173,7 +178,7 @@ export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0, a
     if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
     if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
   }
-  const pad = Math.ceil(wt * wMul * HALO_MULT + 4);
+  const pad = Math.ceil(wt * wMul * CORE_MULT + HALO_DUST + 4);
   const ox = Math.floor(minX - pad), oy = Math.floor(minY - pad);
   const bw = Math.ceil(maxX - minX + pad * 2), bh = Math.ceil(maxY - minY + pad * 2);
   if (bw <= 0 || bh <= 0) return;
@@ -184,17 +189,28 @@ export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0, a
   o.translate(-ox, -oy);
   o.lineCap = 'round'; o.lineJoin = 'round'; o.strokeStyle = col;
 
-  // 1. wide soft dust halo (the edge) — dustier for older strokes
+  // Grain scales WITH stroke width (brief 10): the tile's holes are a fixed
+  // pixel size, so on a wide stroke they were too small to break the halo up —
+  // it read as a smooth translucent glow instead of dusty chalk. Scaling the
+  // pattern by width/GRAIN_REF_WIDTH keeps the chalk texture proportional at
+  // any width (capped so it never gets blotchy). Built once, used by both
+  // grain punches.
+  const grainScale = Math.min(1.8, Math.max(1, Math.sqrt((wt * wMul) / GRAIN_REF_WIDTH)));
+  const gpat = o.createPattern(_grainTile, 'repeat');
+  if (gpat.setTransform) gpat.setTransform(new DOMMatrix([grainScale, 0, 0, grainScale, 0, 0]));
+
+  // 1. soft dust halo — a constant fringe just beyond the core, dustier for
+  //    older strokes (width-proportional halos glowed on wide strokes)
   o.globalAlpha = op * haloAlpha;
-  o.lineWidth = wt * wMul * HALO_MULT;
+  o.lineWidth = wt * wMul * CORE_MULT + HALO_DUST;
   traceCR(o, pts); o.stroke();
 
-  // 2. punch seeded grain into the halo only (device space => cover bbox)
+  // 2. punch width-scaled grain into the halo (device space => cover bbox)
   o.save();
   o.setTransform(1, 0, 0, 1, 0, 0);
   o.globalCompositeOperation = 'destination-out';
   o.globalAlpha = 1;
-  o.fillStyle = o.createPattern(_grainTile, 'repeat');
+  o.fillStyle = gpat;
   o.fillRect(0, 0, bw, bh);
   o.restore(); // restores transform + source-over + globalAlpha
 
@@ -210,7 +226,7 @@ export function renderChalkStroke(ctx, pts, col, wt, op, chalkWidthMult = 1.0, a
   o.setTransform(1, 0, 0, 1, 0, 0);
   o.globalCompositeOperation = 'destination-out';
   o.globalAlpha = coreGrain;
-  o.fillStyle = o.createPattern(_grainTile, 'repeat');
+  o.fillStyle = gpat;
   o.fillRect(0, 0, bw, bh);
   o.restore();
 

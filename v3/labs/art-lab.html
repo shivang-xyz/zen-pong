@@ -152,18 +152,6 @@
       <input type="range" id="enh-agefade-oldest" min="0" max="1.5" step="0.05" value="0.55">
     </div>
   </div>
-
-  <div class="enh-group">
-    <label class="enh-toggle"><input type="checkbox" id="enh-speedwt-on">Speed weight</label>
-    <div class="field">
-      <label>Min × (<span id="v-speedwt-minw">0.8</span>)</label>
-      <input type="range" id="enh-speedwt-minw" min="0.2" max="2" step="0.05" value="0.8">
-    </div>
-    <div class="field">
-      <label>Max × (<span id="v-speedwt-maxw">2.0</span>)</label>
-      <input type="range" id="enh-speedwt-maxw" min="0.5" max="4" step="0.05" value="2.0">
-    </div>
-  </div>
 </div>
 
 <div id="grid"></div>
@@ -180,7 +168,7 @@ import { buildSurface } from '../engine/surface.js';
 import { makeRng } from '../engine/rng.js';
 import { W, H } from '../engine/physics.js';
 import {
-  DEFAULT_ENHANCEMENTS, ageFadeMultiplier, speedWeightMultiplier,
+  DEFAULT_ENHANCEMENTS, ageFadeMultiplier,
 } from '../engine/enhancements.js';
 import {
   buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE, WHITE_CHALK_HEX,
@@ -310,12 +298,12 @@ function renderTile(i) {
   const cutoff = Math.ceil(total * (state.density / 100));
   const resolved = data.strokes.slice(0, cutoff).map(st => ({
     pts: st.pts, col: st.col,
-    wt: state.enh.speedWeight.enabled ? st.wt * speedWeightMultiplier(st.speed, state.enh.speedWeight) : st.wt,
+    wt: st.wt,
     op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
   }));
 
-  // Same resolved wt/op (age-fade / speed-weight) feed both renderers — no
-  // second age/opacity system. Chalk white mode overrides colour per stroke.
+  // Same resolved wt/op (age fade) feed both renderers — no second age/opacity
+  // system. Chalk white mode overrides colour per stroke.
   if (state.surface === 'chalkboard') {
     resolved.forEach(st => {
       const col = state.chalkMode === 'white' ? WHITE_CHALK_HEX : st.col;
@@ -439,10 +427,6 @@ function bindEnhSlider(id, labelId, apply) {
 bindEnhCheckbox('enh-agefade-on', v => { state.enh.ageFade.enabled = v; });
 bindEnhSlider('enh-agefade-newest', 'v-agefade-newest', v => { state.enh.ageFade.newest = v; });
 bindEnhSlider('enh-agefade-oldest', 'v-agefade-oldest', v => { state.enh.ageFade.oldest = v; });
-
-bindEnhCheckbox('enh-speedwt-on', v => { state.enh.speedWeight.enabled = v; });
-bindEnhSlider('enh-speedwt-minw', 'v-speedwt-minw', v => { state.enh.speedWeight.minW = v; });
-bindEnhSlider('enh-speedwt-maxw', 'v-speedwt-maxw', v => { state.enh.speedWeight.maxW = v; });
 
 /* ── surface / chalk controls (brief 07) ─────────────── */
 const chalkGroup = document.getElementById('chalk-group');

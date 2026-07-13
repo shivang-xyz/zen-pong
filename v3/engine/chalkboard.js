@@ -119,9 +119,9 @@ export const WHITE_CHALK_HEX = '#EFEAE0';
    offscreen keeps the erase local; nothing here reads/writes global state.
 
    chalkWidthMult scales BOTH pass widths (the standalone "thicker/thinner"
-   knob). It stacks on the ball's own wt, which the caller has already
-   resolved through age-fade / speed-weight (see art-lab renderTile) — this
-   function never touches opacity or age logic itself. col is whatever the
+   knob). It stacks on the ball's own wt (the caller resolves op through age
+   fade before calling; see art-lab renderTile) — this function never touches
+   opacity or age logic itself. col is whatever the
    caller passes (white-mode override or the ball's tri-palette colour); mode
    selection lives in the caller, not here. */
 const HALO_MULT = 2.1, HALO_ALPHA = 0.20;

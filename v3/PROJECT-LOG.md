@@ -5,6 +5,29 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-12 — Chalkboard final polish (Brief 09 done, NOT merged)
+
+On `feature/chalkboard-surface`, the last chalk brief before Shivang's review:
+- **Task 1 — roughness that survives display size.** Root cause the prior two
+  passes missed: the grain tile used per-pixel holes that average away when the
+  1000×630 canvas is shown at ~312px (3.2× downscale) — textured zoomed in,
+  clean at a glance. Rebuilt the tile with multi-pixel blob holes (300 arcs,
+  r 1.4–4px, 128px seamless) that survive the downscale, plus the ~20% presence
+  bump: `CORE_GRAIN_STRENGTH` 0.5→0.6, `HALO_ALPHA` 0.20→0.24. Verified at real
+  display size, not just zoomed.
+- **Task 2 — intersection smudge.** Pure/headless `findStrokeIntersections`
+  (bbox-culled pairs, strided polylines, 8px-grid dedup) + a soft radial-blob
+  `renderIntersectionSmudges` (pale neutral chalk dust, low opacity, radius off
+  local width). Composited once per render. Subtle, not muddy even at 140
+  strokes.
+- **Task 3 — age-linked smudge.** Threaded the existing age fraction into
+  `renderChalkStroke`; older strokes get more core grain + dustier halo, so age
+  costs crispness as well as opacity. Same single Age Fade toggle governs both;
+  OFF = flat baseline.
+- Verified: paper byte-identical to main, chalkboard deterministic (smudges
+  included), chalkboard.js finder pure / DOM confined to render+build fns, no
+  new lab controls. Still NOT merged — this is the review gate.
+
 ## 2026-07-12 — Chalkboard revision (Brief 08 done, NOT merged)
 
 On `feature/chalkboard-surface`, two fixes before composition review:

@@ -297,18 +297,21 @@ function renderTile(i) {
 
   const total = data.strokes.length;
   const cutoff = Math.ceil(total * (state.density / 100));
+  const ageOn = state.enh.ageFade.enabled;
   const resolved = data.strokes.slice(0, cutoff).map(st => ({
-    pts: st.pts, col: st.col,
-    wt: st.wt,
-    op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
+    pts: st.pts, col: st.col, wt: st.wt,
+    op: ageOn ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
+    // age fraction for chalk age-smudge (0 = newest, 1 = oldest); flat when off
+    age: ageOn && total > 1 ? 1 - st.index / (total - 1) : 0,
   }));
 
   // Same resolved wt/op (age fade) feed both renderers — no second age/opacity
-  // system. Chalk white mode overrides colour per stroke.
+  // system. Chalk white mode overrides colour per stroke; older chalk strokes
+  // also render softer/dustier via the threaded age fraction.
   if (state.surface === 'chalkboard') {
     resolved.forEach(st => {
       const col = state.chalkMode === 'white' ? WHITE_CHALK_HEX : st.col;
-      renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult);
+      renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult, st.age);
     });
     // chalk dust where strokes cross — composited after all strokes are down
     renderIntersectionSmudges(ctx, findStrokeIntersections(resolved), state.chalkWidthMult);
@@ -355,9 +358,10 @@ document.getElementById('btn-parity').addEventListener('click', () => {
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(surface, 0, 0);
   if (chalk) {
+    // parity renders raw defaults (no age fade), so age stays at flat baseline
     result.strokes.forEach(st => {
       const col = state.chalkMode === 'white' ? WHITE_CHALK_HEX : st.col;
-      renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult);
+      renderChalkStroke(ctx, st.pts, col, st.wt, st.op, state.chalkWidthMult, 0);
     });
     renderIntersectionSmudges(ctx, findStrokeIntersections(result.strokes), state.chalkWidthMult);
   } else {

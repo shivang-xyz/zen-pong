@@ -5,6 +5,21 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-12 — Chalkboard revision (Brief 08 done, NOT merged)
+
+On `feature/chalkboard-surface`, two fixes before composition review:
+- **Task 1 — chalk stroke roughness/thickness.** The core was drawn clean at
+  the identical width paper uses (0.75), so chalk read as a paper stroke. Now
+  `CORE_MULT` 1.0, `HALO_MULT` 2.1, and a second grain punch on the core at
+  `CORE_GRAIN_STRENGTH` 0.5 (grain tile also coarsened) so texture is visible
+  on the line itself, not just the halo. Tuned by eye to sit between the old
+  clean build and the ampersand reference. `chalkWidthMult` still scales.
+- **Task 2 — speed-weight removed entirely** (engine + lab + the per-stroke
+  `speed` field). Indistinguishable from age fade in practice; cut per
+  build-lean. Age fade is now the only enhancement.
+- Verified: paper byte-identical to main, chalkboard deterministic, grep-clean
+  of speed-weight refs. Still NOT merged — next is composition/density review.
+
 ## 2026-07-12 — Chalkboard surface built (Brief 07 done, NOT merged)
 
 ### Built but NOT merged — on branch `feature/chalkboard-surface` (off main)

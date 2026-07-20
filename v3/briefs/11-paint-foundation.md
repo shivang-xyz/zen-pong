@@ -62,12 +62,48 @@ Requirements:
 - Scheme index arithmetic is mod 12.
 - A/B/C assignment across the three picked hues is **seeded, not positional** —
   the base hue must not always end up dominant.
-- Contrast guard: each accent must clear a minimum perceptual contrast against
-  the resolved ground. Use relative luminance (WCAG formula is fine — this is
-  a muddiness guard, not an accessibility claim). If an accent fails, re-roll
-  the base index, up to a bounded number of attempts, then fall back to the
-  highest-contrast valid combination. Never return a failing palette, never
-  loop unbounded.
+- Separation guard: each accent must be perceptually distinguishable from the
+  resolved ground. **Use OKLab ΔE (euclidean distance in OKLab), not WCAG
+  relative luminance.** This is a muddiness guard, not a legibility one, and
+  the distinction matters: yellow on cream has very low luminance contrast and
+  is the single best-loved pairing in the reference set — it works because it
+  separates on *chroma*, not lightness. A luminance-only metric cannot see
+  that axis and would either ban yellow outright or have to be set so low it
+  passes everything. Implement sRGB → linear → OKLab inline; it's ~30 lines
+  and adds no dependency.
+
+  **Resolved by evidence (2026-07-20):** the 12 × 4 matrix shows Yellow/Cream
+  at ΔE 0.1687 is the global minimum — and it is also the best-loved pairing
+  in the reference set. There is therefore no bad accent-vs-ground combination
+  in the current library; a floor that rejects the worst pairing would reject
+  the thing we're trying to produce. Two consequences:
+
+  **Ground floor — `MIN_GROUND_DE = 0.16`, dormant by design.** It rejects
+  nothing in today's library and is not expected to fire. It exists solely as
+  a tripwire if a pale, low-chroma hue is added to `HUE_LIBRARY` later.
+  Comment it in the source as exactly that. Do not tune it upward to make it
+  "do something," and do not special-case any approved combination to bypass
+  it — carving out the best pairing to satisfy a guard is proof the guard is
+  measuring the wrong relationship.
+
+  **Accent-vs-accent separation is the guard that does real work.** Two
+  accents landing close together collapses the three-colour structure and
+  makes the 0.55/0.30/0.15 weighting meaningless. This can genuinely occur:
+  analogous is `i, i+1, i+3`, which at 30° hue spacing can select e.g.
+  Vermilion / Orange / Amber. Add `MIN_ACCENT_DE`, applied pairwise across
+  the three accents.
+
+  **Setting `MIN_ACCENT_DE` — evidence first, again.** Compute pairwise
+  accent ΔE for all four schemes across all 12 base indices, report the
+  distribution, then propose a floor. If analogous fails at a large fraction
+  of base indices, that is a signal the scheme offsets are mis-specified
+  rather than that the floor is too high — say so and propose a widening
+  (e.g. `i, i+2, i+4`) instead of quietly lowering the threshold. Mark
+  PROVISIONAL.
+
+- On failure of either guard: cycle the base index deterministically, bounded
+  at 12 attempts, falling back to the best worst-case ΔE if none clears.
+  Never return a failing palette, never loop unbounded.
 - Exactly three accents. Never more. Do not add a parameter for more.
 
 Verify: same seed → identical palette, hash-compared across at least 6 seeds.
@@ -86,8 +122,14 @@ follow its structure; do not invent a different surface contract.
   (two perpendicular sets of soft lines) with irregular thread thickness, not
   as isotropic noise. Build it as a seamless tile, as brief 09 did for chalk,
   and make sure it survives display downscale — brief 09's whole root cause was
-  a texture that averaged away at real display size. Evaluate at native
-  resolution from the start.
+  a texture that averaged away at real display size.
+
+  **Evaluate at BOTH sizes, always.** Native 1000×630 *and* ~312px wide, the
+  size artworks actually render at in the lab's 12-up grid. Brief 09 failed by
+  judging zoomed-in only; judging native-only fails the same way in reverse —
+  a weave that reads beautifully at 1000px and vanishes at 312px is a weave
+  nobody will ever see, because the grid is the primary review surface. Any
+  screenshot evidence for this task must show both.
 - Very subtle edge vignette, weaker than chalkboard's.
 - No dashed centre line. No dust speckle.
 

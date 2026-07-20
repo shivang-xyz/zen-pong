@@ -58,6 +58,18 @@ accumulate into a painting. The game is the brush; the artwork is the product.
   wall hit / score / 500-pt overflow; per-ball wt 1.0-2.4, op 0.50-0.68
 - Faithful extraction means: same numbers, same formulas, same commit points.
 
+## Docs live on `main`, code lives on branches — settled 2026-07-20
+- `PROJECT-LOG.md`, `BACKLOG.md`, `ARCHITECT.md`, `CLAUDE.md`, `PAINT-MODE.md`
+  and everything in `briefs/` are committed to `main` ONLY, never to a feature
+  branch — even when they describe work that lives on that branch.
+- Feature branches carry engine/lab code and nothing else.
+- Rebase the feature branch on `main` after a doc commit so the session reads
+  the current brief.
+- Why: brief 10's log entry was committed to `feature/chalkboard-surface`,
+  `main` went stale, and a later session loaded an 11-day-old snapshot of the
+  project's own state and planned against it. A doc on a branch is a doc
+  nobody reads.
+
 ## Workflow habits
 - Plan mode for any extraction or refactor session.
 - Small commits with clear messages. Do not reformat code you aren't changing.

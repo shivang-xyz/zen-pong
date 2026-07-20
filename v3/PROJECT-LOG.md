@@ -5,6 +5,62 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-20 — Brief 11 tasks 1-2 done (palette + paint ground); task 3 deferred to review
+
+### Task 1 — `v3/engine/palette.js` (new, on `feature/paint-surface`)
+Built per brief 11, but the brief's own separation-guard spec was revised
+mid-session (WCAG relative luminance → OKLab ΔE) after Claude Code's plan
+flagged that a WCAG floor would ban Yellow from ever appearing against any
+ground — Yellow/Cream only reaches 1.25–1.51 WCAG contrast, well under any
+conventional floor, despite being the best-loved pairing in the reference
+set. Computing the actual 12×4 OKLab ΔE matrix confirmed the deeper issue:
+Yellow/Cream (ΔE 0.1687) is the matrix's global minimum — the approved
+pairing IS the worst pairing, so no ground-vs-accent floor can reject bad
+combinations without also rejecting the good one. Resolution: `MIN_GROUND_DE
+= 0.16` is dormant by design (rejects nothing today, tripwire for a future
+low-chroma hue); the guard doing real work is accent-vs-accent
+(`MIN_ACCENT_DE = 0.15`), which surfaced that the `analogous` scheme's
+offsets `(0,1,3)` were mis-specified — adjacent library hues 30° apart fail
+the floor on 9/12 base indices. Widened to `(0,2,4)`, per the brief's own
+suggested fix; worst-case ΔE across all 4 schemes × 12 base indices now
+0.131–0.328. Verified: deterministic (hash-compared, seeds 1-6, both random
+and fully-pinned opts), exactly 3 accents always, no duplicate accent hexes,
+A/B/C assignment ~35% base-hue-dominant (not positional), no `Math.random()`,
+no DOM reference anywhere in the file.
+
+### Task 2 — `v3/engine/paint.js` (new, ground only)
+`buildPaintSurface(w, h, rng, groundHex)` — flat ground + weave texture +
+weak vignette, no dashed centre line, no dust speckle. First implementation
+read as a hard drafting grid, not woven cloth — a real bug (looping both
+wraparound axes for every thread band stacked 2-3 overlapping strokes into
+one hard edge). Rebuilt as an actual basket-weave: short alternating dashes
+per grid cell (checkerboard on-top order) rather than tile-length ruled
+lines, which is what stopped it reading as graph paper. Verified visually at
+both native 1000×630 *and* ~312px (the lab's actual grid-tile size) across
+all 4 `GROUND_LIBRARY` grounds — texture survives both, per the brief's
+revised dual-size evaluation requirement (added mid-session for the same
+reason brief 09 had to fix chalk's grain: a texture judged at only one size
+can pass while failing at the other, in either direction).
+
+### Housekeeping
+- `v3/CLAUDE.md`: new rule — docs (`PROJECT-LOG.md`, `BACKLOG.md`,
+  `ARCHITECT.md`, `CLAUDE.md`, `PAINT-MODE.md`, `briefs/`) commit to `main`
+  only, never to a feature branch, rebase the branch after a doc commit.
+  Root cause: brief 10's log entry landed on `feature/chalkboard-surface`
+  instead of `main`, so the next chat loaded an 11-day-stale project state.
+  This session's own brief-11 edits (the OKLab pivot above) were made
+  directly against the working tree mid-session and needed exactly this
+  split — code to `feature/paint-surface`, docs to `main` — to land clean.
+
+### Status
+`feature/paint-surface` has `palette.js` + `paint.js` (ground only), pushed.
+Task 3 (paint stroke renderer — variable-width ribbon, pooling at commit
+points) and Task 4 (lab wiring) not started; brief 11 explicitly gates Task 3
+on review since it's the piece that decides whether paint mode works at all.
+
+### Next
+Brief 11 Task 3, new session.
+
 ## 2026-07-20 — Chalk arc closed pending review; paint/splatter references received; recommending a new chat, on Opus, for paint
 
 ### Housekeeping (confirmed landed on `main`)

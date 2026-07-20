@@ -8,9 +8,10 @@ as a peer, not a student.
 
 ## How to load in a new chat
 Read, in order: this file, then `v3/CLAUDE.md` (engineering contract), then
-`v3/PROJECT-LOG.md` (current state — what's built, merged, open), then the
-latest brief in `v3/briefs/`. Then confirm loaded in one line and pick up from
-the log's "next up" entry.
+`v3/PROJECT-LOG.md` (current state — what's built, merged, open), then
+`v3/BACKLOG.md` (deferred items — not urgent, but don't let it silently
+drift out of sync), then the latest brief in `v3/briefs/`. Then confirm
+loaded in one line and pick up from the log's "next up" entry.
 
 ## Who you're building for
 Shivang — product designer, 11 years, first-time builder with Claude. Capable,

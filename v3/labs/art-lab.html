@@ -34,6 +34,11 @@
   .enh-group{display:flex;gap:14px;align-items:flex-end;background:#2c2f38;border-radius:8px;padding:10px 14px}
   .enh-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:#ddd;white-space:nowrap}
   .enh-toggle input{width:15px;height:15px}
+  #paint-controls{display:none;flex-wrap:wrap;gap:24px;padding:14px 20px;background:#2c2420;border-bottom:1px solid #3a3a3a;align-items:flex-end}
+  #paint-controls.visible{display:flex}
+  #paint-controls h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#e0a15a;margin:0;width:100%}
+  .swatch-row{display:flex;gap:4px;margin-top:6px;justify-content:center}
+  .swatch{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid rgba(255,255,255,0.15)}
 </style>
 </head>
 <body>
@@ -56,6 +61,14 @@
     <input type="number" id="ctl-seed" value="1">
   </div>
   <button id="btn-reroll">Reroll all</button>
+
+  <div class="field">
+    <label>Surface</label>
+    <select id="ctl-surface">
+      <option value="paper">Paper</option>
+      <option value="paint">Paint</option>
+    </select>
+  </div>
 
   <div class="field">
     <label>Win score</label>
@@ -146,6 +159,37 @@
   </div>
 </div>
 
+<div id="paint-controls">
+  <h2>Paint (calibration instruments — none of this ships as end-user UI; ground colour is the product-control exception, but it doesn't ship from the lab)</h2>
+
+  <div class="field">
+    <label>Scheme</label>
+    <select id="paint-scheme">
+      <option value="random">Random (seeded)</option>
+      <option value="analogous">Analogous</option>
+      <option value="split-complementary">Split-complementary</option>
+      <option value="triadic">Triadic</option>
+      <option value="complementary-minor">Complementary + minor</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Ground</label>
+    <select id="paint-ground"></select>
+  </div>
+  <div class="field">
+    <label>Base width (<span id="v-paint-width">6.0</span>)</label>
+    <input type="range" id="paint-width" min="3.0" max="10.0" step="0.1" value="6.0">
+  </div>
+  <div class="field">
+    <label>Pooling strength (<span id="v-paint-pool">1.0</span>)</label>
+    <input type="range" id="paint-pool" min="1.0" max="4.0" step="0.1" value="1.0">
+  </div>
+  <div class="field">
+    <label>Width variation (<span id="v-paint-var">1.0</span>)</label>
+    <input type="range" id="paint-var" min="0" max="1" step="0.05" value="1.0">
+  </div>
+</div>
+
 <div id="grid"></div>
 
 <div id="lightbox">
@@ -162,6 +206,8 @@ import { W, H } from '../engine/physics.js';
 import {
   DEFAULT_ENHANCEMENTS, ageFadeMultiplier, speedWeightMultiplier,
 } from '../engine/enhancements.js';
+import { buildPalette, GROUND_LIBRARY } from '../engine/palette.js';
+import { buildPaintSurface, renderPaintStroke, PAINT_WIDTH_BASE } from '../engine/paint.js';
 
 const TILE_COUNT = 12;
 
@@ -175,11 +221,20 @@ const state = {
   palette: [...DEFAULT_PALETTE],
   density: 100,
   enh: JSON.parse(JSON.stringify(DEFAULT_ENHANCEMENTS)),
+  surfaceMode: 'paper', // 'paper' | 'paint' — no 'chalkboard' option: chalk lives only on
+                         // feature/chalkboard-surface (unmerged), this branch never touches it
+  paint: {
+    scheme: 'random',       // one of SCHEMES' keys, or 'random' => undefined => rng-drawn
+    groundHex: GROUND_LIBRARY[0].hex,
+    widthBase: PAINT_WIDTH_BASE,  // render-time multiplier, no re-sim needed (like the Enhancements panel)
+    poolingStrength: 1.0,
+    widthVariation: 1.0,
+  },
 };
 
 const tileData = new Array(TILE_COUNT).fill(null);
 const grid = document.getElementById('grid');
-const tileCanvases = [], tileSeedLabels = [], tileMetricsEls = [];
+const tileCanvases = [], tileSeedLabels = [], tileMetricsEls = [], tileSwatchRows = [];
 
 for (let i = 0; i < TILE_COUNT; i++) {
   const tile = document.createElement('div');
@@ -190,26 +245,66 @@ for (let i = 0; i < TILE_COUNT; i++) {
   seedLabel.className = 'seed-label';
   const metricsEl = document.createElement('div');
   metricsEl.className = 'metrics';
-  tile.appendChild(canvas); tile.appendChild(seedLabel); tile.appendChild(metricsEl);
+  const swatchRow = document.createElement('div');
+  swatchRow.className = 'swatch-row';
+  tile.appendChild(canvas); tile.appendChild(seedLabel); tile.appendChild(metricsEl); tile.appendChild(swatchRow);
   tile.addEventListener('click', () => openLightbox(i));
   grid.appendChild(tile);
-  tileCanvases.push(canvas); tileSeedLabels.push(seedLabel); tileMetricsEls.push(metricsEl);
+  tileCanvases.push(canvas); tileSeedLabels.push(seedLabel); tileMetricsEls.push(metricsEl); tileSwatchRows.push(swatchRow);
 }
 
 function seedFor(i) { return state.baseSeed + i; }
 
+function isHitEvent(ev) { return ev === 'paddleHit' || ev === 'wallHit'; }
+
+/* simulateGame's palette cycling is a plain round-robin (colState.i++), which
+   has no notion of accent weight. Rather than touch engine code for a
+   lab-only concern, build a 20-slot array with each accent repeated
+   proportionally to its weight (11/6/3 for 0.55/0.30/0.15) and seed-shuffle
+   it so round-robin cycling doesn't visit dominant/secondary/minor in
+   visible blocks. */
+function weightedPaletteArray(palette, seed) {
+  const arr = [];
+  palette.accents.forEach(a => {
+    const n = Math.max(1, Math.round(a.weight * 20));
+    for (let k = 0; k < n; k++) arr.push(a.hex);
+  });
+  const shuffleRng = makeRng((seed ^ 0x9E3779B9) >>> 0);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(shuffleRng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 function resimulateTile(i) {
   const seed = seedFor(i);
-  const result = simulateGame({
-    seed,
-    winScore: state.winScore,
-    jitterAmplitude: state.jitterAmplitude,
-    palette: state.palette,
-    wtRange: state.wtRange,
-    opRange: state.opRange,
-  });
-  const surface = buildSurface(W, H, makeRng(seed));
-  tileData[i] = { strokes: result.strokes, meta: result.meta, surface };
+  if (state.surfaceMode === 'paint') {
+    const paletteOpts = { groundHex: state.paint.groundHex };
+    if (state.paint.scheme !== 'random') paletteOpts.scheme = state.paint.scheme;
+    const palette = buildPalette(makeRng(seed), paletteOpts);
+    const result = simulateGame({
+      seed,
+      winScore: state.winScore,
+      jitterAmplitude: state.jitterAmplitude,
+      palette: weightedPaletteArray(palette, seed),
+      wtRange: [0.9, 1.1], // small per-ball variance; widthBase is a render-time multiplier below
+      opRange: state.opRange,
+    });
+    const surface = buildPaintSurface(W, H, makeRng(seed), palette.ground);
+    tileData[i] = { strokes: result.strokes, meta: result.meta, surface, palette };
+  } else {
+    const result = simulateGame({
+      seed,
+      winScore: state.winScore,
+      jitterAmplitude: state.jitterAmplitude,
+      palette: state.palette,
+      wtRange: state.wtRange,
+      opRange: state.opRange,
+    });
+    const surface = buildSurface(W, H, makeRng(seed));
+    tileData[i] = { strokes: result.strokes, meta: result.meta, surface };
+  }
 }
 
 function resimulateAll() {
@@ -267,6 +362,25 @@ function computeMetrics(strokesSubset) {
   return { strokeCount: strokesSubset.length, coverage, crossings };
 }
 
+/* ── palette swatches (paint mode only) ──────────────── */
+function renderSwatches(i, palette) {
+  const row = tileSwatchRows[i];
+  row.innerHTML = '';
+  const chips = [
+    { hex: palette.ground, label: 'ground' },
+    { hex: palette.ink, label: 'ink' },
+    ...palette.accents.map(a => ({ hex: a.hex, label: a.name })),
+  ];
+  chips.forEach(c => {
+    const sw = document.createElement('span');
+    sw.className = 'swatch';
+    sw.style.background = c.hex;
+    sw.title = `${c.label} ${c.hex}`;
+    row.appendChild(sw);
+  });
+}
+function clearSwatches(i) { tileSwatchRows[i].innerHTML = ''; }
+
 /* ── rendering ──────────────────────────────────────── */
 function renderTile(i) {
   const data = tileData[i];
@@ -277,18 +391,41 @@ function renderTile(i) {
 
   const total = data.strokes.length;
   const cutoff = Math.ceil(total * (state.density / 100));
-  const resolved = data.strokes.slice(0, cutoff).map(st => ({
-    pts: st.pts, col: st.col,
-    wt: state.enh.speedWeight.enabled ? st.wt * speedWeightMultiplier(st.speed, state.enh.speedWeight) : st.wt,
-    op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
-  }));
 
-  resolved.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
+  if (state.surfaceMode === 'paint') {
+    const resolved = data.strokes.slice(0, cutoff).map(st => ({
+      pts: st.pts, col: st.col, index: st.index, event: st.event,
+      wt: (state.enh.speedWeight.enabled ? st.wt * speedWeightMultiplier(st.speed, state.enh.speedWeight) : st.wt)
+          * state.paint.widthBase,
+      op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
+    }));
+    resolved.forEach(st => {
+      const poolEnd = isHitEvent(st.event);
+      const poolStart = st.index > 0 && isHitEvent(data.strokes[st.index - 1].event);
+      renderPaintStroke(ctx, st.pts, st.col, st.wt, st.op, {
+        widthVariation: state.paint.widthVariation,
+        poolingStrength: state.paint.poolingStrength,
+        poolStart, poolEnd,
+      });
+    });
+    tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
+    tileMetricsEls[i].textContent = `${resolved.length} strokes · ${data.palette.scheme} · base ${data.palette.baseIndex}`;
+    renderSwatches(i, data.palette);
+  } else {
+    const resolved = data.strokes.slice(0, cutoff).map(st => ({
+      pts: st.pts, col: st.col,
+      wt: state.enh.speedWeight.enabled ? st.wt * speedWeightMultiplier(st.speed, state.enh.speedWeight) : st.wt,
+      op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
+    }));
 
-  tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
-  const m = computeMetrics(resolved);
-  tileMetricsEls[i].textContent =
-    `${m.strokeCount} strokes · ${m.coverage.toFixed(1)}% ink · ~${m.crossings} crossings`;
+    resolved.forEach(st => renderStroke(ctx, st.pts, st.col, st.wt, st.op, state.strokeParams));
+
+    tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
+    const m = computeMetrics(resolved);
+    tileMetricsEls[i].textContent =
+      `${m.strokeCount} strokes · ${m.coverage.toFixed(1)}% ink · ~${m.crossings} crossings`;
+    clearSwatches(i);
+  }
 }
 
 function renderAll() { for (let i = 0; i < TILE_COUNT; i++) renderTile(i); }
@@ -395,6 +532,33 @@ bindEnhSlider('enh-agefade-oldest', 'v-agefade-oldest', v => { state.enh.ageFade
 bindEnhCheckbox('enh-speedwt-on', v => { state.enh.speedWeight.enabled = v; });
 bindEnhSlider('enh-speedwt-minw', 'v-speedwt-minw', v => { state.enh.speedWeight.minW = v; });
 bindEnhSlider('enh-speedwt-maxw', 'v-speedwt-maxw', v => { state.enh.speedWeight.maxW = v; });
+
+/* ── paint controls wiring ────────────────────────────── */
+document.getElementById('ctl-surface').addEventListener('change', e => {
+  state.surfaceMode = e.target.value;
+  document.getElementById('paint-controls').classList.toggle('visible', state.surfaceMode === 'paint');
+  resimulateAll();
+});
+
+const paintGroundSel = document.getElementById('paint-ground');
+GROUND_LIBRARY.forEach(g => {
+  const opt = document.createElement('option');
+  opt.value = g.hex; opt.textContent = g.name;
+  paintGroundSel.appendChild(opt);
+});
+paintGroundSel.value = state.paint.groundHex;
+paintGroundSel.addEventListener('change', e => { state.paint.groundHex = e.target.value; resimulateAll(); });
+
+document.getElementById('paint-scheme').addEventListener('change', e => {
+  state.paint.scheme = e.target.value;
+  resimulateAll();
+});
+
+document.getElementById('paint-width').value = state.paint.widthBase;
+document.getElementById('v-paint-width').textContent = state.paint.widthBase.toFixed(1);
+bindSlider('paint-width', 'v-paint-width', v => { state.paint.widthBase = v; renderAll(); });
+bindSlider('paint-pool', 'v-paint-pool', v => { state.paint.poolingStrength = v; renderAll(); });
+bindSlider('paint-var', 'v-paint-var', v => { state.paint.widthVariation = v; renderAll(); });
 
 document.getElementById('btn-copy').addEventListener('click', () => {
   const json = JSON.stringify(state, null, 2);

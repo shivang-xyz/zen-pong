@@ -112,13 +112,39 @@ A scheme picks three library indices given a seeded base index `i`:
 
 | Scheme | Selection | Character |
 |---|---|---|
-| Analogous | `i, i+1, i+3` | Calm, close-harmony, low tension |
+| Analogous | `i, i+2, i+4` | Calm, close-harmony, low tension |
 | Split-complementary | `i, i+5, i+7` | The workhorse — one hue against two near-opposites |
 | Triadic | `i, i+4, i+8` | Even, poster-like, high energy |
 | Complementary + minor | `i, i+6, i+2` | Strong opposition with one bridging hue |
 
+Analogous was widened from `i, i+1, i+3` to `i, i+2, i+4` in brief 11. The
+original selected two adjacent library hues (30° apart) often enough to fail
+its own accent-separation floor on 9 of 12 base indices — mis-specified
+offsets, not a floor set too high. `i, i+2, i+4` drops the adjacent pair,
+keeps all three hues inside a 120° window so the close-harmony character
+survives, and clears the same floor as every other scheme.
+
 All arithmetic mod 12. Scheme and base index are both seeded, so a given seed
 always yields the same palette.
+
+### 2.6 Separation guards — LOCKED (method), PROVISIONAL (values)
+
+Both use OKLab ΔE. WCAG relative luminance is the wrong tool here — it is a
+text-legibility metric, and it cannot see chroma separation, which is the axis
+that makes yellow-on-cream work.
+
+| Guard | Value | Role |
+|---|---|---|
+| `MIN_GROUND_DE` | 0.16 | Dormant by design |
+| `MIN_ACCENT_DE` | 0.15 | Active — the guard that does real work |
+
+The ground guard rejects nothing in the current library and is not expected
+to: the 12 × 4 matrix showed Yellow/Cream at ΔE 0.1687 is simultaneously the
+global minimum *and* the best pairing in the reference set. It exists only as
+a tripwire if a pale, low-chroma hue is added to `HUE_LIBRARY` later. Do not
+tune it upward to make it appear useful, and never special-case an approved
+combination to bypass it — carving out a good result to satisfy a guard proves
+the guard is measuring the wrong relationship.
 
 Assignment of A/B/C to the three picked hues is also seeded, not positional —
 the base hue should not always be the dominant one.

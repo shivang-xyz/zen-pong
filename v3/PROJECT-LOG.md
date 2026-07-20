@@ -5,6 +5,96 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-20 — Brief 11 complete: paint stroke renderer + lab wiring (tasks 3-4)
+
+Review gate released same-session ("a bare weave with no strokes on it isn't
+reviewable"), so tasks 3 and 4 ran together on `feature/paint-surface`.
+
+### Task 3 — `renderPaintStroke` in `v3/engine/paint.js`
+A single `ctx.lineWidth` stroke can't vary width along its length, so this is
+a filled ribbon: the Catmull-Rom spine is sampled densely, each sample offset
+perpendicular by half the local width, left+right edges filled as one closed
+polygon. Width at each sample is `wt` scaled by two independent signals,
+combined by `max()` (not multiply, so a pooling knot isn't cancelled by a low
+point in the width wave):
+- **3b (width wave):** low-frequency sine across arc length, 0.55–1.6× range,
+  1.5–3 undulations. Deterministic without threading an `rng` through the
+  renderer — undulation count/phase are hashed off the stroke's own start/end
+  coordinates, the same technique `strokes.js`'s `jitterPath` already uses
+  (`Math.sin(p.x*0.73+p.y*1.31)`) rather than a new pattern.
+- **3c (pooling):** peak 2.2–3.2× base over an 8–14px arc window, both
+  seeded off the commit point's coordinates, smoothstep falloff (not a step).
+  Only fires where `poolStart`/`poolEnd` are true — the caller (the lab)
+  computes these from stroke adjacency + `event` type, so only real
+  `paddleHit`/`wallHit` commit points pool; `score`/`overflow`/`gameEnd`
+  endings (not physical direction changes) don't. Same division of labour as
+  `renderChalkStroke` taking `ageFrac` from the caller instead of computing
+  it from stroke index itself.
+- **Glossy highlight, not in the brief's lettered subtasks:** a second,
+  thinner (32% width) fill down the centre in a lightened tint at reduced
+  alpha, motivated directly by the brief's "clean and slightly glossy, not
+  grainy" line — a flat single-tone fill read as matte poster colour without
+  it. Small and reversible if it reads wrong in review.
+- Rounded caps at both ends, radius following local half-width, so a pooled
+  end reads as a blob per 3c's spec rather than a bulge.
+
+### Task 4 — lab wiring, `v3/labs/art-lab.html`
+**Deviation from the brief, flagged not silently resolved:** the brief says
+the surface selector "gains a third option: Paint," implying Paper+Chalkboard
+already exist as a pair. They don't on this branch — chalk lives only on
+`feature/chalkboard-surface` (unmerged), and brief 11 is explicit that paint
+must stay independent of chalk and chalk must stay untouched. Building a real
+3-way selector would mean pulling chalk code onto this branch, which the
+brief's own constraint forbids. Built a 2-way Paper/Paint selector instead —
+what's actually real on this branch — and flagging the gap rather than
+inventing chalk here or silently shipping "third option" language that isn't
+true yet.
+- Scheme selector (4 rules + Random), ground colour (4 `GROUND_LIBRARY`
+  entries) — both resimulate, since they change the underlying palette/ground.
+- Base width / pooling strength / width variation sliders are pure
+  render-time multipliers, no resimulate — same pattern as the existing
+  Enhancements panel (age fade, speed weight), confirmed by watching stroke
+  counts stay identical while dragging them.
+- `simulateGame`'s colour cycling is a plain round-robin with no notion of
+  accent weight, so the lab (not the engine) builds a 20-slot array with each
+  accent repeated proportionally to its weight (11/6/3 for 0.55/0.30/0.15)
+  and seed-shuffles it, so cycling doesn't visit dominant/secondary/minor in
+  visible blocks. Lab-only glue, no engine change.
+- Palette swatches (ground/ink/3 accents) render under each tile per the
+  brief's explicit ask, so scheme rules are actually judgeable.
+
+### Verification (Task 5)
+1. Paper byte-identical to `main`: `surface.js`/`strokes.js`/`simulate.js`/
+   `physics.js`/`rng.js` are untouched this whole brief (confirmed via
+   `git diff main`), and the paper code path in `art-lab.html` calls the same
+   functions with the same arguments, just now inside an `if/else` — hash
+   re-render across seeds 1–6 confirms determinism on top of that.
+2. Chalkboard: not on this branch, nothing to move.
+3. Paint fully deterministic: palette + ground + stroke geometry + pooling
+   hash-compared identical on same-seed re-render, 6/6 distinct across seeds
+   1–6 (browser console, full pipeline including `renderPaintStroke`).
+4. `palette.js`: still zero DOM references (unchanged this session).
+5. `paint.js`: only two `document.createElement` calls in the whole file,
+   both inside `buildWeaveTile`/`buildPaintSurface` — `renderPaintStroke` and
+   its helpers only touch the passed-in `ctx`, matching `renderChalkStroke`'s
+   confinement.
+6. Grepped clean: no `Math.random()` anywhere in `v3/engine/`.
+
+Manually exercised in the browser: surface toggle, scheme/ground dropdowns,
+all three paint sliders, pooling strength pushed to visible extremes (4.0)
+and width variation to uniform (0) to confirm both signals actually drive the
+renderer, not just accept parameters silently.
+
+### Status
+Brief 11 (all 4 tasks) done on `feature/paint-surface`, pushed. Lab link
+given to Shivang for his own-eye review — nothing here is a merge decision,
+that's his call per `ARCHITECT.md`.
+
+### Next
+Brief 12 — physics-driven emission events (spin → splatter burst, speed →
+whip line) and drips off the pools. Blocked on Shivang's review of this
+session's stroke renderer landing well; do not start speculatively.
+
 ## 2026-07-20 — Brief 11 tasks 1-2 done (palette + paint ground); task 3 deferred to review
 
 ### Task 1 — `v3/engine/palette.js` (new, on `feature/paint-surface`)

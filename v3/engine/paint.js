@@ -100,56 +100,65 @@ export function buildPaintSurface(w, h, rng, groundHex) {
   return cv;
 }
 
-/* ── ground patches — brief 13 task 3 ─────────────────────────────────────
-   Mode 2 from PAINT-MODE.md §3: no colour choice (fully seeded), coloured
-   from the SAME accent palette as strokes/splatter rather than
-   GROUND_LIBRARY, so ground and marks agree. §3.1 requires composition-
-   awareness — patch centres are density-weighted toward where the rally was
-   busy (reusing density.js, same module Task 1's splatter placement uses),
-   not placed independently of the strokes.
+/* ── ground patches — brief 14 task 1 (replaces brief 13's soft-glow
+   version entirely) ────────────────────────────────────────────────────
+   Brief 13's patches were soft radial gradients — wrong on every axis per
+   review. Patches are now the SAME paint quality as strokes/splatter: hard
+   opaque fills, no gradient, no blur, no feather. Mode 2 from
+   PAINT-MODE.md §3 still holds — no colour choice (accent palette, not
+   GROUND_LIBRARY), composition-aware placement via density.js (§3.1),
+   still composited beneath all marks.
 
-   "Brush-swipe, not circles, not rectangles": each field is several
-   overlapping soft radial blobs walking along a jittered line rather than
-   one clean ellipse — the same organic-edge idea as paintTexture's
-   blotches, just larger and elongated. Unlike the stroke/splatter opacity
-   rule, patches are explicitly "soft-edged fields" (brief 13 task 3) — the
-   gradient falloff here is intentional, not a violation of brief 12's
-   opaque-stroke rule, which only ever applied to strokes/marks. */
-const PATCH_COUNT_MIN = 3, PATCH_COUNT_MAX = 6;
-const PATCH_COVERAGE_MIN = 0.55, PATCH_COVERAGE_MAX = 0.85;
-const PATCH_ELONGATION_MIN = 1.3, PATCH_ELONGATION_MAX = 2.2;
-const PATCH_KNOT_JITTER = 80; // px, spread around a chosen density knot
-const PATCH_GROUND_HEX = '#F4EBD4'; // Cream — fixed, Patches mode has no colour choice
+   Shape: a closed polygon with a multi-harmonic wobble on the radius
+   (three sine terms at different frequencies/phases, hashed per patch) —
+   one low-frequency term makes the overall silhouette lopsided, higher-
+   frequency terms add lobes. Independent x/y scale (not just a uniform
+   radius) gives the elongated/round variety the brief asks for without
+   needing true ellipse trig. `count` is now caller-supplied (the lab's
+   Patch count slider), not rng-derived — "seeded placement WITHIN that
+   count," not a seeded count. */
+const PATCH_R_MIN = 9;                 // "comparable to a large splatter drop"
+const PATCH_R_MAX_FRAC = 1 / 3;        // "up to a third of the canvas" — resolved against w*h at call time
+const PATCH_SIZE_POWER = 3.2;          // heavy-tailed: rng()^3.2, mostly small/mid, occasional huge
+const PATCH_KNOT_JITTER = 90;          // px, spread around a chosen density knot
+const PATCH_GROUND_HEX = '#F4EBD4';    // Cream — fixed, Patches mode has no colour choice
 
-function hexToRgb(hex) {
-  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
-}
-
-function brushSwipeBlob(pc, cx, cy, radius, angle, elongation, colorHex, rng) {
-  const [r, g, b] = hexToRgb(colorHex);
-  const dx = Math.cos(angle), dy = Math.sin(angle);
-  const totalLen = radius * elongation * 1.6;
-  const steps = 4 + Math.floor(rng() * 3); // 4-6 overlapping soft blobs
-
-  for (let i = 0; i < steps; i++) {
-    const t = steps > 1 ? i / (steps - 1) - 0.5 : 0; // -0.5..0.5 along the swipe
-    const px = cx + dx * t * totalLen + (rng() - 0.5) * radius * 0.3;
-    const py = cy + dy * t * totalLen + (rng() - 0.5) * radius * 0.3;
-    const br = (radius / elongation) * (0.55 + rng() * 0.55); // cross-swipe thickness, jittered
-
-    const grad = pc.createRadialGradient(px, py, 0, px, py, br);
-    grad.addColorStop(0, `rgba(${r},${g},${b},0.82)`);
-    grad.addColorStop(0.7, `rgba(${r},${g},${b},0.55)`);
-    grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-    pc.fillStyle = grad;
-    pc.fillRect(px - br, py - br, br * 2, br * 2);
+function irregularPatchPoints(cx, cy, baseR, scaleX, scaleY, angle, lobeStrength, seed) {
+  const verts = 14 + Math.floor(hash1(seed) * 8); // 14-21
+  const pts = [];
+  for (let i = 0; i < verts; i++) {
+    const a = (i / verts) * Math.PI * 2;
+    const w1 = Math.sin(a * 2 + seed * 3.1) * 0.55;
+    const w2 = Math.sin(a * 3 + seed * 5.7 + 1.3) * 0.28;
+    const w3 = Math.sin(a * 5 + seed * 1.9 + 2.6) * 0.17;
+    const wobble = 1 + lobeStrength * (w1 + w2 + w3);
+    const lx = Math.cos(a) * baseR * scaleX * wobble;
+    const ly = Math.sin(a) * baseR * scaleY * wobble;
+    pts.push({
+      x: cx + lx * Math.cos(angle) - ly * Math.sin(angle),
+      y: cy + lx * Math.sin(angle) + ly * Math.cos(angle),
+    });
   }
+  return pts;
 }
 
-/* buildPatchGround(w, h, rng, strokes, palette) → offscreen canvas. Same
-   shape family as buildPaintSurface, plus the two composition-awareness
-   inputs (strokes, palette) Plain mode doesn't need. */
-export function buildPatchGround(w, h, rng, strokes, palette) {
+function fillPatch(pc, points, colorHex) {
+  pc.save();
+  pc.globalAlpha = 1.0; // hard opaque — same paint quality as strokes/splatter, no falloff
+  pc.fillStyle = colorHex;
+  pc.beginPath();
+  pc.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) pc.lineTo(points[i].x, points[i].y);
+  pc.closePath();
+  pc.fill();
+  pc.restore();
+}
+
+/* buildPatchGround(w, h, rng, strokes, palette, count) → offscreen canvas.
+   Same shape family as buildPaintSurface, plus the composition-awareness
+   inputs (strokes, palette) Plain mode doesn't need, plus the lab-
+   controlled patch count (default 6, matching brief 13's old midpoint). */
+export function buildPatchGround(w, h, rng, strokes, palette, count = 6) {
   const cv = document.createElement('canvas');
   cv.width = w; cv.height = h;
   const pc = cv.getContext('2d');
@@ -161,28 +170,14 @@ export function buildPatchGround(w, h, rng, strokes, palette) {
   const field = computeLineDensity(strokes, w, h, 28);
   const knots = findDenseKnots(field, { densityFloor: 0.05, minSpacing: 50, maxCandidates: 40 });
 
-  const fieldCount = PATCH_COUNT_MIN + Math.floor(rng() * (PATCH_COUNT_MAX - PATCH_COUNT_MIN + 1));
-  const targetCoverage = PATCH_COVERAGE_MIN + rng() * (PATCH_COVERAGE_MAX - PATCH_COVERAGE_MIN);
-  const targetArea = targetCoverage * w * h;
-
   const colorWeights = palette.accents.map(a => ({ value: a, weight: a.weight }));
-  const fields = [];
-  let weightSum = 0;
-  for (let i = 0; i < fieldCount; i++) {
-    const accent = weightedPick(rng, colorWeights);
-    fields.push(accent);
-    weightSum += accent.weight;
-  }
+  const patchRMax = Math.sqrt(w * h * PATCH_R_MAX_FRAC / Math.PI);
 
-  fields.forEach(accent => {
-    const area = targetArea * (accent.weight / weightSum);
-    // Measured effective coverage (pixel sample against a soft-falloff swipe)
-    // runs well under the naive solid-disc estimate — overlapping sub-blobs
-    // and the gradient's own faded edge both "waste" some of that area
-    // budget. RADIUS_COMPENSATION brings actual output into the 55-85%
-    // brief target; PROVISIONAL like every other number here.
-    const RADIUS_COMPENSATION = 1.55;
-    const radius = Math.sqrt(area / Math.PI) * RADIUS_COMPENSATION;
+  for (let i = 0; i < count; i++) {
+    const accent = weightedPick(rng, colorWeights);
+
+    const sizeNorm = Math.pow(rng(), PATCH_SIZE_POWER); // heavy-tailed toward small/mid
+    const baseR = PATCH_R_MIN + (patchRMax - PATCH_R_MIN) * sizeNorm;
 
     let cx, cy;
     if (knots.length > 0) {
@@ -196,10 +191,16 @@ export function buildPatchGround(w, h, rng, strokes, palette) {
       cx = rng() * w; cy = rng() * h;
     }
 
+    // Some broadly round, some elongated: 55% near-round, 45% clearly stretched.
+    const elongated = rng() < 0.45;
+    const scaleX = elongated ? 1.3 + rng() * 1.6 : 1.0 + rng() * 0.12;
+    const scaleY = elongated ? 1 / (1.0 + rng() * 0.7) : 1.0 + rng() * 0.12;
     const angle = rng() * Math.PI * 2;
-    const elongation = PATCH_ELONGATION_MIN + rng() * (PATCH_ELONGATION_MAX - PATCH_ELONGATION_MIN);
-    brushSwipeBlob(pc, cx, cy, radius, angle, elongation, accent.hex, rng);
-  });
+    const lobeStrength = 0.08 + rng() * 0.24; // some lobed/spilled, some cleaner
+
+    const points = irregularPatchPoints(cx, cy, baseR, scaleX, scaleY, angle, lobeStrength, rng() * 1000);
+    fillPatch(pc, points, accent.hex);
+  }
 
   applyVignette(pc, w, h);
   return cv;
@@ -227,16 +228,28 @@ export function buildPatchGround(w, h, rng, strokes, palette) {
    point in the width wave:
      3b — low-frequency sine wave across arc length (brush loading/
           unloading), seeded off the stroke's own start/end coordinates.
-          Range widened to 0.4x-2.0x per brief 12 (was 0.55x-1.6x).
+          Range widened to 0.15x-4.0x per brief 14 (was 0.4x-2.0x in brief
+          12, which review found still barely perceptible). Undulation
+          count dropped too (0.5-1.5 vs the old 1.5-3) — brief 14 wants
+          "one or two transitions per stroke, not many," and at this much
+          wider an amplitude, the old cycle count read as vibration.
      3c — pooling spike near either end, IF that end is a real paddle/wall
           hit (poolStart/poolEnd, computed by the caller from stroke
           adjacency + event type — same division of labour as
-          renderChalkStroke taking ageFrac from the caller).
+          renderChalkStroke taking ageFrac from the caller). Peak lowered
+          brief 14 task 4 — pooling at hit points was reading as the
+          dominant mark, edge-clustered exactly like brief 02's cut ink
+          bloom (hit-triggered placement is always boundary-pinned; see
+          PROJECT-LOG.md 2026-07-09). Brief 13's density-placed intersection
+          blotches (splatter.js) are the replacement for "marks read where
+          the rally was busy"; pooling now only has to read as "the line
+          paused here," not carry the composition's mark-density.
    Edges are clean fills only: no grain, no halo, no soft falloff. */
 export const PAINT_WIDTH_BASE = 6.0;
 
-const WIDTH_VAR_MIN = 0.4, WIDTH_VAR_MAX = 2.0;    // 3b, brief 12 widened range
-const POOL_PEAK_MIN = 2.2, POOL_PEAK_MAX = 3.2;    // 3c, brief 11 §3c, unchanged
+const WIDTH_VAR_MIN = 0.15, WIDTH_VAR_MAX = 4.0;   // 3b, brief 14 widened range
+const WIDTH_VAR_UNDULATIONS_MIN = 0.5, WIDTH_VAR_UNDULATIONS_MAX = 1.5; // brief 14: fewer transitions
+const POOL_PEAK_MIN = 1.3, POOL_PEAK_MAX = 1.8;    // 3c, brief 14 task 4: reduced from 2.2-3.2
 const POOL_WINDOW_MIN = 8, POOL_WINDOW_MAX = 14;   // 3c, brief 11 §3c, unchanged
 
 // GLSL-style deterministic hash — same family of trick as jitterPath's
@@ -298,7 +311,8 @@ export function renderPaintStroke(ctx, pts, col, wt, op, opts = {}) {
   if (samples.length < 2) return;
   const { s: arcS, length } = arcLengths(samples);
 
-  const undulations = 1.5 + hash2(pts[0].x, pts[0].y) * 1.5;             // 1.5-3, 3b
+  const undulations = WIDTH_VAR_UNDULATIONS_MIN
+    + hash2(pts[0].x, pts[0].y) * (WIDTH_VAR_UNDULATIONS_MAX - WIDTH_VAR_UNDULATIONS_MIN); // 3b
   const phase = hash2(pts[pts.length - 1].x, pts[pts.length - 1].y) * Math.PI * 2;
 
   function widthMultAt(i) {

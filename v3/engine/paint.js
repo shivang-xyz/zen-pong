@@ -8,6 +8,9 @@
    job. That access is confined to the exported build/render functions.
    Everywhere else in the engine stays DOM-free. */
 
+import { computeLineDensity, findDenseKnots } from './density.js';
+import { weightedPick } from './rng.js';
+
 /* ── ground texture — brief 12 task 1 ─────────────────────────────────────
    Brief 11's tiled basket-weave read as a drafting grid at every size and
    is not tunable into correctness: a repeating tile with regular pitch will
@@ -59,6 +62,22 @@ const VIGNETTE_EDGE = 60;
 const VIGNETTE_TB_ALPHA = 0.09;  // weaker than chalkboard's 0.32 (very subtle, per brief 11)
 const VIGNETTE_LR_ALPHA = 0.07;  // weaker than chalkboard's 0.26
 
+function applyVignette(pc, w, h) {
+  const ew = VIGNETTE_EDGE; let g;
+  g = pc.createLinearGradient(0, 0, 0, ew);
+  g.addColorStop(0, `rgba(0,0,0,${VIGNETTE_TB_ALPHA})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  pc.fillStyle = g; pc.fillRect(0, 0, w, ew);
+  g = pc.createLinearGradient(0, h, 0, h - ew);
+  g.addColorStop(0, `rgba(0,0,0,${VIGNETTE_TB_ALPHA})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  pc.fillStyle = g; pc.fillRect(0, h - ew, w, ew);
+  g = pc.createLinearGradient(0, 0, ew, 0);
+  g.addColorStop(0, `rgba(0,0,0,${VIGNETTE_LR_ALPHA})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  pc.fillStyle = g; pc.fillRect(0, 0, ew, h);
+  g = pc.createLinearGradient(w, 0, w - ew, 0);
+  g.addColorStop(0, `rgba(0,0,0,${VIGNETTE_LR_ALPHA})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+  pc.fillStyle = g; pc.fillRect(w - ew, 0, ew, h);
+}
+
 /* buildPaintSurface(w, h, rng, groundHex) — same shape as
    buildChalkboardSurface(w, h, rng). Plain mode only: groundHex always
    comes from GROUND_LIBRARY (palette.js), passed by the caller. Unlike
@@ -73,24 +92,116 @@ export function buildPaintSurface(w, h, rng, groundHex) {
   pc.fillRect(0, 0, w, h);
 
   paintTexture(pc, w, h, rng);
-
-  const ew = VIGNETTE_EDGE; let g;
-  g = pc.createLinearGradient(0, 0, 0, ew);
-  g.addColorStop(0, `rgba(0,0,0,${VIGNETTE_TB_ALPHA})`); g.addColorStop(1, 'rgba(0,0,0,0)');
-  pc.fillStyle = g; pc.fillRect(0, 0, w, ew);
-  g = pc.createLinearGradient(0, h, 0, h - ew);
-  g.addColorStop(0, `rgba(0,0,0,${VIGNETTE_TB_ALPHA})`); g.addColorStop(1, 'rgba(0,0,0,0)');
-  pc.fillStyle = g; pc.fillRect(0, h - ew, w, ew);
-  g = pc.createLinearGradient(0, 0, ew, 0);
-  g.addColorStop(0, `rgba(0,0,0,${VIGNETTE_LR_ALPHA})`); g.addColorStop(1, 'rgba(0,0,0,0)');
-  pc.fillStyle = g; pc.fillRect(0, 0, ew, h);
-  g = pc.createLinearGradient(w, 0, w - ew, 0);
-  g.addColorStop(0, `rgba(0,0,0,${VIGNETTE_LR_ALPHA})`); g.addColorStop(1, 'rgba(0,0,0,0)');
-  pc.fillStyle = g; pc.fillRect(w - ew, 0, ew, h);
+  applyVignette(pc, w, h);
 
   // No dashed centre line (paper-specific), no dust speckle beyond the
   // tooth above — both explicitly excluded for paint's ground.
 
+  return cv;
+}
+
+/* ── ground patches — brief 13 task 3 ─────────────────────────────────────
+   Mode 2 from PAINT-MODE.md §3: no colour choice (fully seeded), coloured
+   from the SAME accent palette as strokes/splatter rather than
+   GROUND_LIBRARY, so ground and marks agree. §3.1 requires composition-
+   awareness — patch centres are density-weighted toward where the rally was
+   busy (reusing density.js, same module Task 1's splatter placement uses),
+   not placed independently of the strokes.
+
+   "Brush-swipe, not circles, not rectangles": each field is several
+   overlapping soft radial blobs walking along a jittered line rather than
+   one clean ellipse — the same organic-edge idea as paintTexture's
+   blotches, just larger and elongated. Unlike the stroke/splatter opacity
+   rule, patches are explicitly "soft-edged fields" (brief 13 task 3) — the
+   gradient falloff here is intentional, not a violation of brief 12's
+   opaque-stroke rule, which only ever applied to strokes/marks. */
+const PATCH_COUNT_MIN = 3, PATCH_COUNT_MAX = 6;
+const PATCH_COVERAGE_MIN = 0.55, PATCH_COVERAGE_MAX = 0.85;
+const PATCH_ELONGATION_MIN = 1.3, PATCH_ELONGATION_MAX = 2.2;
+const PATCH_KNOT_JITTER = 80; // px, spread around a chosen density knot
+const PATCH_GROUND_HEX = '#F4EBD4'; // Cream — fixed, Patches mode has no colour choice
+
+function hexToRgb(hex) {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
+
+function brushSwipeBlob(pc, cx, cy, radius, angle, elongation, colorHex, rng) {
+  const [r, g, b] = hexToRgb(colorHex);
+  const dx = Math.cos(angle), dy = Math.sin(angle);
+  const totalLen = radius * elongation * 1.6;
+  const steps = 4 + Math.floor(rng() * 3); // 4-6 overlapping soft blobs
+
+  for (let i = 0; i < steps; i++) {
+    const t = steps > 1 ? i / (steps - 1) - 0.5 : 0; // -0.5..0.5 along the swipe
+    const px = cx + dx * t * totalLen + (rng() - 0.5) * radius * 0.3;
+    const py = cy + dy * t * totalLen + (rng() - 0.5) * radius * 0.3;
+    const br = (radius / elongation) * (0.55 + rng() * 0.55); // cross-swipe thickness, jittered
+
+    const grad = pc.createRadialGradient(px, py, 0, px, py, br);
+    grad.addColorStop(0, `rgba(${r},${g},${b},0.82)`);
+    grad.addColorStop(0.7, `rgba(${r},${g},${b},0.55)`);
+    grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    pc.fillStyle = grad;
+    pc.fillRect(px - br, py - br, br * 2, br * 2);
+  }
+}
+
+/* buildPatchGround(w, h, rng, strokes, palette) → offscreen canvas. Same
+   shape family as buildPaintSurface, plus the two composition-awareness
+   inputs (strokes, palette) Plain mode doesn't need. */
+export function buildPatchGround(w, h, rng, strokes, palette) {
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const pc = cv.getContext('2d');
+
+  pc.fillStyle = PATCH_GROUND_HEX;
+  pc.fillRect(0, 0, w, h);
+  paintTexture(pc, w, h, rng); // same substrate tooth as Plain, visible in the gaps between fields
+
+  const field = computeLineDensity(strokes, w, h, 28);
+  const knots = findDenseKnots(field, { densityFloor: 0.05, minSpacing: 50, maxCandidates: 40 });
+
+  const fieldCount = PATCH_COUNT_MIN + Math.floor(rng() * (PATCH_COUNT_MAX - PATCH_COUNT_MIN + 1));
+  const targetCoverage = PATCH_COVERAGE_MIN + rng() * (PATCH_COVERAGE_MAX - PATCH_COVERAGE_MIN);
+  const targetArea = targetCoverage * w * h;
+
+  const colorWeights = palette.accents.map(a => ({ value: a, weight: a.weight }));
+  const fields = [];
+  let weightSum = 0;
+  for (let i = 0; i < fieldCount; i++) {
+    const accent = weightedPick(rng, colorWeights);
+    fields.push(accent);
+    weightSum += accent.weight;
+  }
+
+  fields.forEach(accent => {
+    const area = targetArea * (accent.weight / weightSum);
+    // Measured effective coverage (pixel sample against a soft-falloff swipe)
+    // runs well under the naive solid-disc estimate — overlapping sub-blobs
+    // and the gradient's own faded edge both "waste" some of that area
+    // budget. RADIUS_COMPENSATION brings actual output into the 55-85%
+    // brief target; PROVISIONAL like every other number here.
+    const RADIUS_COMPENSATION = 1.55;
+    const radius = Math.sqrt(area / Math.PI) * RADIUS_COMPENSATION;
+
+    let cx, cy;
+    if (knots.length > 0) {
+      // Density-weighted knot choice — PAINT-MODE.md §3.1's composition-
+      // awareness, without depleting the pool (patches may reuse a busy
+      // region; splatter's placement already used its own weighted draw).
+      const knot = weightedPick(rng, knots.map(k => ({ value: k, weight: k.density })));
+      cx = knot.x + (rng() - 0.5) * PATCH_KNOT_JITTER;
+      cy = knot.y + (rng() - 0.5) * PATCH_KNOT_JITTER;
+    } else {
+      cx = rng() * w; cy = rng() * h;
+    }
+
+    const angle = rng() * Math.PI * 2;
+    const elongation = PATCH_ELONGATION_MIN + rng() * (PATCH_ELONGATION_MAX - PATCH_ELONGATION_MIN);
+    brushSwipeBlob(pc, cx, cy, radius, angle, elongation, accent.hex, rng);
+  });
+
+  applyVignette(pc, w, h);
   return cv;
 }
 

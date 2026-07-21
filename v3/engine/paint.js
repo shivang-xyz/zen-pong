@@ -1,117 +1,69 @@
-/* Paint surface — brief 11 task 2 (canvas ground, plain mode only). A third
+/* Paint surface — brief 12 (reset of brief 11 tasks 2-3; palette.js and this
+   file's function contract from brief 11 tasks 1-2 stand unchanged). A third
    surface style alongside paper (surface.js) and chalkboard (chalkboard.js
    on feature/chalkboard-surface), fully additive: neither is touched.
 
    Same carve-out as those two modules: this file is allowed to touch a
    canvas 2D context because producing surface/stroke pixels is its whole
-   job. That access is confined to the exported build/render functions
-   (buildPaintSurface here; renderPaintStroke lands in task 3). Everywhere
-   else in the engine stays DOM-free. */
+   job. That access is confined to the exported build/render functions.
+   Everywhere else in the engine stays DOM-free. */
 
-/* ── canvas weave texture ─────────────────────────────────────────────────
-   Distinguishing feature vs. paper/chalkboard's per-pixel grain (a
-   getImageData noise loop): woven cloth reads as a REGULAR cross-hatch
-   (two perpendicular thread directions) with IRREGULAR thread thickness,
-   not as isotropic per-pixel noise. Built as a static, fixed-internal-seed,
-   seamless tile — same idiom as chalkboard.js's stroke grain tile
-   (brief 09): multi-pixel elements survive display-size downscale, where
-   per-pixel noise averages away (that was brief 09's whole root cause).
-   Built once, cached, reused via createPattern — cheap regardless of how
-   many grounds get built in a session. */
-const WEAVE_TILE = 64;     // px, seamless repeat unit at native (1000x630) res
-const WEAVE_PITCH = 16;    // px per weave cell (4x4 cells/tile)
-const WEAVE_TILE_SEED = 0x7EA7E;
-let _weaveTile = null;
+/* ── ground texture — brief 12 task 1 ─────────────────────────────────────
+   Brief 11's tiled basket-weave read as a drafting grid at every size and
+   is not tunable into correctness: a repeating tile with regular pitch will
+   always read as ruled paper, no matter how faint. Killed entirely — no
+   tile, no createPattern, no repeat.
 
-function buildWeaveTile() {
-  const s = WEAVE_TILE;
-  const tile = document.createElement('canvas');
-  tile.width = s; tile.height = s;
-  const tcx = tile.getContext('2d');
+   Replaced with a non-repeating "tooth": sparse irregular specks plus a
+   handful of very-low-amplitude soft blotches, each drawn once at a random
+   position across the FULL canvas from the passed rng — nothing tiled,
+   nothing on a grid, no directional structure. Colour-neutral (light+dark
+   mix, like real primed-canvas tooth) so it reads correctly over all 4
+   GROUND_LIBRARY hexes with no per-ground tuning. */
+const SPECK_COUNT = 900;
+const SPECK_R_MIN = 0.35, SPECK_R_MAX = 1.1;
+const SPECK_ALPHA_MIN = 0.02, SPECK_ALPHA_MAX = 0.05;
 
-  // Simple deterministic PRNG local to this tile build (mirrors rng.js's
-  // mulberry32 so no import is needed for a one-off internal seed).
-  let a = WEAVE_TILE_SEED >>> 0;
-  const wrng = () => {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+const BLOTCH_COUNT_MIN = 14, BLOTCH_COUNT_MAX = 24;
+const BLOTCH_R_MIN = 40, BLOTCH_R_MAX = 150;
+const BLOTCH_ALPHA_MIN = 0.012, BLOTCH_ALPHA_MAX = 0.03;
 
-  // Basket-weave, not ruled lines: a first pass drew full-length horizontal
-  // and vertical strokes spanning the whole tile, which — however faint —
-  // still reads as a drafted grid, because real interlaced thread doesn't
-  // present as continuous rules. Real canvas weave is perceived as a field
-  // of small alternating over/under nubs at each thread crossing, each
-  // thread only "on top" for the span of one crossing before the
-  // perpendicular thread covers it again. So: iterate grid CELLS, and in
-  // each cell draw one short horizontal dash and one short vertical dash
-  // (each ~1 pitch long, not tile-length), alternating which one paints on
-  // top in a checkerboard — that alternation is what a basket weave is.
-  // Each dash is a colour-neutral highlight+shadow bevel pair, same reason
-  // as before: one shared tile has to read correctly over all 4
-  // GROUND_LIBRARY hexes with no per-ground tuning.
-  const cells = Math.round(s / WEAVE_PITCH);
-
-  function drawDash(cx, cy, isHorizontal, len, thick, shadowA, highlightA) {
-    for (let dx = -s; dx <= s; dx += s) {
-      for (let dy = -s; dy <= s; dy += s) {
-        const x = cx + dx, y = cy + dy;
-        const half = len / 2;
-        tcx.strokeStyle = `rgba(0,0,0,${shadowA.toFixed(3)})`;
-        tcx.lineWidth = thick;
-        tcx.beginPath();
-        if (isHorizontal) { tcx.moveTo(x - half, y + thick * 0.4); tcx.lineTo(x + half, y + thick * 0.4); }
-        else { tcx.moveTo(x + thick * 0.4, y - half); tcx.lineTo(x + thick * 0.4, y + half); }
-        tcx.stroke();
-
-        tcx.strokeStyle = `rgba(255,255,255,${highlightA.toFixed(3)})`;
-        tcx.lineWidth = thick * 0.65;
-        tcx.beginPath();
-        if (isHorizontal) { tcx.moveTo(x - half, y - thick * 0.35); tcx.lineTo(x + half, y - thick * 0.35); }
-        else { tcx.moveTo(x - thick * 0.35, y - half); tcx.lineTo(x - thick * 0.35, y + half); }
-        tcx.stroke();
-      }
-    }
+function paintTexture(pc, w, h, rng) {
+  for (let i = 0; i < SPECK_COUNT; i++) {
+    const x = rng() * w, y = rng() * h;
+    const r = SPECK_R_MIN + rng() * (SPECK_R_MAX - SPECK_R_MIN);
+    const dark = rng() > 0.45; // slightly more dark flecks than light, like real tooth
+    const a = SPECK_ALPHA_MIN + rng() * (SPECK_ALPHA_MAX - SPECK_ALPHA_MIN);
+    pc.fillStyle = dark ? `rgba(0,0,0,${a.toFixed(3)})` : `rgba(255,255,255,${a.toFixed(3)})`;
+    pc.beginPath();
+    pc.arc(x, y, r, 0, Math.PI * 2);
+    pc.fill();
   }
 
-  for (let cy = 0; cy < cells; cy++) {
-    for (let cx = 0; cx < cells; cx++) {
-      const centerX = (cx + 0.5) * WEAVE_PITCH + (wrng() - 0.5) * 1.5;
-      const centerY = (cy + 0.5) * WEAVE_PITCH + (wrng() - 0.5) * 1.5;
-      const len = WEAVE_PITCH * (0.8 + wrng() * 0.25);
-      const thick = 0.8 + wrng() * 0.7;
-      const shadowA = 0.05 + wrng() * 0.025;
-      const highlightA = 0.04 + wrng() * 0.02;
-      const hOnTop = (cx + cy) % 2 === 0; // checkerboard alternation = the weave
-
-      if (hOnTop) {
-        drawDash(centerX, centerY, false, len, thick, shadowA * 0.75, highlightA * 0.75);
-        drawDash(centerX, centerY, true, len, thick, shadowA, highlightA);
-      } else {
-        drawDash(centerX, centerY, true, len, thick, shadowA * 0.75, highlightA * 0.75);
-        drawDash(centerX, centerY, false, len, thick, shadowA, highlightA);
-      }
-    }
+  const blotchCount = BLOTCH_COUNT_MIN + Math.floor(rng() * (BLOTCH_COUNT_MAX - BLOTCH_COUNT_MIN + 1));
+  for (let i = 0; i < blotchCount; i++) {
+    const x = rng() * w, y = rng() * h;
+    const r = BLOTCH_R_MIN + rng() * (BLOTCH_R_MAX - BLOTCH_R_MIN);
+    const dark = rng() > 0.5;
+    const a = BLOTCH_ALPHA_MIN + rng() * (BLOTCH_ALPHA_MAX - BLOTCH_ALPHA_MIN);
+    const tone = dark ? '0,0,0' : '255,255,255';
+    const g = pc.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(${tone},${a.toFixed(3)})`);
+    g.addColorStop(1, `rgba(${tone},0)`);
+    pc.fillStyle = g;
+    pc.fillRect(x - r, y - r, r * 2, r * 2);
   }
-
-  return tile;
 }
 
 const VIGNETTE_EDGE = 60;
-const VIGNETTE_TB_ALPHA = 0.09;  // weaker than chalkboard's 0.32 (very subtle, per brief)
+const VIGNETTE_TB_ALPHA = 0.09;  // weaker than chalkboard's 0.32 (very subtle, per brief 11)
 const VIGNETTE_LR_ALPHA = 0.07;  // weaker than chalkboard's 0.26
 
 /* buildPaintSurface(w, h, rng, groundHex) — same shape as
-   buildChalkboardSurface(w, h, rng). Plain mode only in this brief:
-   groundHex always comes from GROUND_LIBRARY (palette.js), passed by the
-   caller. `rng` is accepted for signature parity with buildChalkboardSurface
-   and because brief 13's seeded Patches ground will need it — Plain mode's
-   ground is fully determined by groundHex alone (shared static weave tile +
-   fixed vignette, no per-seed variation), so it goes unused here rather than
-   inventing a cosmetic use that would read as per-pixel tone drift and
-   contradict "flat groundHex base." */
+   buildChalkboardSurface(w, h, rng). Plain mode only: groundHex always
+   comes from GROUND_LIBRARY (palette.js), passed by the caller. Unlike
+   brief 11's tiled version, the texture now genuinely uses rng — every seed
+   gets its own scatter of specks/blotches, still deterministic per seed. */
 export function buildPaintSurface(w, h, rng, groundHex) {
   const cv = document.createElement('canvas');
   cv.width = w; cv.height = h;
@@ -120,10 +72,7 @@ export function buildPaintSurface(w, h, rng, groundHex) {
   pc.fillStyle = groundHex;
   pc.fillRect(0, 0, w, h);
 
-  if (!_weaveTile) _weaveTile = buildWeaveTile();
-  const pat = pc.createPattern(_weaveTile, 'repeat');
-  pc.fillStyle = pat;
-  pc.fillRect(0, 0, w, h);
+  paintTexture(pc, w, h, rng);
 
   const ew = VIGNETTE_EDGE; let g;
   g = pc.createLinearGradient(0, 0, 0, ew);
@@ -139,45 +88,45 @@ export function buildPaintSurface(w, h, rng, groundHex) {
   g.addColorStop(0, `rgba(0,0,0,${VIGNETTE_LR_ALPHA})`); g.addColorStop(1, 'rgba(0,0,0,0)');
   pc.fillStyle = g; pc.fillRect(w - ew, 0, ew, h);
 
-  // No dashed centre line (paper-specific), no dust speckle — both
-  // explicitly excluded for paint's ground.
+  // No dashed centre line (paper-specific), no dust speckle beyond the
+  // tooth above — both explicitly excluded for paint's ground.
 
   return cv;
 }
 
-/* ── paint stroke renderer — brief 11 task 3 ──────────────────────────────
-   renderPaintStroke(ctx, pts, col, wt, op, opts) mirrors renderChalkStroke's
-   signature shape: (ctx, pts, col, wt, op, ...extra-knobs). `wt` here IS the
-   base width in pixels, same contract as renderStroke/renderChalkStroke —
-   PAINT_WIDTH_BASE=6.0 is a starting point for whatever the caller feeds in
-   as wt (the lab's Base width slider becomes the wtRange fed to
-   simulateGame; this function doesn't know or care where wt came from).
+/* ── paint stroke renderer — brief 12 task 2 (independent path, replaces
+   brief 11 task 3 entirely) ────────────────────────────────────────────────
+   Brief 11's stroke went through paper's two-pass translucent pipeline in
+   spirit (opacity range 0.50-0.68, a soft glossy overlay pass) and read as
+   watercolour, not paint. This path is fully opaque — globalAlpha is always
+   1.0, `op` is accepted for signature parity with renderStroke/
+   renderChalkStroke but never read. No second translucent pass of any kind:
+   overlap must read as one flat colour sitting on top of another, never a
+   blend. Age fade and the weight/opacity range controls are paper-only —
+   this function's own hardcoded opacity is what actually severs them, no
+   matter what the caller passes in.
 
-   A single ctx.lineWidth stroke can't vary width along its length, so this
-   is a filled ribbon: sample the Catmull-Rom spine densely, offset each
-   sample perpendicular by half the local width, and fill the closed
-   left+right outline. Width at each sample is base wt scaled by two
-   independent, purely-deterministic (no injected rng — same idiom as
-   strokes.js's jitterPath, which derives its jitter from point coordinates
-   rather than threading an rng call through every renderer) signals:
-     3b — a low-frequency sine wave across arc length (brush loading/
+   Still a filled ribbon (a single ctx.lineWidth stroke can't vary width
+   along its length): Catmull-Rom spine sampled densely, each sample offset
+   perpendicular by half the local width, closed outline filled. Width at
+   each sample is base wt scaled by two independent, purely-deterministic
+   (no injected rng — same idiom as strokes.js's jitterPath, hashing off
+   point coordinates rather than threading rng through every renderer)
+   signals, combined by max() so a pooling knot is never cancelled by a low
+   point in the width wave:
+     3b — low-frequency sine wave across arc length (brush loading/
           unloading), seeded off the stroke's own start/end coordinates.
-     3c — a pooling spike near either end, IF that end is a real paddle/wall
-          hit (poolStart/poolEnd — the caller determines this from stroke
-          adjacency + event type, same division of responsibility as
-          renderChalkStroke taking ageFrac from the caller instead of
-          computing it from stroke index itself).
-   The two combine by max(), not multiply — a pooling knot should read
-   reliably regardless of where the width wave happens to sit at that arc
-   length, not get cancelled by a low point in the wave. */
+          Range widened to 0.4x-2.0x per brief 12 (was 0.55x-1.6x).
+     3c — pooling spike near either end, IF that end is a real paddle/wall
+          hit (poolStart/poolEnd, computed by the caller from stroke
+          adjacency + event type — same division of labour as
+          renderChalkStroke taking ageFrac from the caller).
+   Edges are clean fills only: no grain, no halo, no soft falloff. */
 export const PAINT_WIDTH_BASE = 6.0;
 
-const WIDTH_VAR_MIN = 0.55, WIDTH_VAR_MAX = 1.6;   // 3b, PROVISIONAL
-const POOL_PEAK_MIN = 2.2, POOL_PEAK_MAX = 3.2;    // 3c, PROVISIONAL
-const POOL_WINDOW_MIN = 8, POOL_WINDOW_MAX = 14;   // 3c, PROVISIONAL, px
-const GLOSS_WIDTH_FRAC = 0.32;   // "clean and slightly glossy, not grainy" —
-const GLOSS_ALPHA_MULT = 0.4;    // a thin lighter streak down the centre,
-                                  // not chalk-style grain.
+const WIDTH_VAR_MIN = 0.4, WIDTH_VAR_MAX = 2.0;    // 3b, brief 12 widened range
+const POOL_PEAK_MIN = 2.2, POOL_PEAK_MAX = 3.2;    // 3c, brief 11 §3c, unchanged
+const POOL_WINDOW_MIN = 8, POOL_WINDOW_MAX = 14;   // 3c, brief 11 §3c, unchanged
 
 // GLSL-style deterministic hash — same family of trick as jitterPath's
 // Math.sin(p.x*0.73+p.y*1.31): a scalar function of coordinates, no rng
@@ -225,16 +174,10 @@ function poolMultAt(distFromEnd, seedX, seedY, poolingStrength) {
   return 1 + (peak - 1) * f;
 }
 
-function lighten(hex, amt) {
-  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-  const mix = c => Math.round(c + (255 - c) * amt);
-  return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
-}
-
 export function renderPaintStroke(ctx, pts, col, wt, op, opts = {}) {
   if (pts.length < 2) return;
   const {
-    widthVariation = 1.0,   // 0 = uniform wt, 1 = full 0.55-1.6x wave (3b)
+    widthVariation = 1.0,   // 0 = uniform wt, 1 = full 0.4-2.0x wave (3b)
     poolingStrength = 1.0,  // 1 = literal 2.2-3.2x PROVISIONAL peak (3c)
     poolStart = false,
     poolEnd = false,
@@ -264,46 +207,35 @@ export function renderPaintStroke(ctx, pts, col, wt, op, opts = {}) {
     return mult;
   }
 
-  function buildRibbon(widthScale) {
-    const left = [], right = [];
-    for (let i = 0; i < samples.length; i++) {
-      const p = samples[i];
-      const pPrev = samples[Math.max(i - 1, 0)], pNext = samples[Math.min(i + 1, samples.length - 1)];
-      let tx = pNext.x - pPrev.x, ty = pNext.y - pPrev.y;
-      const tl = Math.hypot(tx, ty) || 1;
-      tx /= tl; ty /= tl;
-      const nx = -ty, ny = tx;
-      const halfW = 0.5 * wt * widthMultAt(i) * widthScale;
-      left.push({ x: p.x + nx * halfW, y: p.y + ny * halfW });
-      right.push({ x: p.x - nx * halfW, y: p.y - ny * halfW });
-    }
-    return { left, right };
+  const left = [], right = [];
+  for (let i = 0; i < samples.length; i++) {
+    const p = samples[i];
+    const pPrev = samples[Math.max(i - 1, 0)], pNext = samples[Math.min(i + 1, samples.length - 1)];
+    let tx = pNext.x - pPrev.x, ty = pNext.y - pPrev.y;
+    const tl = Math.hypot(tx, ty) || 1;
+    tx /= tl; ty /= tl;
+    const nx = -ty, ny = tx;
+    const halfW = 0.5 * wt * widthMultAt(i);
+    left.push({ x: p.x + nx * halfW, y: p.y + ny * halfW });
+    right.push({ x: p.x - nx * halfW, y: p.y - ny * halfW });
   }
 
-  function fillRibbon(left, right, fillStyle, alpha) {
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = fillStyle;
-    ctx.beginPath();
-    ctx.moveTo(left[0].x, left[0].y);
-    for (let i = 1; i < left.length; i++) ctx.lineTo(left[i].x, left[i].y);
-    for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
-    ctx.closePath();
-    ctx.fill();
-    // Rounded caps at both ends — radius follows local half-width, so a
-    // pooled end's cap reads as a blob (per 3c), not a bulge with square
-    // corners.
-    const r0 = Math.hypot(left[0].x - right[0].x, left[0].y - right[0].y) / 2;
-    ctx.beginPath(); ctx.arc(samples[0].x, samples[0].y, r0, 0, Math.PI * 2); ctx.fill();
-    const n = left.length - 1;
-    const rN = Math.hypot(left[n].x - right[n].x, left[n].y - right[n].y) / 2;
-    ctx.beginPath(); ctx.arc(samples[n].x, samples[n].y, rN, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-
-  const { left, right } = buildRibbon(1);
-  fillRibbon(left, right, col, op);
-
-  const { left: gl, right: gr } = buildRibbon(GLOSS_WIDTH_FRAC);
-  fillRibbon(gl, gr, lighten(col, 0.5), op * GLOSS_ALPHA_MULT);
+  ctx.save();
+  ctx.globalAlpha = 1.0; // always opaque — op is accepted for signature parity, never read
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.moveTo(left[0].x, left[0].y);
+  for (let i = 1; i < left.length; i++) ctx.lineTo(left[i].x, left[i].y);
+  for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
+  ctx.closePath();
+  ctx.fill();
+  // Rounded caps at both ends — radius follows local half-width, so a
+  // pooled end's cap reads as a blob (per 3c), not a bulge with square
+  // corners. Clean fills only: no grain, no halo, no soft falloff.
+  const r0 = Math.hypot(left[0].x - right[0].x, left[0].y - right[0].y) / 2;
+  ctx.beginPath(); ctx.arc(samples[0].x, samples[0].y, r0, 0, Math.PI * 2); ctx.fill();
+  const n = left.length - 1;
+  const rN = Math.hypot(left[n].x - right[n].x, left[n].y - right[n].y) / 2;
+  ctx.beginPath(); ctx.arc(samples[n].x, samples[n].y, rN, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }

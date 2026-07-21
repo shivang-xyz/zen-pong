@@ -39,6 +39,8 @@
   #paint-controls h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#e0a15a;margin:0;width:100%}
   .swatch-row{display:flex;gap:4px;margin-top:6px;justify-content:center}
   .swatch{width:14px;height:14px;border-radius:3px;display:inline-block;border:1px solid rgba(255,255,255,0.15)}
+  input:disabled,select:disabled{opacity:0.32;cursor:not-allowed}
+  .field.inert label{opacity:0.5}
 </style>
 </head>
 <body>
@@ -393,11 +395,15 @@ function renderTile(i) {
   const cutoff = Math.ceil(total * (state.density / 100));
 
   if (state.surfaceMode === 'paint') {
+    // Age fade and the weight/opacity range controls are paper-only (brief
+    // 12 task 2/3) — op isn't even computed here since renderPaintStroke
+    // never reads it (always fully opaque). Speed weight isn't one of the
+    // controls the brief names for severing, so it still applies to wt.
     const resolved = data.strokes.slice(0, cutoff).map(st => ({
       pts: st.pts, col: st.col, index: st.index, event: st.event,
       wt: (state.enh.speedWeight.enabled ? st.wt * speedWeightMultiplier(st.speed, state.enh.speedWeight) : st.wt)
           * state.paint.widthBase,
-      op: state.enh.ageFade.enabled ? st.op * ageFadeMultiplier(st.index, total, state.enh.ageFade) : st.op,
+      op: st.op,
     }));
     resolved.forEach(st => {
       const poolEnd = isHitEvent(st.event);
@@ -534,9 +540,29 @@ bindEnhSlider('enh-speedwt-minw', 'v-speedwt-minw', v => { state.enh.speedWeight
 bindEnhSlider('enh-speedwt-maxw', 'v-speedwt-maxw', v => { state.enh.speedWeight.maxW = v; });
 
 /* ── paint controls wiring ────────────────────────────── */
+// Brief 12 task 3: age fade, weight range, opacity range, and both pass
+// alpha/width multipliers are paper-only — inert (disabled) when
+// Surface = Paint, so a live-looking control never silently does nothing.
+// Speed weight isn't in that list and stays live for both surfaces.
+const PAPER_ONLY_IDS = [
+  'enh-agefade-on', 'enh-agefade-newest', 'enh-agefade-oldest',
+  'ctl-wt-min', 'ctl-wt-max', 'ctl-op-min', 'ctl-op-max',
+  'ctl-p1w', 'ctl-p1a', 'ctl-p2w', 'ctl-p2a',
+];
+function updatePaperOnlyInertness() {
+  const inert = state.surfaceMode === 'paint';
+  PAPER_ONLY_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    el.disabled = inert;
+    const field = el.closest('.field');
+    if (field) field.classList.toggle('inert', inert);
+  });
+}
+
 document.getElementById('ctl-surface').addEventListener('change', e => {
   state.surfaceMode = e.target.value;
   document.getElementById('paint-controls').classList.toggle('visible', state.surfaceMode === 'paint');
+  updatePaperOnlyInertness();
   resimulateAll();
 });
 
@@ -568,6 +594,7 @@ document.getElementById('btn-copy').addEventListener('click', () => {
 /* ── boot ─────────────────────────────────────────────── */
 state.baseSeed = Math.floor(Math.random() * 1_000_000);
 document.getElementById('ctl-seed').value = state.baseSeed;
+updatePaperOnlyInertness();
 resimulateAll();
 </script>
 </body>

@@ -54,7 +54,7 @@ function srgbToLinear(c) {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 
-function hexToOklab(hex) {
+export function hexToOklab(hex) {
   const r = srgbToLinear(parseInt(hex.slice(1, 3), 16));
   const g = srgbToLinear(parseInt(hex.slice(3, 5), 16));
   const b = srgbToLinear(parseInt(hex.slice(5, 7), 16));
@@ -70,6 +70,43 @@ function hexToOklab(hex) {
     a: 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
     b: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
   };
+}
+
+function linearToSrgb(c) {
+  c = Math.max(0, Math.min(1, c));
+  return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+}
+
+/* oklabToHex({L,a,b}) — inverse of hexToOklab (standard Ottosson matrices).
+   Blended Oklab points can land slightly outside the sRGB gamut; channels
+   are clamped 0-255 on the way out rather than gamut-mapped, which is fine
+   for a "does this read as mixed pigment" use, not a colour-accuracy one. */
+export function oklabToHex({ L, a, b }) {
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+
+  const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+
+  const r = linearToSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
+  const g = linearToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
+  const bl = linearToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s);
+
+  const toHex = c => Math.round(c * 255).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(bl)}`;
+}
+
+/* blendOklab(hexA, hexB, t) — lerp in OKLab space (t=0 → hexA, t=1 → hexB),
+   not sRGB: sRGB-blending saturated near-complements produces dead grey,
+   OKLab keeps the result chromatic and plausible as mixed pigment (brief
+   14 task 4). */
+export function blendOklab(hexA, hexB, t) {
+  const a = hexToOklab(hexA), b = hexToOklab(hexB);
+  return oklabToHex({
+    L: a.L + (b.L - a.L) * t,
+    a: a.a + (b.a - a.a) * t,
+    b: a.b + (b.b - a.b) * t,
+  });
 }
 
 function oklabDeltaE(hexA, hexB) {

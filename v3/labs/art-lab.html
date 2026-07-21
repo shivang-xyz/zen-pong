@@ -197,6 +197,10 @@
     <label>Width variation (<span id="v-paint-var">1.0</span>)</label>
     <input type="range" id="paint-var" min="0" max="1" step="0.05" value="1.0">
   </div>
+  <div class="field">
+    <label>Patch count (<span id="v-paint-patchcount">6</span>)</label>
+    <input type="range" id="paint-patchcount" min="0" max="12" step="1" value="6">
+  </div>
 </div>
 
 <div id="grid"></div>
@@ -217,7 +221,7 @@ import {
 } from '../engine/enhancements.js';
 import { buildPalette, GROUND_LIBRARY } from '../engine/palette.js';
 import { buildPaintSurface, buildPatchGround, renderPaintStroke, PAINT_WIDTH_BASE } from '../engine/paint.js';
-import { buildSplatter, renderSplatterMark } from '../engine/splatter.js';
+import { buildSplatter, buildIntersectionBlotches, renderSplatterMark } from '../engine/splatter.js';
 
 const TILE_COUNT = 12;
 
@@ -237,6 +241,7 @@ const state = {
     scheme: 'random',       // one of SCHEMES' keys, or 'random' => undefined => rng-drawn
     groundHex: GROUND_LIBRARY[0].hex,
     groundMode: 'plain',    // 'plain' | 'patches'
+    patchCount: 6,          // brief 14: caller-supplied, not rng-derived — seeded placement WITHIN the count
     widthBase: PAINT_WIDTH_BASE,  // render-time multiplier, no re-sim needed (like the Enhancements panel)
     poolingStrength: 1.0,
     widthVariation: 1.0,
@@ -307,10 +312,11 @@ function resimulateTile(i) {
     // Distinct derived seeds so their rng draws don't mirror the ground
     // texture's own sequence — same idiom as weightedPaletteArray's shuffle.
     const surface = state.paint.groundMode === 'patches'
-      ? buildPatchGround(W, H, makeRng((seed ^ 0x27220A95) >>> 0), result.strokes, palette)
+      ? buildPatchGround(W, H, makeRng((seed ^ 0x27220A95) >>> 0), result.strokes, palette, state.paint.patchCount)
       : buildPaintSurface(W, H, makeRng(seed), palette.ground);
     const splatter = buildSplatter(result.strokes, palette, makeRng((seed ^ 0x51ED270B) >>> 0), W, H);
-    tileData[i] = { strokes: result.strokes, meta: result.meta, surface, palette, splatter };
+    const blotches = buildIntersectionBlotches(result.strokes, palette, makeRng((seed ^ 0x6A2F1C4D) >>> 0), W, H);
+    tileData[i] = { strokes: result.strokes, meta: result.meta, surface, palette, splatter, blotches };
   } else {
     const result = simulateGame({
       seed,
@@ -431,14 +437,19 @@ function renderTile(i) {
       });
     });
 
-    // Same density scrubber governs splatter count as strokes (brief 13
-    // task 2: "tune count against the density-scrubber calibration").
+    // Same density scrubber governs splatter/blotch count as strokes
+    // (brief 13 task 2: "tune count against the density-scrubber
+    // calibration"). Blotches draw first — they read as part of the wet
+    // paint the strokes just left; splatter (flung/dropped) lands on top.
+    const blotchCutoff = Math.ceil(data.blotches.length * (state.density / 100));
+    data.blotches.slice(0, blotchCutoff).forEach(mark => renderSplatterMark(ctx, mark));
     const splatterCutoff = Math.ceil(data.splatter.length * (state.density / 100));
     data.splatter.slice(0, splatterCutoff).forEach(mark => renderSplatterMark(ctx, mark));
 
     tileSeedLabels[i].textContent = `seed ${seedFor(i)} · ${data.meta.score.ps}–${data.meta.score.as}`;
     tileMetricsEls[i].textContent =
-      `${resolved.length} strokes · ${data.splatter.length} splatter · ${data.palette.scheme} · base ${data.palette.baseIndex}`;
+      `${resolved.length} strokes · ${data.splatter.length} splatter · ${data.blotches.length} blotches · `
+      + `${data.palette.scheme} · base ${data.palette.baseIndex}`;
     renderSwatches(i, data.palette);
   } else {
     const resolved = data.strokes.slice(0, cutoff).map(st => ({
@@ -613,6 +624,10 @@ document.getElementById('v-paint-width').textContent = state.paint.widthBase.toF
 bindSlider('paint-width', 'v-paint-width', v => { state.paint.widthBase = v; renderAll(); });
 bindSlider('paint-pool', 'v-paint-pool', v => { state.paint.poolingStrength = v; renderAll(); });
 bindSlider('paint-var', 'v-paint-var', v => { state.paint.widthVariation = v; renderAll(); });
+// Patch count changes what buildPatchGround draws, not just how it's
+// rendered — needs a resim (only matters in Patches ground mode, but
+// resimulateAll is cheap enough at 12 tiles not to special-case that).
+bindSlider('paint-patchcount', 'v-paint-patchcount', v => { state.paint.patchCount = Math.round(v); resimulateAll(); });
 
 document.getElementById('btn-copy').addEventListener('click', () => {
   const json = JSON.stringify(state, null, 2);

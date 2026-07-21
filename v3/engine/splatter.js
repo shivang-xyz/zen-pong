@@ -13,11 +13,17 @@
 
 import { computeLineDensity, findDenseKnots } from './density.js';
 import { weightedPick, weightedSampleWithoutReplacement } from './rng.js';
+import { blendOklab } from './palette.js';
 
 const DENSITY_CELL = 28;
 const DENSITY_FLOOR = 0.15;
 const MIN_SPACING = DENSITY_CELL * 2.5;
-const COUNT_MIN = 12, COUNT_MAX = 26;   // PROVISIONAL — tune against the density scrubber
+// PROVISIONAL — brief 14 task 3 raised this: review read the line as the
+// exception and dots as the rule. The fix for THAT was mostly Task 2 (much
+// wider stroke width) and Task 4 (less pooling stealing the eye at the
+// edges) — splatter count still goes up too, per the brief's explicit
+// "more splatter and more line at once, not a trade" instruction.
+const COUNT_MIN = 24, COUNT_MAX = 50;
 const FLUNG_RATIO = 0.4;                // ~60/40 drops:flung, PROVISIONAL per brief
 
 const DROP_R_MIN = 1.0, DROP_R_MAX = 9.0;
@@ -120,6 +126,110 @@ export function buildSplatter(strokes, palette, rng, w, h, opts = {}) {
     const seedAngle = rng() * Math.PI * 2;
     return { type: 'drop', x: k.x, y: k.y, r, irregularity, seedAngle, colorHex };
   });
+}
+
+/* ── intersection blotches — brief 14 task 4 ──────────────────────────────
+   Reads brief 02's failure first: hit-triggered ink bloom put every mark on
+   the canvas edge, because paddle/wall hits — the only events that fired
+   it — are structurally always on the boundary. Cut for exactly that
+   reason (PROJECT-LOG.md 2026-07-09). Brief 12/13 quietly reintroduced the
+   same shape of bug: pooling (renderPaintStroke's 3c) also only fires at
+   paddle/wall hits, so once strokes went opaque and wide, the pooling
+   knots became the dominant, edge-ringed mark — same root cause, different
+   feature. Task 4's real fix isn't "make blotches at intersections" in
+   isolation, it's "stop placing the DOMINANT mark at a boundary-only event
+   at all" — paint.js's POOL_PEAK_* reduction (task 4's other half) is what
+   actually stops the edge-ringing; this function is what fills the
+   resulting gap with marks that land where the rally was actually busy.
+
+   Reuses brief 13's density machinery rather than a fresh intersection
+   detector — findDenseKnots' candidates already ARE the high-crossing
+   points (that's what "dense" means for overlapping line segments), so a
+   second bespoke pairwise-segment-intersection pass would find the same
+   locations by a more expensive route. What density alone can't answer is
+   WHICH two strokes cross at a given knot — contributingStrokes below
+   answers that by re-checking proximity at each chosen point. */
+const BLOTCH_COUNT_MIN = 6, BLOTCH_COUNT_MAX = 14;
+const BLOTCH_PROX_RADIUS = 22;      // px — how close two strokes must both pass to "cross" here
+const BLOTCH_R_MIN = 6, BLOTCH_R_MAX = 30;
+const BLOTCH_SIZE_POWER = 2;        // less heavy-tailed than drops — a blotch should usually read
+
+/* Every stroke with a segment within `radius` of (x,y), one entry each
+   (nearest distance kept if a stroke weaves past the point more than
+   once). Not just the nearest stroke (nearestDirection's job) — this is
+   "who's here", plural, since a blotch needs to know how many/which
+   strokes actually converge at the knot. */
+function contributingStrokes(strokes, x, y, radius) {
+  const r2 = radius * radius;
+  const found = [];
+  for (const s of strokes) {
+    let best = Infinity;
+    const pts = s.pts;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const abx = b.x - a.x, aby = b.y - a.y;
+      const len2 = abx * abx + aby * aby || 1;
+      let t = ((x - a.x) * abx + (y - a.y) * aby) / len2;
+      t = Math.max(0, Math.min(1, t));
+      const px = a.x + abx * t, py = a.y + aby * t;
+      const dx = x - px, dy = y - py;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < best) best = d2;
+    }
+    if (best <= r2) found.push({ colorHex: s.col, wt: s.wt });
+  }
+  return found;
+}
+
+/* buildIntersectionBlotches(strokes, palette, rng, w, h, opts) → mark
+   descriptors, same { type:'drop', ... } shape buildSplatter's drops use
+   (renderSplatterMark already renders it) — a blotch IS an irregular
+   opaque blob, just bigger and OKLab-blended rather than palette-drawn.
+   Skips any candidate knot where fewer than 2 strokes actually converge
+   (nothing there to mix) — real dense knots almost always clear this,
+   since that is what "dense" means. */
+export function buildIntersectionBlotches(strokes, palette, rng, w, h, opts = {}) {
+  const { countRange = [BLOTCH_COUNT_MIN, BLOTCH_COUNT_MAX] } = opts;
+
+  const field = computeLineDensity(strokes, w, h, DENSITY_CELL);
+  const knots = findDenseKnots(field, {
+    densityFloor: DENSITY_FLOOR, minSpacing: MIN_SPACING, maxCandidates: 60,
+  });
+  if (knots.length === 0) return [];
+
+  const count = Math.min(
+    knots.length,
+    countRange[0] + Math.floor(rng() * (countRange[1] - countRange[0] + 1)),
+  );
+  const chosen = weightedSampleWithoutReplacement(
+    rng, knots.map(k => ({ value: k, weight: k.density })), count,
+  );
+
+  const blotches = [];
+  chosen.forEach(k => {
+    const contributors = contributingStrokes(strokes, k.x, k.y, BLOTCH_PROX_RADIUS);
+    if (contributors.length < 2) return; // no actual crossing here, skip
+    contributors.sort((a, b) => b.wt - a.wt);
+    const [c1, c2] = contributors; // two widest, per brief: never average 3+ down to mud
+
+    const bias = 0.3 + rng() * 0.4; // 0.3-0.7 — never a flat 50/50 wash
+    const colorHex = blendOklab(c1.colorHex, c2.colorHex, bias);
+
+    const sizeNorm = Math.pow(rng(), BLOTCH_SIZE_POWER);
+    const baseR = BLOTCH_R_MIN + (BLOTCH_R_MAX - BLOTCH_R_MIN) * sizeNorm;
+    // Size scales with local density and the crossing strokes' combined width.
+    const r = Math.max(3, baseR * (0.6 + 0.5 * k.density) * (0.6 + (c1.wt + c2.wt) / 16));
+
+    blotches.push({
+      type: 'drop',
+      x: k.x, y: k.y, r,
+      irregularity: 0.15 + rng() * 0.15,
+      seedAngle: rng() * Math.PI * 2,
+      colorHex,
+    });
+  });
+
+  return blotches;
 }
 
 function drawIrregularBlob(ctx, x, y, r, irregularity, seedAngle) {

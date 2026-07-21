@@ -5,6 +5,35 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-20 — Brief 12: paint reset (weave + stroke replaced, review-driven)
+
+Brief 11's weave and stroke failed review — read as graph paper + translucent
+watercolour, not paint. Brief 12 replaced both; palette.js and paint.js's
+function contracts stand.
+
+- **Ground:** `buildWeaveTile`/tile pattern deleted outright — a repeating
+  tile can't be tuned into non-grid. Replaced with a non-repeating tooth
+  (900 specks + ~15-24 low-amplitude blotches, positioned directly from the
+  passed `rng`, no tile). Vignette kept.
+- **Stroke:** new independent path, `globalAlpha` hardcoded to 1.0 (`op`
+  param kept for signature parity, never read) — no two-pass, no blend on
+  overlap. Removed the glossy highlight pass added last session (unrequested
+  then, and a translucent layer contradicts "flat poster colour" now).
+  Width-wave range widened 0.4×–2.0× (was 0.55×–1.6×). Pooling numbers
+  unchanged (brief 11 §3c) — opacity was the reason it wasn't reading, not
+  the peak/window values; confirmed visible post-fix, didn't need widening.
+- **Lab:** age fade, weight range, opacity range, and both pass mults now
+  `disabled` when Surface = Paint (verified both directions). Speed weight
+  is not in the brief's severance list — left live for paint intentionally.
+- Verified: paper-path files (`surface.js`/`strokes.js`/`simulate.js`/
+  `physics.js`/`rng.js`) zero-diff vs `main`. Paint full-pipeline
+  hash-deterministic, 6/6 distinct across seeds 1–6. Opaque confirmed at the
+  pixel level (overlap = exact top colour, alpha 255, no blend). No
+  `Math.random()` in engine. `paint.js` DOM confined to one
+  `document.createElement` (`buildPaintSurface`).
+
+Status: brief 12 done on `feature/paint-surface`, pushed. Awaiting review.
+
 ## 2026-07-20 — Brief 11 complete: paint stroke renderer + lab wiring (tasks 3-4)
 
 Review gate released same-session ("a bare weave with no strokes on it isn't

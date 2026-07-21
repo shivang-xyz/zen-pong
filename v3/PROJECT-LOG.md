@@ -5,6 +5,66 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-21 — Brief 14: calibration pass (patches, width, splatter/pooling balance)
+
+Opened by committing docs left uncommitted from the architect side
+(`v3/briefs/14-paint-calibration.md`, `v3/ARCHITECT.md`'s new "never hand
+Shivang git chores" rule) to `main`, then rebasing the feature branch — the
+new rule's own first-line-of-every-prompt pattern, now actually followed.
+
+### Task 4 first, since it's the one with a real failure mode behind it
+Read brief 02's ink-bloom postmortem before touching code (PROJECT-LOG.md
+2026-07-09): hit-triggered placement put every bloom on the left/right
+edges, because paddle/wall hits are structurally always on the boundary —
+cut for exactly that reason. Brief 12/13 quietly reintroduced the identical
+bug in a different feature: `renderPaintStroke`'s pooling (3c) *also* only
+fires at paddle/wall hits, and once strokes went opaque and wide, those
+pooling knots became the dominant, edge-ringed mark. Same root cause, new
+paint. Fix has two halves, not one:
+1. `POOL_PEAK_MIN/MAX` cut from 2.2-3.2x to 1.3-1.8x (`paint.js`) — pooling
+   still reads as "the line paused here," stops being the loudest mark.
+2. New `buildIntersectionBlotches` (`splatter.js`) fills the gap with marks
+   that land where the rally was actually busy — reuses brief 13's
+   `findDenseKnots` rather than a fresh intersection detector (dense knots
+   already *are* the high-crossing points); `contributingStrokes` then
+   answers "which two strokes" at each chosen point. Colour is an OKLab
+   blend (`palette.js` gained `hexToOklab` export + new `oklabToHex`/
+   `blendOklab`) of the two widest contributors, seeded-biased 0.3-0.7 so
+   it's never a flat 50/50 wash — verified non-grey, non-uniform blends
+   across a real seed.
+
+### Task 1 — patches rebuilt, not tuned
+Brief 13's soft radial-gradient patches were wrong on every axis per
+review. New version: hard opaque fills (no gradient anywhere), closed
+polygon with a 3-harmonic radius wobble for irregular/lobed silhouettes,
+independent x/y scale for round-vs-elongated variety, heavy-tailed size
+(`rng()^3.2`, 9px to a third of canvas area). `count` is now a lab slider
+(0-12) instead of rng-derived — "seeded placement WITHIN that count," not a
+seeded count.
+
+### Task 2 — width range
+0.4x-2.0x → 0.15x-4.0x. Also dropped undulation frequency (1.5-3 cycles →
+0.5-1.5) since the old cycle count read as vibration at the new amplitude —
+brief wanted "one or two transitions, not many." Verified the slider
+actually sweeps uniform-at-0 to extreme-at-1, not just extreme-at-1.
+
+### Task 3 — splatter count
+12-26 → 24-50. Confirmed nothing in the render path was fragmenting or
+skipping the trail — the "dots not lines" read was Task 2 (thin strokes)
+and Task 4 (edge-pooling dominating attention), not a suppression bug.
+
+### Verification
+Paper zero-diff vs `main`. Full pipeline (palette, both ground modes,
+strokes, splatter, blotches) hash-deterministic across seeds 1-6, all
+distinct. `oklabToHex` round-trips exactly on all tested hexes. Blotch
+colours pixel-checked on a real seed: genuine blends, not pure passthrough,
+not flat grey. DOM confined to `paint.js`'s two build functions only —
+`palette.js`/`splatter.js`/`density.js`/`rng.js` stay DOM-free. No
+`Math.random()`. Screenshotted 312px grid (both ground modes) + one native
+lightbox.
+
+Status: brief 14 done on `feature/paint-surface`, pushed. Awaiting review.
+
 ## 2026-07-21 — Brief 13: splatter (density-placed) + ground patches
 
 Found an interactive rebase left mid-flight from outside this session

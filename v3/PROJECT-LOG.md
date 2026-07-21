@@ -5,6 +5,71 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-21 — Brief 15: refinement (splatter mass, curved patches, blotch clusters)
+
+Opened with a real doc collision: two different `v3/briefs/15-*.md` files
+existed uncommitted (`15-paint-refinement.md`, `15-splatter-scale-and-patch-
+curves.md`), both numbered 15. Committed both to `main` (docs go to main
+regardless of which gets built), flagged the collision, built
+`15-paint-refinement.md` per explicit instruction — did not silently pick
+one or merge them.
+
+### Task 1 — pooling removed entirely, not reduced
+Brief 14 cut pooling's peak; brief 15's own postmortem on that: "any amount
+clusters at the boundary, because direction change only ever happens at a
+paddle or a wall." Correct — there's no partial fix here, only gone or not.
+Deleted `POOL_PEAK_*`/`POOL_WINDOW_*`/`poolMultAt`/`poolStart`/`poolEnd`
+from `renderPaintStroke` outright (`paint.js`). The `POOLING STRENGTH`
+slider is relabelled **Blotch size** and now feeds
+`buildIntersectionBlotches`' `sizeMult` instead — a build-time input now,
+so that control moved from `renderAll()` to `resimulateAll()` in the lab.
+
+### Task 2 — splatter given real visual mass
+Second size pass (brief 14 already raised it once, still read as specks).
+Drop radius 1-9px → 4-20px (large end now approaches a fat stroke's actual
+width: `PAINT_WIDTH_BASE 6.0 × WIDTH_VAR_MAX 4.0`). Flung length 14-34px →
+26-60px, head radius 3-7px → 7-15px (satellites scale off head radius, so
+they grew with it). Count 24-50 → 32-64. Placement logic untouched — brief
+was explicit this is a size/count change, not a placement change.
+
+### Task 3 — patches: closed Catmull-Rom, not straight edges
+Added `traceClosedCR` to `strokes.js` (paper-path file — purely additive,
+existing `traceCR`/`renderStroke`/`jitterPath` untouched, verified paper
+still hash-identical). Same t=0.5 Catmull-Rom-to-bezier math as `traceCR`,
+neighbour indices wrap modulo instead of clamping, so it closes smoothly.
+`buildPatchGround`'s wobble-jittered vertices now trace through this
+instead of `lineTo` — smooth lobed silhouette, still a hard opaque fill
+(smooth outline ≠ soft edge).
+
+### Task 4 — blotches: clusters, not single ellipses
+The one needing actual judgment. Rewrote `buildIntersectionBlotches`
+entirely: far fewer locations (2-4, density floor raised 0.15→0.5 — "only
+the densest," not splatter's whole-composition pool) and each one is now a
+compound `blotchCluster` — one irregular main mass + 3-6 overlapping
+satellites + 2-4 droplets flung outward, every element its own
+`traceClosedCR` silhouette. Colour: main mass blends near the seeded true
+mix (bias 0.35-0.65), satellites/droplets independently skew toward one
+parent colour or the other (0-0.35 or 0.65-1.0) — that per-element
+variation, not a uniform blend repeated, is what reads as two wet colours
+actually meeting rather than a third colour painted on. Considered literal
+deterministic top-N by density for "only the densest" (brief's wording
+leans that way) but kept the seeded-weighted draw brief 13 established,
+just over a much smaller, already-elite candidate pool — abandoning
+seed-to-seed variety entirely felt like solving the wrong problem now that
+there are only 2-4 slots to begin with.
+
+### Verification
+Paper byte-identical (zero-diff on `surface.js`/`simulate.js`/`physics.js`;
+`strokes.js` purely additive; hash-confirmed regardless). Full pipeline —
+palette, both ground modes, strokes, splatter, blotch clusters —
+hash-deterministic across seeds 1-6, all distinct. DOM confined to
+`paint.js`'s two build functions; `splatter.js`/`density.js`/`rng.js`/
+`strokes.js` stay DOM-free. No `Math.random()`. Screenshotted 312px grid
+(both ground modes) + native lightboxes showing blotch clusters and patch
+curves close up.
+
+Status: brief 15 done on `feature/paint-surface`, pushed. Awaiting review.
+
 ## 2026-07-21 — Brief 14: calibration pass (patches, width, splatter/pooling balance)
 
 Opened by committing docs left uncommitted from the architect side

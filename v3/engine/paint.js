@@ -10,6 +10,7 @@
 
 import { computeLineDensity, findDenseKnots } from './density.js';
 import { weightedPick } from './rng.js';
+import { traceClosedCR } from './strokes.js';
 
 /* ── ground texture — brief 12 task 1 ─────────────────────────────────────
    Brief 11's tiled basket-weave read as a drafting grid at every size and
@@ -109,14 +110,19 @@ export function buildPaintSurface(w, h, rng, groundHex) {
    GROUND_LIBRARY), composition-aware placement via density.js (§3.1),
    still composited beneath all marks.
 
-   Shape: a closed polygon with a multi-harmonic wobble on the radius
-   (three sine terms at different frequencies/phases, hashed per patch) —
-   one low-frequency term makes the overall silhouette lopsided, higher-
-   frequency terms add lobes. Independent x/y scale (not just a uniform
-   radius) gives the elongated/round variety the brief asks for without
-   needing true ellipse trig. `count` is now caller-supplied (the lab's
-   Patch count slider), not rng-derived — "seeded placement WITHIN that
-   count," not a seeded count. */
+   Shape: a multi-harmonic wobble on the radius (three sine terms at
+   different frequencies/phases, hashed per patch) — one low-frequency term
+   makes the overall silhouette lopsided, higher-frequency terms add lobes.
+   Independent x/y scale (not just a uniform radius) gives the elongated/
+   round variety the brief asks for without needing true ellipse trig.
+   `count` is now caller-supplied (the lab's Patch count slider), not
+   rng-derived — "seeded placement WITHIN that count," not a seeded count.
+
+   Brief 15 task 3: the wobble vertices are now traced as a CLOSED
+   Catmull-Rom curve (traceClosedCR, strokes.js) instead of straight
+   lineTo segments — brief 14's polygon read as computer graphics, hard
+   corners at every vertex. Smooth outline, still a hard opaque fill
+   underneath (smooth ≠ soft — the edge is still a clean cut, no blur). */
 const PATCH_R_MIN = 9;                 // "comparable to a large splatter drop"
 const PATCH_R_MAX_FRAC = 1 / 3;        // "up to a third of the canvas" — resolved against w*h at call time
 const PATCH_SIZE_POWER = 3.2;          // heavy-tailed: rng()^3.2, mostly small/mid, occasional huge
@@ -146,10 +152,7 @@ function fillPatch(pc, points, colorHex) {
   pc.save();
   pc.globalAlpha = 1.0; // hard opaque — same paint quality as strokes/splatter, no falloff
   pc.fillStyle = colorHex;
-  pc.beginPath();
-  pc.moveTo(points[0].x, points[0].y);
-  for (let i = 1; i < points.length; i++) pc.lineTo(points[i].x, points[i].y);
-  pc.closePath();
+  traceClosedCR(pc, points); // smooth closed curve through the wobble vertices, not straight edges
   pc.fill();
   pc.restore();
 }
@@ -221,43 +224,34 @@ export function buildPatchGround(w, h, rng, strokes, palette, count = 6) {
    Still a filled ribbon (a single ctx.lineWidth stroke can't vary width
    along its length): Catmull-Rom spine sampled densely, each sample offset
    perpendicular by half the local width, closed outline filled. Width at
-   each sample is base wt scaled by two independent, purely-deterministic
-   (no injected rng — same idiom as strokes.js's jitterPath, hashing off
-   point coordinates rather than threading rng through every renderer)
-   signals, combined by max() so a pooling knot is never cancelled by a low
-   point in the width wave:
-     3b — low-frequency sine wave across arc length (brush loading/
-          unloading), seeded off the stroke's own start/end coordinates.
-          Range widened to 0.15x-4.0x per brief 14 (was 0.4x-2.0x in brief
-          12, which review found still barely perceptible). Undulation
-          count dropped too (0.5-1.5 vs the old 1.5-3) — brief 14 wants
-          "one or two transitions per stroke, not many," and at this much
-          wider an amplitude, the old cycle count read as vibration.
-     3c — pooling spike near either end, IF that end is a real paddle/wall
-          hit (poolStart/poolEnd, computed by the caller from stroke
-          adjacency + event type — same division of labour as
-          renderChalkStroke taking ageFrac from the caller). Peak lowered
-          brief 14 task 4 — pooling at hit points was reading as the
-          dominant mark, edge-clustered exactly like brief 02's cut ink
-          bloom (hit-triggered placement is always boundary-pinned; see
-          PROJECT-LOG.md 2026-07-09). Brief 13's density-placed intersection
-          blotches (splatter.js) are the replacement for "marks read where
-          the rally was busy"; pooling now only has to read as "the line
-          paused here," not carry the composition's mark-density.
+   each sample is base wt scaled by a low-frequency sine wave across arc
+   length (brush loading/unloading), seeded off the stroke's own start/end
+   coordinates — purely deterministic, no injected rng (same idiom as
+   strokes.js's jitterPath, hashing off point coordinates rather than
+   threading rng through every renderer). Range 0.15x-4.0x, brief 14;
+   undulation count 0.5-1.5 cycles, also brief 14 — "one or two transitions
+   per stroke, not many," not a vibrating line.
+
+   Brief 11 §3c originally added a pooling spike at paddle/wall hit ends.
+   Brief 14 cut its peak, reasoning pooling at hit points was repeating
+   brief 02's cut ink-bloom mistake (hit-triggered placement is always
+   boundary-pinned — see PROJECT-LOG.md 2026-07-09). Brief 15: any residual
+   amount still rings the edge, since direction change only ever happens at
+   a paddle or a wall — there is no partial fix, only gone. Pooling is
+   removed entirely; density-placed intersection blotches (splatter.js)
+   carry the "marks where the rally was busy" job on their own now.
    Edges are clean fills only: no grain, no halo, no soft falloff. */
 export const PAINT_WIDTH_BASE = 6.0;
 
-const WIDTH_VAR_MIN = 0.15, WIDTH_VAR_MAX = 4.0;   // 3b, brief 14 widened range
+const WIDTH_VAR_MIN = 0.15, WIDTH_VAR_MAX = 4.0;   // brief 14 widened range — do not change (brief 15)
 const WIDTH_VAR_UNDULATIONS_MIN = 0.5, WIDTH_VAR_UNDULATIONS_MAX = 1.5; // brief 14: fewer transitions
-const POOL_PEAK_MIN = 1.3, POOL_PEAK_MAX = 1.8;    // 3c, brief 14 task 4: reduced from 2.2-3.2
-const POOL_WINDOW_MIN = 8, POOL_WINDOW_MAX = 14;   // 3c, brief 11 §3c, unchanged
 
 // GLSL-style deterministic hash — same family of trick as jitterPath's
 // Math.sin(p.x*0.73+p.y*1.31): a scalar function of coordinates, no rng
-// threading needed for per-stroke/per-commit "seeded" jitter.
+// threading needed for per-stroke "seeded" jitter. hash1 also used by the
+// patch wobble above.
 function hash1(x) { const s = Math.sin(x) * 43758.5453123; return s - Math.floor(s); }
 function hash2(x, y) { return hash1(x * 12.9898 + y * 78.233); }
-function smoothstep01(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
 
 // Same Catmull-Rom construction as strokes.js's traceCR, but returns sampled
 // {x,y} points instead of issuing ctx bezier commands — the ribbon needs
@@ -289,22 +283,10 @@ function arcLengths(samples) {
   return { s, length: s[s.length - 1] };
 }
 
-function poolMultAt(distFromEnd, seedX, seedY, poolingStrength) {
-  const seed = hash2(seedX, seedY);
-  const window = POOL_WINDOW_MIN + hash1(seed + 7.77) * (POOL_WINDOW_MAX - POOL_WINDOW_MIN);
-  if (distFromEnd >= window) return 1;
-  const peak = (POOL_PEAK_MIN + seed * (POOL_PEAK_MAX - POOL_PEAK_MIN)) * poolingStrength;
-  const f = 1 - smoothstep01(distFromEnd / window);
-  return 1 + (peak - 1) * f;
-}
-
 export function renderPaintStroke(ctx, pts, col, wt, op, opts = {}) {
   if (pts.length < 2) return;
   const {
-    widthVariation = 1.0,   // 0 = uniform wt, 1 = full 0.4-2.0x wave (3b)
-    poolingStrength = 1.0,  // 1 = literal 2.2-3.2x PROVISIONAL peak (3c)
-    poolStart = false,
-    poolEnd = false,
+    widthVariation = 1.0,   // 0 = uniform wt, 1 = full 0.15-4.0x wave
   } = opts;
 
   const samples = sampleSpine(pts, 8);
@@ -312,24 +294,14 @@ export function renderPaintStroke(ctx, pts, col, wt, op, opts = {}) {
   const { s: arcS, length } = arcLengths(samples);
 
   const undulations = WIDTH_VAR_UNDULATIONS_MIN
-    + hash2(pts[0].x, pts[0].y) * (WIDTH_VAR_UNDULATIONS_MAX - WIDTH_VAR_UNDULATIONS_MIN); // 3b
+    + hash2(pts[0].x, pts[0].y) * (WIDTH_VAR_UNDULATIONS_MAX - WIDTH_VAR_UNDULATIONS_MIN);
   const phase = hash2(pts[pts.length - 1].x, pts[pts.length - 1].y) * Math.PI * 2;
 
   function widthMultAt(i) {
     const t = length > 0 ? arcS[i] / length : 0;
     const wave = Math.sin(t * undulations * Math.PI * 2 + phase);       // -1..1
     const waveMult = WIDTH_VAR_MIN + (wave * 0.5 + 0.5) * (WIDTH_VAR_MAX - WIDTH_VAR_MIN);
-    let mult = 1 + (waveMult - 1) * widthVariation;
-
-    if (poolStart) {
-      const p0 = samples[0];
-      mult = Math.max(mult, poolMultAt(arcS[i], p0.x, p0.y, poolingStrength));
-    }
-    if (poolEnd) {
-      const pN = samples[samples.length - 1];
-      mult = Math.max(mult, poolMultAt(length - arcS[i], pN.x, pN.y, poolingStrength));
-    }
-    return mult;
+    return 1 + (waveMult - 1) * widthVariation;
   }
 
   const left = [], right = [];
@@ -354,9 +326,9 @@ export function renderPaintStroke(ctx, pts, col, wt, op, opts = {}) {
   for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
   ctx.closePath();
   ctx.fill();
-  // Rounded caps at both ends — radius follows local half-width, so a
-  // pooled end's cap reads as a blob (per 3c), not a bulge with square
-  // corners. Clean fills only: no grain, no halo, no soft falloff.
+  // Rounded caps at both ends — radius follows local half-width, avoiding
+  // a square-cornered bulge at a wide point in the width wave. Clean fills
+  // only: no grain, no halo, no soft falloff.
   const r0 = Math.hypot(left[0].x - right[0].x, left[0].y - right[0].y) / 2;
   ctx.beginPath(); ctx.arc(samples[0].x, samples[0].y, r0, 0, Math.PI * 2); ctx.fill();
   const n = left.length - 1;

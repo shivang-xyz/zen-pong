@@ -5,6 +5,56 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-21 — Brief 13: splatter (density-placed) + ground patches
+
+Found an interactive rebase left mid-flight from outside this session
+(`.gitignore` conflict — main and the feature branch each independently
+added the file, one for `.DS_Store`, one for `.claude/settings.local.json`).
+Merged both lines, completed it, force-pushed. `.claude/settings.local.json`
+is now untracked+ignored — the recurring dirty-file noise in every prior
+session's git status is gone.
+
+### Task 0 — `v3/engine/density.js`, on `main`
+`computeLineDensity` (normalised [0,1] field this time, chalkboard.js's
+version wasn't) + `findDenseKnots` (greedy local-maxima, minimum-spacing
+constraint so results spread across the composition instead of clustering).
+Built standalone per the brief — chalkboard.js/fill.js sit on unmerged
+branches. Also added `weightedPick`/`weightedSampleWithoutReplacement` to
+`rng.js` (purely additive, paper's `makeRng` untouched) since both splatter
+and patches need seeded weighted sampling.
+
+### Task 1-2 — `v3/engine/splatter.js` (new)
+Placement: density field → `findDenseKnots` → seeded weighted sample (not
+top-N, so similarly-busy rallies don't produce identical structure). Two
+mark types, both fully opaque (no gradient, no soft edge): irregular blobs
+(heavy-tailed size via `rng()^4`) and teardrop-shaped flung marks with 2-5
+satellite droplets, oriented along the nearest stroke segment's direction.
+Colour: ink at a fixed 0.15 weight alongside the 3 accent weights.
+
+### Task 3 — `buildPatchGround`, `v3/engine/paint.js`
+Colours come from the accent palette (not `GROUND_LIBRARY` — Patches mode
+has no colour choice, PAINT-MODE.md §3). Composition-aware: field centres
+are density-weighted toward busy rally regions, same `density.js` Task 1
+uses. "Brush-swipe not circles" via 4-6 overlapping soft-gradient blobs
+walking a jittered line per field. Coverage measured short of the 55-85%
+target on the first pass (37-53%, pixel-sampled) — soft falloff + blob
+overlap both eat into the naive solid-disc area estimate; added a measured
+`RADIUS_COMPENSATION` (1.55x) to close the gap, re-verified in range.
+
+### Verification
+Paper byte-identical (engine files zero-diff vs `main` except the additive
+`rng.js` exports; hash-confirmed anyway). Full paint pipeline — palette,
+ground (both modes), strokes, splatter — hash-deterministic across seeds
+1-6, all distinct. `density.js`/`splatter.js` DOM-free; `paint.js`'s new
+`buildPatchGround` confined to the same carve-out as `buildPaintSurface`.
+No `Math.random()`. Screenshotted native + 312px grid, both ground modes.
+
+Not fully resolved by eye: patches read as soft round clouds more than
+directional "brush swipes" at default settings — elongation is present but
+subtle. Flagging for review rather than continuing to tune blind.
+
+Status: brief 13 done on `feature/paint-surface`, pushed. Awaiting review.
+
 ## 2026-07-20 — Brief 12: paint reset (weave + stroke replaced, review-driven)
 
 Brief 11's weave and stroke failed review — read as graph paper + translucent

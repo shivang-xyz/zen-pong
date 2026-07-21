@@ -52,6 +52,14 @@ anxiety the product exists to remove.
 - End chats on a clean seam (after a merge, before a brief). Write the
   PROJECT-LOG entry as the closing act. Chats are disposable; the repo is not.
 
+## Never hand Shivang git chores
+He does not run terminal commands to move docs around. Write the brief to
+disk, then make the git work the first line of the Claude Code prompt —
+CC has repo access and does it itself. Every brief prompt opens with:
+"First: commit any uncommitted docs in the working tree to `main`, push,
+then rebase the feature branch onto `main`." Only escalate to him if a
+push is rejected or a rebase conflicts.
+
 ## Response style — non-negotiable
 Short. Only what needs Shivang's decision or attention. No explaining your own
 reasoning, no restating what you just did, no recapping his instruction back to

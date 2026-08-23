@@ -12,6 +12,27 @@ import { computeLineDensity, findDenseKnots } from './density.js';
 import { weightedPick } from './rng.js';
 import { traceClosedCR } from './strokes.js';
 
+/* ── frozen product defaults — brief 16 task 1 ────────────────────────────
+   Per the calibration-instrument rule (v3/CLAUDE.md): lab sliders never
+   ship, their settled positions freeze into named constants so a later
+   product-port pass has one unambiguous source instead of lab UI state.
+   Shivang approved these exact lab positions 2026-07-21. This block does
+   not change lab behaviour — the lab's own sliders are untouched and
+   already default to these same values; this just names what's approved
+   as "the" product defaults, expected to be re-tuned again at the port,
+   which is why these are named constants and not magic numbers repeated
+   in two places.
+
+   Ground (default) = Cream is GROUND_LIBRARY[0] in palette.js, not
+   duplicated here. Density is deliberately NOT in this block — it's a
+   live product control, not a frozen one (see art-lab.html's default
+   scrubber position, also set this brief). */
+export const PAINT_DEFAULT_WIDTH_VARIATION = 1.0;   // full 0.15x-4.0x range
+export const PAINT_DEFAULT_BLOTCH_SIZE_MULT = 1.0;  // buildIntersectionBlotches' sizeMult
+export const PAINT_DEFAULT_PATCH_COUNT = 6;         // buildPatchGround's count
+export const PAINT_DEFAULT_JITTER_AMPLITUDE = 0.5;  // shared control; already paper's own default too
+export const PAINT_DEFAULT_GROUND_MODE = 'plain';   // 'plain' | 'patches'
+
 /* ── ground texture — brief 12 task 1 ─────────────────────────────────────
    Brief 11's tiled basket-weave read as a drafting grid at every size and
    is not tunable into correctness: a repeating tile with regular pitch will
@@ -241,7 +262,7 @@ export function buildPatchGround(w, h, rng, strokes, palette, count = 6) {
    removed entirely; density-placed intersection blotches (splatter.js)
    carry the "marks where the rally was busy" job on their own now.
    Edges are clean fills only: no grain, no halo, no soft falloff. */
-export const PAINT_WIDTH_BASE = 6.0;
+export const PAINT_WIDTH_BASE = 6.0; // frozen product default, brief 16 task 1 (approved 2026-07-21)
 
 const WIDTH_VAR_MIN = 0.15, WIDTH_VAR_MAX = 4.0;   // brief 14 widened range — do not change (brief 15)
 const WIDTH_VAR_UNDULATIONS_MIN = 0.5, WIDTH_VAR_UNDULATIONS_MAX = 1.5; // brief 14: fewer transitions

@@ -120,8 +120,8 @@
   </div>
 
   <div class="field" style="flex:1;min-width:200px">
-    <label>Density (<span id="v-density">100</span>%)</label>
-    <input type="range" id="ctl-density" min="0" max="100" step="1" value="100" style="width:100%">
+    <label>Density (<span id="v-density">37</span>%)</label>
+    <input type="range" id="ctl-density" min="0" max="100" step="1" value="37" style="width:100%">
   </div>
 
   <div class="field">
@@ -233,7 +233,7 @@ const state = {
   wtRange: [1.0, 2.4],
   opRange: [0.50, 0.68],
   palette: [...DEFAULT_PALETTE],
-  density: 100,
+  density: 37, // brief 16: approved default scrubber position — density stays a live control, not frozen
   enh: JSON.parse(JSON.stringify(DEFAULT_ENHANCEMENTS)),
   surfaceMode: 'paper', // 'paper' | 'paint' — no 'chalkboard' option: chalk lives only on
                          // feature/chalkboard-surface (unmerged), this branch never touches it

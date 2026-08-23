@@ -22,13 +22,12 @@ Primary aesthetic target is the **cream-ground / line-dominant** family: a
 visible warm substrate, one or two confident looping lines carrying the
 composition, a handful of flat accent blobs, fine multi-colour speckle.
 
-**OPEN — density ceiling.** The maximalist references (60–80% coverage,
-6–8 simultaneous colours) sit five to eight times above the locked paper
-calibration of ~30–35 strokes / 10–12% ink. Either paint gets its own,
-much higher calibration number, or those references are aspirational and
-the restrained family is the real target. Not resolved. Build to the
-restrained family until it is; do not design the renderer in a way that
-forecloses the dense one.
+**LOCKED — density ceiling, resolved 2026-07-21 (brief 16).** The restrained
+family is the target across the whole paint arc, approved and shipped as
+such through brief 15. The maximalist references (60–80% coverage, 6–8
+simultaneous colours) were a real option considered, not an oversight —
+consciously declined, not forgotten. Not revisited unless a future brief
+reopens it explicitly.
 
 ---
 

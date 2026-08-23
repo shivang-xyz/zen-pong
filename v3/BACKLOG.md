@@ -24,22 +24,18 @@ triaging this whole list, not before.
 
 ## Chalkboard
 
-- **Smudge control + mode-aware colour.** Add a lab slider to control
-  ambient smudge intensity (calibration instrument only, per the
-  lab-controls rule in `v3/CLAUDE.md` — doesn't ship as end-user UI).
-  Smudge colour should follow chalk mode: white mode keeps the current pale
-  neutral dust, colour mode should render smudge tinted toward the local
-  stroke colour(s) instead of staying neutral — this revises brief 09/10's
-  "always pale neutral, never a colour blend" call, scoped specifically to
-  tri-colour mode.
-  Diagnostic note (read the code before starting): brief 10's density
-  smudge (`scatterDensitySmudges`/`renderSmudges` in `chalkboard.js`) is
-  correctly wired and firing, but tuned too faint to read —
-  `SMUDGE_ALPHA = 0.055` peak, radius `6–16px`, further diluted by radial
-  falloff. This isn't a repeat of the earlier viewing/upscale problem
-  (evaluation was already at native res by the time this landed) — it's
-  just genuinely under-tuned. A real visual pass on opacity/radius/
-  probability is needed before a slider is even useful to add.
+- ~~Diagnostic: brief 10's density smudge tuned too faint to read
+  (`SMUDGE_ALPHA = 0.055` peak, radius `6–16px`).~~ **Resolved, brief 17**
+  (2026-08-24): retuned and approved at the merge review — `SMUDGE_ALPHA`
+  0.14, `SMUDGE_PROB` 0.6, radius base 8-22px, now frozen product constants.
+- **Mode-aware smudge colour** (still open). Smudge colour should follow
+  chalk mode: white mode keeps the current pale neutral dust, colour mode
+  should render smudge tinted toward the local stroke colour(s) instead of
+  staying neutral — revises brief 09/10's "always pale neutral, never a
+  colour blend" call, scoped specifically to tri-colour mode. A lab slider
+  for smudge intensity was also floated alongside this but never built —
+  worth reconsidering now that the constants are dialed in and merged;
+  may not be needed if the frozen defaults hold up in the product port.
   *Surfaced: brief 10 follow-up, 2026-07-20.*
 
 ## Canvas / Paint

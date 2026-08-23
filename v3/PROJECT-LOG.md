@@ -5,6 +5,73 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-24 — Brief 17: chalkboard reviewed, frozen, merged to main
+
+Chalkboard (briefs 07-10) cleared its review gate and is merged. `main` now
+carries all three surfaces — paper, chalkboard, paint.
+
+### Task 1 — rebase, review
+`feature/chalkboard-surface` was 11 days stale (last touched at brief 10,
+before paint's briefs 11-16 landed on `main`). Rebasing it forward meant
+resolving `art-lab.html` conflicts across 6 of chalk's commits, reconciling
+two independently-evolved forks of the same file — not just picking a side,
+keeping both surfaces' functionality at every conflict (paint's paper-only
+inertness + control panel, chalk's mode/width controls and render branch),
+plus a real product conflict: chalk's brief 08 had removed speed-weight
+entirely, unaware paint's later work (brief 12) explicitly kept it live.
+Resolved provisionally by keeping it, flagged to Shivang as a genuine
+"which decision wins" call rather than deciding it silently.
+
+### Task 1 review verdict
+- **Density smudge** — approved after a tuning pass (was task-listed as a
+  known BACKLOG item: correctly wired but read as invisible at native res).
+  `SMUDGE_ALPHA` 0.055 → 0.14, `SMUDGE_PROB` 0.45 → 0.6, radius base
+  6-16px → 8-22px (`chalkboard.js`). BACKLOG's diagnostic item is resolved.
+- **Speed weight** — the rebase's provisional "keep it" call was reversed.
+  Shivang confirmed it isn't needed and doesn't meaningfully affect the
+  result; re-removed for good (brief 08's original intent), this time
+  cleanly: `enhancements.js`/`simulate.js` back to post-removal shape, the
+  Speed Weight UI group and both `wt`-resolution branches in `art-lab.html`
+  removed (the first removal attempt, brief 08, had left an orphaned lab
+  binding that threw at boot — caught and fixed in-browser this session).
+- Palette hexes, chalk mode default (white), chalk width default (1.0):
+  reviewed as-is, no changes requested.
+
+### Task 2 — freeze
+Named the approved lab defaults as product constants in `chalkboard.js`,
+mirroring paint's `PAINT_DEFAULT_*` pattern from brief 16: `CHALK_DEFAULT_MODE`
+('white'), `CHALK_DEFAULT_WIDTH_MULT` (1.0). `CHALK_PALETTE`/`WHITE_CHALK_HEX`
+and the smudge constants were already module-level constants — frozen in
+place, now commented as approved-at-review rather than provisional.
+`art-lab.html`'s initial state imports the two new constants instead of
+duplicating the literals. Lab sliders stay live for future re-tuning.
+
+### Task 3 — merge
+Real merge (`--no-ff`, not squash) — brief 07-10 history stays legible in
+`main`'s log.
+
+**Post-merge verification (all passed):**
+1. Paper byte-identical: `surface.js`/`physics.js`/`strokes.js`/`rng.js`
+   zero-diff against pre-merge `main`; rendered-hash confirmed equal to the
+   pre-merge branch's own hashes, seeds 1-3, both a same-session re-render
+   and a full page reload.
+2. Paint renders unchanged — visually confirmed on merged `main`, same
+   splatter/blotch/patch behavior as brief 16's frozen defaults.
+3. Chalkboard renders as approved — white mode default, tri-colour mode,
+   both smudge levels, native lightbox, all confirmed error-free in-browser
+   on merged `main`.
+4. No `Math.random()` in `v3/engine/`; DOM confined to `surface.js`/
+   `paint.js`/`chalkboard.js`'s designated build functions, as everywhere
+   else in this arc.
+
+`feature/chalkboard-surface` not deleted yet — origin push confirmed, but
+leaving it per the brief's own instruction until Shivang has a chance to
+notice if anything's off.
+
+### Next
+No brief queued. `v3/briefs/18-app-shell-idle-doodle.md` (already committed,
+brief 16 session) was blocked on this merge landing — now unblocked.
+
 ## 2026-07-21 — Brief 16: paint finalised and merged to main
 
 Paint mode (briefs 11-16) is merged. `main` now carries paper + paint;

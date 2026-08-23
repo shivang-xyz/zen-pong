@@ -16,6 +16,26 @@ export function traceCR(ctx, pts) {
   }
 }
 
+/* Closed variant of traceCR — same t=0.5 Catmull-Rom-to-bezier conversion,
+   but neighbour indices wrap (modulo pts.length) instead of clamping at the
+   ends, so the curve closes smoothly back on itself rather than reading as
+   an open path with its ends pinned. Brief 15: paint patches and blotch-
+   cluster blobs both need a closed, curved (not polygon) silhouette. */
+export function traceClosedCR(ctx, pts) {
+  const n = pts.length;
+  if (n < 3) return;
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n],
+          p3 = pts[(i + 2) % n], t = .5;
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) * t / 3, p1.y + (p2.y - p0.y) * t / 3,
+      p2.x - (p3.x - p1.x) * t / 3, p2.y - (p3.y - p1.y) * t / 3,
+      p2.x, p2.y);
+  }
+  ctx.closePath();
+}
+
 /* Defaults equal to the live build's hardcoded pass widths/alphas. */
 export const DEFAULT_STROKE_PARAMS = {
   pass1WidthMult: 2.2, pass1AlphaMult: 0.22,

@@ -12,7 +12,8 @@ existed uncommitted (`15-paint-refinement.md`, `15-splatter-scale-and-patch-
 curves.md`), both numbered 15. Committed both to `main` (docs go to main
 regardless of which gets built), flagged the collision, built
 `15-paint-refinement.md` per explicit instruction — did not silently pick
-one or merge them.
+one or merge them. *(Brief 16 housekeeping: `15-splatter-scale-and-patch-
+curves.md` was never built and has now been deleted — orphan removed.)*
 
 ### Task 1 — pooling removed entirely, not reduced
 Brief 14 cut pooling's peak; brief 15's own postmortem on that: "any amount

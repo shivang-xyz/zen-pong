@@ -276,9 +276,11 @@ export function computeLineDensity(strokes, W, H, cellSize = 28) {
 }
 
 const SMUDGE_TONE = '232,228,219'; // pale neutral chalk dust
-const SMUDGE_ALPHA = 0.055;        // per-blob base opacity (density scales it up)
+const SMUDGE_ALPHA = 0.14;         // per-blob base opacity (density scales it up)
+                                    // — brief 17 review: 0.055 read as invisible
+                                    // at native res, bumped ~2.5x until it reads
 const DENSITY_FLOOR = 0.16;        // normalized density below which no dust falls
-const SMUDGE_PROB = 0.45;          // per-cell smudge chance at max local density
+const SMUDGE_PROB = 0.6;           // per-cell smudge chance at max local density
 
 /* PURE (rng injected, no DOM): scatter ambient smudge blobs, placement chance /
    size / opacity all weighted by each cell's normalized local density. Fixed-
@@ -298,7 +300,7 @@ export function scatterDensitySmudges(grid, rng, chalkWidthMult = 1.0) {
       if (rng() >= SMUDGE_PROB * d) continue; // denser => more likely to smudge
       const x = (cx + rng()) * cellSize;
       const y = (cy + rng()) * cellSize;
-      const r = (6 + d * 10) * chalkWidthMult; // denser => bigger dust
+      const r = (8 + d * 14) * chalkWidthMult; // denser => bigger dust
       const a = SMUDGE_ALPHA * (0.5 + 0.5 * d); // denser => stronger dust
       out.push({ x, y, r, a });
     }

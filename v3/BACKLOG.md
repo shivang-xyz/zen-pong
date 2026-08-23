@@ -42,9 +42,13 @@ triaging this whole list, not before.
   probability is needed before a slider is even useful to add.
   *Surfaced: brief 10 follow-up, 2026-07-20.*
 
-## Canvas / Paint (future)
+## Canvas / Paint
 
-*(none yet — will fill in once that surface is underway)*
+- **Product port.** Merged to `main` and values frozen as of brief 16
+  (2026-07-21) — `paint.js`'s `PAINT_DEFAULT_*` constants. Re-tune at the
+  product port; the lab (`art-lab.html`) keeps its own sliders live for
+  that pass, this isn't a one-way freeze of the lab itself.
+  *Surfaced: brief 16, 2026-07-21.*
 
 ## Engine-wide / Product
 

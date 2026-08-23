@@ -5,6 +5,48 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-07-21 — Brief 16: paint finalised and merged to main
+
+Paint mode (briefs 11-16) is merged. `main` now carries paper + paint;
+chalkboard stays parked, unmerged, on `feature/chalkboard-surface`.
+
+- **Frozen product defaults**, `paint.js`: `PAINT_WIDTH_BASE` 6.0 (already
+  existed, re-confirmed), `PAINT_DEFAULT_WIDTH_VARIATION` 1.0,
+  `PAINT_DEFAULT_BLOTCH_SIZE_MULT` 1.0, `PAINT_DEFAULT_PATCH_COUNT` 6,
+  `PAINT_DEFAULT_JITTER_AMPLITUDE` 0.5, `PAINT_DEFAULT_GROUND_MODE`
+  `'plain'` — Shivang's approved 2026-07-21 lab positions, named so a
+  future product-port pass has one unambiguous source. Lab sliders
+  untouched, already defaulted to these values. Density scrubber default
+  moved to 37% (stays a live control, not frozen — approved position, not
+  a fixed constant).
+- Orphan `15-splatter-scale-and-patch-curves.md` (never built) deleted,
+  noted in the brief-15 log entry above.
+- `PAINT-MODE.md` §1's density-ceiling OPEN item resolved to LOCKED —
+  restrained family is the approved target across the whole arc; the
+  maximalist/dense references were considered and consciously declined,
+  not forgotten.
+- Merged `feature/paint-surface` → `main` with a real merge commit (not
+  squash) — brief-by-brief history stays legible. Branch not deleted yet,
+  left until the merge is confirmed good on origin.
+
+### Post-merge verification (all passed)
+1. Paper byte-identical: `surface.js`/`simulate.js`/`physics.js` zero-diff
+   against pre-merge `main`; `strokes.js`/`rng.js` purely additive (existing
+   exports untouched) — confirmed both by source diff and rendered-hash
+   re-render, seeds 1-6.
+2. `feature/chalkboard-surface` still on origin, tip unchanged (`dbea3fd`).
+3. Paint renders deterministically on `main` using the frozen defaults
+   above, both ground modes, seeds 1-6 all distinct.
+4. No `Math.random()` in `v3/engine/`. `palette.js`/`density.js` confirmed
+   DOM-free; DOM touches in the whole engine confined to `surface.js` and
+   `paint.js`'s designated build functions, as everywhere else in this arc.
+
+### Next
+No paint brief queued. Chalkboard's review gate (briefs 07-10, unmerged)
+and its backlogged smudge-slider item are still open and untouched by any
+of this. `v3/UI-BRIEF-CONTEXT.md` (committed this session) is ready to hand
+to a UI design chat cold whenever that starts.
+
 ## 2026-07-21 — Brief 15: refinement (splatter mass, curved patches, blotch clusters)
 
 Opened with a real doc collision: two different `v3/briefs/15-*.md` files

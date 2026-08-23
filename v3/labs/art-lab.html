@@ -233,6 +233,7 @@ import { buildSplatter, buildIntersectionBlotches, renderSplatterMark, renderBlo
 import {
   buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE, WHITE_CHALK_HEX,
   computeLineDensity, scatterDensitySmudges, renderSmudges,
+  CHALK_DEFAULT_MODE, CHALK_DEFAULT_WIDTH_MULT,
 } from '../engine/chalkboard.js';
 
 const TILE_COUNT = 12;
@@ -251,8 +252,8 @@ const state = {
   // 'surface' field, values 'paper'|'chalkboard') onto paint's 'surfaceMode'
   // naming. Standardised on 'surfaceMode' everywhere; three values now.
   surfaceMode: 'paper',
-  chalkMode: 'white',      // 'white' | 'tri'
-  chalkWidthMult: 1.0,     // chalk stroke thickness knob (0.5–3)
+  chalkMode: CHALK_DEFAULT_MODE,        // 'white' | 'tri'
+  chalkWidthMult: CHALK_DEFAULT_WIDTH_MULT, // chalk stroke thickness knob (0.5–3)
   paint: {
     scheme: 'random',       // one of SCHEMES' keys, or 'random' => undefined => rng-drawn
     groundHex: GROUND_LIBRARY[0].hex,

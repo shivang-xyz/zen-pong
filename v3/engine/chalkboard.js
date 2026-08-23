@@ -90,11 +90,21 @@ export function buildChalkboardSurface(w, h, rng) {
 }
 
 /* ── Task 3 — chalk palettes ──────────────────────────────────────────────
-   Starting points sampled off the bubbles PALETTE reference; Shivang eyeball-
-   corrects the exact hexes in the lab, so these are not final. White mode uses
-   a single warm off-white (not pure #FFFFFF, which reads plastic on grain). */
+   Starting points sampled off the bubbles PALETTE reference. Frozen as
+   approved product defaults at the brief 17 review (2026-08-23) — Shivang
+   reviewed the served lab with these live and proceeded to merge without
+   changes. White mode uses a single warm off-white (not pure #FFFFFF,
+   which reads plastic on grain). Lab controls stay live for future
+   re-tuning, same as paint's frozen defaults (brief 16). */
 export const CHALK_PALETTE = ['#3E8EF7', '#E8478E', '#F5C518']; // blue / pink / yellow
 export const WHITE_CHALK_HEX = '#EFEAE0';
+
+/* Lab default positions, frozen as approved product defaults at the brief 17
+   review (2026-08-23) — mirrors paint's PAINT_DEFAULT_* constants (brief 16):
+   named here so a future product-port pass has one unambiguous source, even
+   though the lab's own controls stay live for re-tuning. */
+export const CHALK_DEFAULT_MODE = 'white';       // 'white' | 'tri' — white is the approved default
+export const CHALK_DEFAULT_WIDTH_MULT = 1.0;     // chalkWidthMult lab default
 
 /* ── Task 2 — chalk stroke renderer ──────────────────────────────────────
    Target: the golden-ratio reference's line quality — a continuous, fairly
@@ -275,10 +285,13 @@ export function computeLineDensity(strokes, W, H, cellSize = 28) {
   return { cols, rows, cellSize, cells };
 }
 
+// Frozen approved product defaults, brief 17 review (2026-08-23): 0.055/0.45
+// read as invisible at native res (BACKLOG diagnostic, brief 10 follow-up) —
+// retuned and approved in the same session. No lab slider exists for these
+// (BACKLOG explicitly deferred adding one until the values themselves were
+// worth exposing); these constants ARE the frozen calibration.
 const SMUDGE_TONE = '232,228,219'; // pale neutral chalk dust
 const SMUDGE_ALPHA = 0.14;         // per-blob base opacity (density scales it up)
-                                    // — brief 17 review: 0.055 read as invisible
-                                    // at native res, bumped ~2.5x until it reads
 const DENSITY_FLOOR = 0.16;        // normalized density below which no dust falls
 const SMUDGE_PROB = 0.6;           // per-cell smudge chance at max local density
 

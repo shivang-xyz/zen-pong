@@ -46,6 +46,33 @@ triaging this whole list, not before.
   that pass, this isn't a one-way freeze of the lab itself.
   *Surfaced: brief 16, 2026-07-21.*
 
+## App port (v3)
+
+- **Promote the app's baked-width paint ribbon renderer into `paint.js`.**
+  Briefs 19-21 built `drawPaintRibbon` + the bake-on-append helpers in
+  `v3/app/index.html` because `renderPaintStroke` cannot draw a *growing*
+  stroke (width derived from current total arc length). Brief 22 generalises it
+  to product width values for the live rally. It is engine-grade logic living
+  in a consumer — the wrong side of `v3/CLAUDE.md`'s "labs and app import the
+  engine, never copy engine logic into a consumer". Deliberately not moved in
+  brief 22: promoting it means touching a frozen merged engine file and
+  re-verifying paper/paint hashes. Do it in the brief-25 integration pass.
+  *Surfaced: brief 22 spec, 2026-08-24.*
+- **The lab's density scrubber ships nowhere.** `PORT-PLAN.md` asserted it was
+  a product control on the playing screen; `DESIGN.md` §8 Screen 2 and the
+  approved design both say no control adjusts the painting mid-rally. Corrected
+  in PORT-PLAN. Open question: does the density scrubber ship at all, and if so
+  on which screen? Needs a product decision, not an inherited assumption.
+  *Surfaced: brief 21 review, 2026-08-24.*
+- **`DESIGN.md` UNRESOLVED items now on the critical path.** Not doc drift —
+  real open decisions that block briefs 23-24: `--color-canvas-chalk` (§2, the
+  placeholder borrows the page background; the app currently sidesteps it by
+  using `chalkboard.js`'s own `CB_BASE`), the paint reveal ground tokens (§2),
+  the share canvas size (§7), the slider primitives for `#timeline-chip` (§10),
+  `.rbtn-primary`'s label alternation (§10), and the whole §13 motion spec
+  (every value a proposal, including the reveal wipe). Sweep them in one pass
+  before brief 23. *Surfaced: brief 22 spec, 2026-08-24.*
+
 ## Engine-wide / Product
 
 Carried forward from `PROJECT-LOG.md`'s 2026-07-10/11 entries — status not

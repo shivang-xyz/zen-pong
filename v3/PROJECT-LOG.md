@@ -5,6 +5,174 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-24 — Brief 21 reviewed: idle screen approved. Log debt cleared.
+
+Brief 21's doodle passed Shivang's eye — cream paint ground, slate-grey
+chalkboard, fuller density before reset — approved as built, no changes
+requested. There is no merge gate here, unlike the surface arcs:
+`feature/v3-app` carries the whole product port through brief 25 per
+`PORT-PLAN.md` and merges to `main` only when the app is whole.
+
+### Doc debt — four sessions with no log entry
+Briefs 18, 19, 20 and 21 all shipped without a `PROJECT-LOG.md` entry.
+`main`'s newest entry was still brief 17's, whose "Next" line said brief 18
+was merely *unblocked* — so a chat loading cold today would have planned
+brief 18 from scratch against a branch that already contained it, plus three
+follow-ups. This is the same failure `v3/CLAUDE.md`'s docs-live-on-`main`
+rule exists to prevent, arriving from the other side: the docs went to the
+right branch, they just never got written. The rule is necessary and not
+sufficient — writing the log entry is the closing act of a session, per
+`ARCHITECT.md`, and four sessions in a row skipped it.
+
+The four entries below are **reconstructed** (2026-08-24) from the brief
+files, the commit diffs, and the unusually thorough inline comments in
+`v3/app/index.html`. They are accurate on what changed and why; they are
+thinner than a live entry on what was considered and rejected in the moment.
+Marked as such rather than passed off as contemporaneous.
+
+### Conflict found and resolved — the density scrubber
+`PORT-PLAN.md`'s brief-22 line listed a density scrubber as a playing-screen
+control. `DESIGN.md` §8 Screen 2 (updated 2026-08-24, *after* PORT-PLAN was
+written) says the opposite in as many words: "no density or timeline control
+during play. Tuning happens on results (Screen 3) only." The approved
+`v3/design/2-playing.html` carries the same call in a source comment and has
+no scrubber in its control row. Newer approved design wins; PORT-PLAN's
+brief 22/23 lines corrected this session.
+
+Note this is not a relocation of the same control. The lab's density
+scrubber tunes *composition density*; results' `#timeline-chip`
+(`DESIGN.md` §10) selects *which frame of the accumulated painting to keep*.
+Different controls. The density scrubber currently ships nowhere — if it is
+still wanted as product UI it needs its own decision, and `PORT-PLAN.md`'s
+closing note (which still names it as one of the two lab-style controls that
+do ship) is now the only place asserting otherwise.
+
+### Next
+Brief 22 — playing screen. Written and committed this session.
+
+## 2026-08-24 — Brief 21: idle doodle fixes, round 3 *(reconstructed)*
+
+Commit `5adcaea` on `feature/v3-app`. Three doodle-scoped fixes.
+
+- **Chalkboard's denim cast — diagnosed doodle-side, not engine-side.** The
+  brief permitted a fix in `chalkboard.js`; the session correctly declined to
+  make one. `CB_BASE` (`#1A1A1E`) and the grain carry a deliberate faint cool
+  tint — approved and frozen at brief 17, and invisible at the engine's own
+  near-black brightness. Brief 20's doodle-only `brightness(2.4)` lift is a
+  flat per-channel multiply, so it scaled that intentional whisper by 2.4x
+  along with everything else and manufactured the blue. Fix: append
+  `grayscale(1)` to the same doodle-only filter chain — strips hue and chroma
+  while leaving the brightness-lifted per-pixel luminance (the grain and
+  smudge texture itself) untouched. `chalkboard.js` not modified, so the lab,
+  which never applies this filter, is unaffected *by construction* rather
+  than by verification. Correct call: the engine value wasn't wrong, the
+  presentation layer was.
+- **Paint ground pinned to Cream.** `buildPalette` had been drawing a random
+  ground and landing on Pale lavender. Now passes
+  `{ groundHex: GROUND_LIBRARY[0].hex }` — the approved lab default
+  (`PAINT-MODE.md` §3, brief 16). Scheme and base index are deliberately left
+  undrawn so the three accents still come from `palette.js`'s real curated-hue
+  scheme system exactly as the lab renders it; nothing swapped in from
+  `DEFAULT_PALETTE`, the unrelated 5-colour paddle palette, per the brief's
+  explicit warning.
+- **Density threshold 8 → 18.** Brief 20's value was inherited unchanged from
+  brief 18's *rolling-window* cap, where 8 meant something different; as a
+  build-then-clear threshold it read as a sparse loop. Tuned by eye.
+
+`PORT-PLAN.md` renumbered (playing → 22, results → 23, share → 24,
+integration → 25) in `c631bcc` on `main`.
+
+## 2026-08-24 — Brief 20: idle doodle fixes, round 2 *(reconstructed)*
+
+Commit `2e4f3c0`. Four fixes; the first is the one that mattered.
+
+- **Paint's commit-time pop — the cause was two renderers, not pooling.**
+  Brief 19 had scoped its width-baking fix to the live stroke only, on the
+  reasoning that a committed `pts` array never changes again, so the engine's
+  own `renderPaintStroke` was already correct for it. True in isolation,
+  false in practice: the baked algorithm and the engine's are independently
+  derived formulas with different phase/frequency, so a stroke visibly
+  snapped to a different shape the instant it committed. Fix: `renderStrokeAs`
+  is now the single renderer for a paint stroke's entire life — live or
+  committed — driven by pre-baked per-point `.w`. The pop is impossible by
+  construction; there is no second algorithm left to disagree. `commitStroke`
+  also re-zips the baked `.w` onto `jitterPath`'s output (a 1:1
+  length-preserving map that drops extra fields), without which every
+  interior point silently lost its width at commit. `paint.js`'s
+  `renderPaintStroke` untouched and still owns the finished-artwork path.
+- **Doodle-scoped width cap.** `DOODLE_PAINT_WIDTH_BASE` 3.0 with a 0.15–2.2
+  variation range, local to the app file. `paint.js`'s frozen
+  `PAINT_WIDTH_BASE` 6.0 / 0.15–4.0 (brief 16, approved) stand untouched —
+  the frozen values read cartoonish at doodle scale, which is a scale
+  problem, not a wrong constant.
+- **Accumulate-then-hard-reset** replaced brief 18's rolling one-stroke
+  eviction, so the cycle reads as a rally building and resolving.
+- **Chalkboard's real ground** (`buildChalkboardSurface`'s smudge blobs,
+  grain, vignette) rendered behind the chalk doodle, with a `brightness(2.4)`
+  presentational lift on that draw call only — the same "correctly wired but
+  invisible at native brightness" pattern `BACKLOG.md` had already logged
+  once for this module. `contrast()` was tried first and read flatter: it
+  pivots around mid-grey and crushes shadow detail toward zero for values
+  this far below it. (That lift is what brief 21 then had to neutralise.)
+- **Canvas group centered** — `justify-content: center` on the body flex
+  column, treating tagline + canvas + palette dock as one unit, replacing
+  brief 18's top-anchored asymmetric 32/48 padding.
+
+## 2026-08-24 — Brief 19: idle doodle fixes *(reconstructed)*
+
+Commit `5c3f151`. Five fixes.
+
+- **Fixed seed** — `DOODLE_SEED = 2026`. Every rng stream in the doodle is a
+  deterministic salt off it: physics, per-surface ground textures, paint
+  width phase, palette. The doodle is ambiance, not the artwork, so
+  determinism is the feature — it is what makes a surface switch a pure
+  restyle of *identical* geometry rather than a fresh simulation.
+- **Every transition continues, none resets.** `switchSurface` re-renders the
+  same `committedStrokes` through the new renderer and cross-fades between
+  two stacked canvases (`DESIGN.md` §13's 400ms linear). Physics and stroke
+  state are never touched. Paint was the path that used to reset.
+- **Chalk in tri-colour** (`CHALK_PALETTE`), matching how chalk was approved
+  in the lab, replacing brief 18's white-mode override.
+- **Ball marker** drawn every frame on every surface — without it the
+  animation doesn't read as a rally.
+- **Paint width baked at absolute arc length**, once per point at append
+  time, never recomputed, with phase and wavelength fixed at the stroke's
+  first point. `paint.js` expresses undulation as a cycle *count* over a
+  finished stroke's total length — meaningless while the stroke is still
+  growing — so it was converted to a fixed spatial wavelength via a 500px
+  reference length. `paintWidthRng` is advanced by exactly two draws at every
+  new stroke start regardless of which surface is on screen, so the sequence
+  can never depend on the player's switching path (which would desync the
+  identical-geometry guarantee). Scoping this to the live stroke only is what
+  brief 20 then had to finish.
+
+## 2026-08-24 — Brief 18: app shell, idle screen, surface selector, live doodle *(reconstructed)*
+
+Commit `e36349a`, first commit on `feature/v3-app`. The port's foundation.
+New file `v3/app/index.html`; root `index.html` untouched.
+
+- **Screen-state machine** — idle / playing / results, with playing and
+  results as labelled stubs. Idle carries its own Step A/B sub-state,
+  independent of the screen state.
+- **Engine consumed, never copied** — `rng`, `physics`, `strokes`, `surface`,
+  `chalkboard`, `paint`, `palette`, `simulate` imported as ES modules.
+- **Idle two-step** per the approved design. Step A shows the card alone; the
+  first real gesture (space / click / touchstart) slides `#surface-chip` up
+  *and* unlocks audio — root `CLAUDE.md` §4's protected pattern, `new Audio()`
+  + `createMediaElementSource()`, never fetch+decodeAudioData, never
+  mousemove. A second gesture while armed starts the game.
+- **Surface selector ships as product UI** — the documented exception to
+  `v3/CLAUDE.md`'s lab-controls rule.
+- **Live doodle** — real `advanceBall` physics against the two static DOM
+  paddles used as genuine collision surfaces, committing on the same events
+  the live game uses, drawn to a persistent offscreen canvas. Root
+  `index.html`'s `drawCv` architecture: cleared only on a full rebuild.
+- **`--color-canvas-chalk`** — `DESIGN.md` §2 still flags this UNRESOLVED
+  with a `#383838` placeholder that borrows the page background. The app uses
+  `chalkboard.js`'s own frozen `CB_BASE` `#1A1A1E` instead, since the doodle
+  draws the real engine texture rather than a CSS approximation. The DESIGN.md
+  item remains formally open — the app simply is not waiting on it.
+
 ## 2026-08-24 — Brief 17: chalkboard reviewed, frozen, merged to main
 
 Chalkboard (briefs 07-10) cleared its review gate and is merged. `main` now

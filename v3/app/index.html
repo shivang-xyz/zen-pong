@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zen Pong v3</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Tokens · DESIGN.md §2/§4/§5/§6 ── */
+  :root {
+    --color-bg:            #383838;
+    --color-cta:           #464646;
+    --color-disabled:      #777777;
+    --color-lightest-grey: #C5C5C5;
+    --color-canvas:        #FFF5E5;
+    --color-canvas-border: #888888;
+    --color-pink:          #FF68AE;
+    --color-blue:          #689AFF;
+    --color-green:         #8CFFB4;
+    --color-orange:        #FFAE68;
+    --color-cyan:          #68D7FF;
+
+    /* DESIGN.md §2 flags --color-canvas-chalk UNRESOLVED (placeholder
+       #383838, borrows the page bg). The real value is the chalkboard
+       engine's own frozen ground constant (chalkboard.js CB_BASE,
+       approved brief 17) — used here instead of the placeholder since
+       the doodle draws the real engine texture, not a CSS approximation. */
+    --color-canvas-chalk:  #1A1A1E;
+    --color-chip-selected: #383838; /* DESIGN.md §2 proposed value */
+
+    --space-xs: 4px;  --space-s: 8px;   --space-xxm: 12px; --space-xm: 16px;
+    --space-m: 24px;  --space-l: 32px;  --space-xl: 40px;  --space-xxl: 48px;
+
+    --radius:        48px;
+    --radius-small:  12px;
+    --radius-nested: 8px;
+
+    --shadow-chip:   0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px rgba(0,0,0,0.52);
+    --shadow-canvas: 0 4px 24px rgba(0,0,0,0.28);
+    --shadow-btn:    0 4px 24px rgba(0,0,0,0.16), inset 0 0 5px rgba(0,0,0,0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-bg);
+    font-family: 'DM Serif Display', serif;
+    font-style: italic;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-l) 0 var(--space-xxl);
+  }
+
+  .screen { display: flex; flex-direction: column; align-items: center; }
+  .screen[hidden] { display: none; }
+
+  .mono {
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+
+  /* ── Header logo · playing/results stub screens · DESIGN.md §8 ── */
+  .app-header { display: flex; justify-content: center; margin-bottom: var(--space-m); }
+  .app-header svg { display: block; }
+
+  /* ── Canvas · DESIGN.md §7 ── */
+  .stage { position: relative; width: 1000px; height: 630px; max-width: 100%; }
+  .canvas-wrap {
+    position: absolute; inset: 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--color-canvas);
+    box-shadow: var(--shadow-canvas);
+  }
+  .doodle-canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0;
+    transition: opacity 400ms linear; /* DESIGN.md §13 — surface switch cross-fade */
+  }
+  .frame {
+    position: absolute; inset: 0;
+    border-radius: var(--radius);
+    border: 8px solid var(--color-canvas-border);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* ── Paddles · DESIGN.md §7/§8 — DOM divs, never canvas ── */
+  .paddle { position: absolute; width: 8px; height: 64px; z-index: 3; }
+  .paddle .bar { position: absolute; inset: 0; border-radius: 4px; }
+  .paddle .dot { position: absolute; top: 26px; width: 12px; height: 12px; border-radius: 50%; }
+  .paddle-left  { left: 0; }
+  .paddle-left  .bar, .paddle-left  .dot { background: var(--color-pink); }
+  .paddle-left  .dot { left: -20px; }
+  .paddle-right { right: 0; }
+  .paddle-right .bar, .paddle-right .dot { background: var(--color-blue); }
+  .paddle-right .dot { right: -20px; }
+  .you {
+    position: absolute; right: calc(100% + 30px); top: 20px;
+    white-space: nowrap;
+    font-size: 12px; color: var(--color-pink);
+  }
+
+  /* ── Control elevation · DESIGN.md §6/§10 ── */
+  .ctrl-chip {
+    height: var(--space-xxl);
+    border-radius: var(--radius-small);
+    background: var(--color-cta);
+    box-shadow: var(--shadow-chip);
+    display: flex;
+    align-items: center;
+  }
+
+  .tagline { font-size: 14px; color: var(--color-lightest-grey); margin: 0; }
+  .spacer-s { height: var(--space-s); }
+  .spacer-m { height: var(--space-m); }
+
+  /* ── Intro card · DESIGN.md §10 #intro-card (v3 opaque treatment) ── */
+  .intro-stack {
+    position: absolute; inset: 0; z-index: 4;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: var(--space-xm);
+  }
+  #intro-card {
+    width: 420px;
+    background: var(--color-cta);
+    border-radius: var(--radius-small);
+    padding: var(--space-m) var(--space-xl);
+    box-shadow: var(--shadow-chip);
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-s);
+  }
+  #intro-card .sub { font-size: 14px; color: var(--color-disabled); margin: 0; }
+
+  /* ── Surface selector · DESIGN.md §10 #surface-chip ──
+     Absent in Step A (attract). Slides up on the first gesture, per
+     brief 18 Task 3, and never leaves — that gesture also unlocks audio. */
+  @keyframes zp-slide-up {
+    from { transform: translateY(64px); opacity: 0; }
+    to   { transform: translateY(0);     opacity: 1; }
+  }
+  #surface-chip {
+    width: 420px; padding: 0 var(--space-s); gap: var(--space-s);
+    display: none;
+  }
+  [data-idle-step="armed"] #surface-chip {
+    display: flex;
+    animation: zp-slide-up 400ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  #surface-chip .tile {
+    flex: 1; height: 32px;
+    border: 0;
+    border-radius: var(--radius-nested);
+    background: transparent;
+    display: flex; align-items: center; justify-content: center; gap: var(--space-s);
+    cursor: pointer;
+    transition: background 200ms linear;
+    font-family: inherit;
+  }
+  #surface-chip .tile span { color: var(--color-lightest-grey); }
+  #surface-chip .tile[aria-pressed="true"] { background: var(--color-chip-selected); }
+  #surface-chip .tile[aria-pressed="true"] span { color: #FFFFFF; }
+  #surface-chip .swatch { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+  .sw-paper { background: var(--color-canvas); }
+  .sw-chalk { background: var(--color-canvas-chalk); }
+  .sw-paint { background: var(--color-orange); }
+
+  /* ── Palette pill · DESIGN.md §10 #pal-pill (idle only, static) ── */
+  .pal-pill { padding: 0 var(--space-xm); gap: var(--space-s); }
+  .pal-pill .dot { width: 10px; height: 10px; border-radius: 50%; transition: transform 150ms; }
+  .pal-pill .dot:hover { transform: scale(1.2); }
+  .pal-pill .shuffle { margin-left: var(--space-s); cursor: pointer; }
+  .pal-pill .shuffle:hover { stroke: #FFFFFF; }
+
+  /* ── Playing/Results stubs (Task 1 — screen-state scaffold only) ── */
+  .stub-label { color: #FFFFFF; margin: 0 0 var(--space-m); }
+  .stub-back {
+    background: var(--color-cta);
+    border: 0;
+    border-radius: var(--radius-small);
+    padding: var(--space-xxm) var(--space-m);
+    color: #FFFFFF;
+    box-shadow: var(--shadow-btn);
+    cursor: pointer;
+  }
+  .stub-back:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+  <!-- ══════════════════════════ IDLE SCREEN ══════════════════════════ -->
+  <section id="screen-idle" class="screen" data-idle-step="attract" data-surface="paper">
+    <p class="tagline">make uncertainty your play</p>
+    <div class="spacer-m"></div>
+
+    <div class="stage">
+      <div class="canvas-wrap">
+        <canvas id="doodle-a" class="doodle-canvas" width="1000" height="630"></canvas>
+        <canvas id="doodle-b" class="doodle-canvas" width="1000" height="630"></canvas>
+      </div>
+      <div class="frame"></div>
+
+      <div class="intro-stack">
+        <div id="intro-card">
+          <svg width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFF5E5"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFF5E5"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFF5E5"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFF5E5"/>
+<rect width="2" height="27" rx="1" fill="#FFF5E5"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
+<circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
+</svg>
+          <p class="sub" id="idle-sub">space to begin · mouse to move</p>
+        </div>
+
+        <div id="surface-chip" class="ctrl-chip" role="group" aria-label="Surface">
+          <button class="tile" data-pick="paper" aria-pressed="true">
+            <i class="swatch sw-paper"></i><span class="mono">paper</span>
+          </button>
+          <button class="tile" data-pick="chalk" aria-pressed="false">
+            <i class="swatch sw-chalk"></i><span class="mono">chalkboard</span>
+          </button>
+          <button class="tile" data-pick="paint" aria-pressed="false">
+            <i class="swatch sw-paint"></i><span class="mono">paint</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="paddle paddle-left" style="top:180px">
+        <div class="bar"></div><div class="dot"></div><span class="you">you</span>
+      </div>
+      <div class="paddle paddle-right" style="top:430px">
+        <div class="bar"></div><div class="dot"></div>
+      </div>
+    </div>
+
+    <div class="spacer-m"></div>
+
+    <div class="ctrl-chip pal-pill" id="pal-pill">
+      <i class="dot" style="background:#FF68AE"></i>
+      <i class="dot" style="background:#689AFF"></i>
+      <i class="dot" style="background:#8CFFB4"></i>
+      <i class="dot" style="background:#FFAE68"></i>
+      <i class="dot" style="background:#68D7FF"></i>
+      <svg class="shuffle" width="20" height="20" viewBox="0 0 20 20" fill="none"
+           stroke="#C5C5C5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="13,3 17,6.5 13,10"/><path d="M2 6.5h15"/>
+        <polyline points="7,10 3,13.5 7,17"/><path d="M18 13.5H3"/>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ══════════════════ PLAYING (stub — brief 19) ══════════════════ -->
+  <section id="screen-playing" class="screen" hidden>
+    <div class="app-header">
+      <svg width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFFFFF"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFFFFF"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFFFFF"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFFFFF"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFFFFF"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFFFFF"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFFFFF"/>
+<rect width="2" height="27" rx="1" fill="#FFFFFF"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFFFFF"/>
+<circle cx="60" cy="14" r="3" fill="#FFFFFF"/>
+</svg>
+    </div>
+    <p class="stub-label mono">state: playing (brief 19 builds this screen)</p>
+    <button class="stub-back mono" id="btn-playing-back">back to idle</button>
+  </section>
+
+  <!-- ══════════════════ RESULTS (stub — brief 20) ══════════════════ -->
+  <section id="screen-results" class="screen" hidden>
+    <div class="app-header">
+      <svg width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFFFFF"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFFFFF"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFFFFF"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFFFFF"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFFFFF"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFFFFF"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFFFFF"/>
+<rect width="2" height="27" rx="1" fill="#FFFFFF"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFFFFF"/>
+<circle cx="60" cy="14" r="3" fill="#FFFFFF"/>
+</svg>
+    </div>
+    <p class="stub-label mono">state: results (brief 20 builds this screen)</p>
+    <button class="stub-back mono" id="btn-results-back">play again</button>
+  </section>
+
+<script type="module">
+import { makeRng } from '../engine/rng.js';
+import { W, H, mkBall, advanceBall } from '../engine/physics.js';
+import { jitterPath, renderStroke, DEFAULT_STROKE_PARAMS } from '../engine/strokes.js';
+import { buildSurface } from '../engine/surface.js';
+import {
+  buildChalkboardSurface, renderChalkStroke,
+  CHALK_DEFAULT_WIDTH_MULT, WHITE_CHALK_HEX,
+} from '../engine/chalkboard.js';
+import {
+  buildPaintSurface, renderPaintStroke,
+  PAINT_WIDTH_BASE, PAINT_DEFAULT_WIDTH_VARIATION,
+} from '../engine/paint.js';
+import { buildPalette } from '../engine/palette.js';
+import { DEFAULT_PALETTE } from '../engine/simulate.js';
+
+/* ════════════════════════════════════════════════════════════════════
+   TASK 1 — screen-state machine. Three states only: idle / playing /
+   results (root game + DESIGN.md §8). idle carries its own Step A/B
+   sub-state (brief 18 Task 3) which is independent of the screen state.
+   ════════════════════════════════════════════════════════════════════ */
+const screens = {
+  idle: document.getElementById('screen-idle'),
+  playing: document.getElementById('screen-playing'),
+  results: document.getElementById('screen-results'),
+};
+let screenState = 'idle';
+function setScreen(next) {
+  screenState = next;
+  Object.entries(screens).forEach(([k, el]) => { el.hidden = (k !== next); });
+}
+// Stub transitions (brief 19/20 build these screens for real).
+document.getElementById('btn-playing-back').addEventListener('click', () => setScreen('idle'));
+document.getElementById('btn-results-back').addEventListener('click', () => setScreen('idle'));
+
+/* ════════════════════════════════════════════════════════════════════
+   TASK 2 — engine integration. The three surface renderers, dispatched
+   by key. This IS the "run a live simulation through each renderer"
+   proof: the idle doodle below drives it continuously, live, per frame.
+   ════════════════════════════════════════════════════════════════════ */
+const idleEl = document.getElementById('screen-idle');
+
+// One paint palette, built once at load (buildPalette draws from
+// palette.js's curated hue library — never arithmetic hue generation).
+// Frozen for the session: re-rolling it on every surface switch would
+// make "switch back to paint" look like a different painting each time.
+const paintSeed = Math.floor(Math.random() * 1e9);
+const paintPalette = buildPalette(makeRng(paintSeed));
+
+// Same weighted/shuffled flattening art-lab.html uses to turn a 3-accent
+// weighted palette into a round-robin array (lab-only bookkeeping, not
+// engine logic — the engine only exposes weights, not a cycle order).
+function weightedPaletteArray(palette, seed) {
+  const arr = [];
+  palette.accents.forEach(a => {
+    const n = Math.max(1, Math.round(a.weight * 20));
+    for (let k = 0; k < n; k++) arr.push(a.hex);
+  });
+  const shuffleRng = makeRng((seed ^ 0x9E3779B9) >>> 0);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(shuffleRng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Per-surface colour cycle. Chalk defaults to white mode (CHALK_DEFAULT_
+// MODE, chalkboard.js, approved brief 17) — a single hex, not a palette.
+const PALETTE_ARRAYS = {
+  paper: DEFAULT_PALETTE,
+  chalk: [WHITE_CHALK_HEX],
+  paint: weightedPaletteArray(paintPalette, paintSeed),
+};
+
+function colourFor(surfaceKey, index) {
+  const arr = PALETTE_ARRAYS[surfaceKey];
+  return arr[index % arr.length];
+}
+
+function buildGround(surfaceKey, rng) {
+  if (surfaceKey === 'chalk') return buildChalkboardSurface(W, H, rng);
+  if (surfaceKey === 'paint') return buildPaintSurface(W, H, rng, paintPalette.ground);
+  return buildSurface(W, H, rng);
+}
+
+function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
+  const col = colourFor(surfaceKey, index);
+  if (surfaceKey === 'chalk') {
+    renderChalkStroke(ctx, pts, col, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
+  } else if (surfaceKey === 'paint') {
+    renderPaintStroke(ctx, pts, col, wt * PAINT_WIDTH_BASE, op, { widthVariation: PAINT_DEFAULT_WIDTH_VARIATION });
+  } else {
+    renderStroke(ctx, pts, col, wt, op, DEFAULT_STROKE_PARAMS);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   TASK 5 — live surface-aware idle doodle.
+   ════════════════════════════════════════════════════════════════════ */
+
+// Cap kept low (calm/sparse, brief 18) and cheap enough that a live
+// re-render on surface switch (chalk/paint do per-stroke offscreen work)
+// stays smooth.
+const MAX_DOODLE_STROKES = 8;
+const JITTER_AMPLITUDE = 0.5; // shared default — paper.js/paint.js both use it
+
+const physRng = makeRng(Math.floor(Math.random() * 1e9));
+const groundCache = {}; // surfaceKey -> offscreen canvas, built once and reused
+
+function getGround(surfaceKey) {
+  if (!groundCache[surfaceKey]) {
+    groundCache[surfaceKey] = buildGround(surfaceKey, makeRng(Math.floor(Math.random() * 1e9)));
+  }
+  return groundCache[surfaceKey];
+}
+
+let currentSurface = 'paper';
+let committedStrokes = []; // canonical, surface-agnostic: {pts, wt, op, index}
+let strokeIndex = 0;
+
+// persistCv accumulates ground + all committed strokes for currentSurface —
+// same persistent-canvas architecture as root index.html's drawCv: never
+// cleared except a full rebuild (surface switch, or eviction past the cap,
+// since a canvas can't un-draw a single stroke).
+const persistCv = document.createElement('canvas');
+persistCv.width = W; persistCv.height = H;
+const persistCx = persistCv.getContext('2d');
+
+function rebuildPersist(surfaceKey) {
+  persistCx.clearRect(0, 0, W, H);
+  persistCx.drawImage(getGround(surfaceKey), 0, 0);
+  committedStrokes.forEach(st => renderStrokeAs(persistCx, surfaceKey, st.pts, st.wt, st.op, st.index));
+}
+
+function commitStroke(rawPts, wt, op) {
+  if (rawPts.length < 2) return;
+  const st = { pts: jitterPath(rawPts, JITTER_AMPLITUDE), wt, op, index: strokeIndex++ };
+  committedStrokes.push(st);
+  renderStrokeAs(persistCx, currentSurface, st.pts, st.wt, st.op, st.index); // incremental
+  if (committedStrokes.length > MAX_DOODLE_STROKES) {
+    committedStrokes.shift();
+    rebuildPersist(currentSurface); // can't erase one stroke — full rebuild from what remains
+  }
+}
+
+// Two stacked canvases so a surface switch can cross-fade (DESIGN.md §13:
+// 400ms linear) instead of popping. Physics/stroke state above is never
+// touched by a switch — only which layer is live and what persistCv holds.
+const layerEls = { A: document.getElementById('doodle-a'), B: document.getElementById('doodle-b') };
+let activeKey = 'A', inactiveKey = 'B';
+layerEls[activeKey].style.opacity = '1';
+
+function switchSurface(newKey) {
+  if (newKey === currentSurface) return;
+  currentSurface = newKey;
+  rebuildPersist(newKey); // re-render the SAME committed stroke data through the new renderer
+
+  const newEl = layerEls[inactiveKey];
+  const newCtx = newEl.getContext('2d');
+  newCtx.clearRect(0, 0, W, H);
+  newCtx.drawImage(persistCv, 0, 0);
+
+  layerEls[inactiveKey].style.opacity = '1';
+  layerEls[activeKey].style.opacity = '0';
+  [activeKey, inactiveKey] = [inactiveKey, activeKey];
+}
+
+// Static paddles (idle screen never moves them, per design) double as
+// real collision surfaces for the doodle ball — same sweptHit the live
+// game uses, so the idle rally is genuine physics, not a canned path.
+const paddleL = { y: 180 };
+const paddleR = { y: 430 };
+
+let ball = mkBall(physRng, 1, null, [1.0, 2.4], [0.50, 0.68]);
+ball.pts = [{ x: ball.x, y: ball.y }];
+
+function stepDoodle() {
+  // Faithful to simulate.js/root index.html's update(): advanceBall moves
+  // the ball and resolves wall/paddle collisions FIRST; a commit fires
+  // using the trail as it stood before this frame's point is appended (so
+  // the committed stroke ends at the previous frame's position, and the
+  // new stroke starts fresh at the post-bounce position) — only THEN does
+  // this frame's position get pushed, unconditionally, exactly once.
+  const events = advanceBall(ball, paddleL, paddleR, 0, physRng);
+
+  events.forEach(() => {
+    commitStroke(ball.pts, ball.wt, ball.op);
+    ball.pts = [{ x: ball.x, y: ball.y }];
+  });
+  ball.pts.push({ x: ball.x, y: ball.y });
+
+  if (ball.pts.length > 500) {
+    commitStroke(ball.pts, ball.wt, ball.op);
+    ball.pts = ball.pts.slice(-4);
+  }
+
+  if (ball.x < -30 || ball.x > W + 30) {
+    if (ball.pts.length >= 2) commitStroke(ball.pts, ball.wt, ball.op);
+    ball = mkBall(physRng, 1, null, [1.0, 2.4], [0.50, 0.68]);
+    ball.pts = [{ x: ball.x, y: ball.y }];
+  }
+}
+
+function drawFrame() {
+  const el = layerEls[activeKey];
+  const ctx = el.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(persistCv, 0, 0);
+  if (ball.pts.length > 1) {
+    // in-flight stroke: raw (unjittered) pts, same as root's live-frame
+    // overlay — jitter is a commit-time effect, not a per-frame one.
+    renderStrokeAs(ctx, currentSurface, ball.pts, ball.wt, ball.op, strokeIndex);
+  }
+}
+
+function doodleLoop() {
+  if (screenState === 'idle') {
+    stepDoodle();
+    drawFrame();
+  }
+  requestAnimationFrame(doodleLoop);
+}
+rebuildPersist(currentSurface);
+requestAnimationFrame(doodleLoop);
+
+/* ════════════════════════════════════════════════════════════════════
+   TASK 4 — surface selector. Ships as product UI (brief 18 Task 4).
+   ════════════════════════════════════════════════════════════════════ */
+document.querySelectorAll('#surface-chip .tile').forEach(tile => {
+  tile.addEventListener('click', (e) => {
+    e.stopPropagation(); // must not also trigger the idle->playing gesture below
+    document.querySelectorAll('#surface-chip .tile').forEach(t => {
+      t.setAttribute('aria-pressed', String(t === tile));
+    });
+    switchSurface(tile.dataset.pick);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   TASK 3 — idle two-step + audio unlock.
+   Step A (attract): card only. First gesture (space/click/touchstart)
+   arms Step B (surface selector slides up) AND is the audio-unlock
+   gesture — root CLAUDE.md §4: AudioContext can only unlock on a real
+   gesture, never mousemove. A second gesture while armed starts the game
+   (idle -> playing, per DESIGN.md §5's state table).
+   ════════════════════════════════════════════════════════════════════ */
+
+// ── BGM — Oolong.mp3, root CLAUDE.md §4's protected pattern verbatim.
+// new Audio() + createMediaElementSource(), never fetch/decodeAudioData.
+let actx = null, muted = false;
+let ooAudio = null, ooGain = null, ooSrc = null;
+
+function initOolong() {
+  if (ooAudio) return;
+  ooAudio = new Audio('../../Oolong.mp3');
+  ooAudio.loop = true;
+  ooAudio.crossOrigin = 'anonymous';
+  ooSrc = actx.createMediaElementSource(ooAudio);
+  ooGain = actx.createGain();
+  ooGain.gain.value = 0;
+  ooSrc.connect(ooGain);
+  ooGain.connect(actx.destination);
+}
+
+async function startBGM() {
+  if (muted) return;
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  await actx.resume();
+  initOolong();
+  ooAudio.currentTime = 0;
+  ooAudio.play().catch(() => {});
+  ooGain.gain.cancelScheduledValues(actx.currentTime);
+  ooGain.gain.setValueAtTime(0, actx.currentTime);
+  ooGain.gain.linearRampToValueAtTime(0.72, actx.currentTime + 2.5);
+}
+
+function stopBGM() {
+  if (!ooGain || !ooAudio || !actx) return;
+  const t = actx.currentTime;
+  ooGain.gain.cancelScheduledValues(t);
+  ooGain.gain.setValueAtTime(ooGain.gain.value, t);
+  ooGain.gain.linearRampToValueAtTime(0, t + 2.5);
+  setTimeout(() => { ooAudio.pause(); }, 2600);
+}
+
+const idleSub = document.getElementById('idle-sub');
+
+function armIdle() {
+  if (idleEl.dataset.idleStep === 'armed') return;
+  idleEl.dataset.idleStep = 'armed';
+  idleSub.textContent = 'choose a surface, then space to serve';
+  startBGM(); // fire-and-forget: startBGM is itself async/awaits actx.resume()
+}
+
+function beginGame() {
+  if (idleEl.dataset.idleStep !== 'armed') return;
+  setScreen('playing'); // brief 19 builds the real playing screen
+}
+
+function onGesture(e) {
+  if (screenState !== 'idle') return;
+  if (idleEl.dataset.idleStep !== 'armed') armIdle();
+  else beginGame();
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); onGesture(e); }
+});
+document.getElementById('screen-idle').addEventListener('click', onGesture);
+document.getElementById('screen-idle').addEventListener('touchstart', onGesture, { passive: true });
+
+// Leaving idle for playing (stub) fades BGM back down until brief 22 wires
+// the real playing/results audio lifecycle — keeps the protected stopBGM
+// path exercised rather than dormant.
+document.getElementById('btn-playing-back').addEventListener('click', () => {
+  idleEl.dataset.idleStep = 'attract';
+  idleSub.textContent = 'space to begin · mouse to move';
+  document.querySelectorAll('#surface-chip .tile').forEach(t => {
+    t.setAttribute('aria-pressed', String(t.dataset.pick === 'paper'));
+  });
+});
+document.getElementById('btn-results-back').addEventListener('click', () => stopBGM());
+</script>
+</body>
+</html>

@@ -112,6 +112,19 @@
     font-size: 12px; color: var(--color-pink);
   }
 
+  /* ── Paddle-travel guardrails · brief 23 Task 1 ── Playing screen only:
+     2px marks at PAD_MIN/PAD_MAX+PH on both canvas edges, telling the
+     player where their reach ends and the wall begins. DOM chrome, same
+     layer treatment as the paddles — above the canvas, below the frame
+     ring — and positioned entirely by JS from physics.js's real constants
+     (never hardcoded here). Never drawn into gamePersistCv: that canvas is
+     the artwork, these are not marks the player made. */
+  .guard {
+    position: absolute; width: 16px; height: 2px;
+    background: var(--color-canvas-border); /* #888888 — same grey as .frame */
+    z-index: 1;
+  }
+
   /* ── Control elevation · DESIGN.md §6/§10 ── */
   .ctrl-chip {
     height: var(--space-xxl);
@@ -331,6 +344,13 @@
         <canvas id="game-canvas" width="1000" height="630"></canvas>
       </div>
       <div class="frame"></div>
+
+      <!-- Paddle-travel guardrails (brief 23 Task 1) — positions set by JS
+           from physics.js's PAD_MIN/PAD_MAX/PH/W, never hardcoded. -->
+      <div class="guard" id="guard-tl"></div>
+      <div class="guard" id="guard-bl"></div>
+      <div class="guard" id="guard-tr"></div>
+      <div class="guard" id="guard-br"></div>
 
       <div class="paddle paddle-left" id="game-paddle-left" style="top:283px">
         <div class="bar"></div><div class="dot"></div><span class="you">you</span>
@@ -565,10 +585,10 @@ function rebuildPersist(surfaceKey) {
   } else {
     persistCx.drawImage(ground, 0, 0);
   }
-  committedStrokes.forEach(st => renderStrokeAs(persistCx, surfaceKey, st.pts, st.wt, st.op, st.index));
+  committedStrokes.forEach(st => renderStrokeAs(persistCx, surfaceKey, st.pts, st.wt, st.op, st.index, { taperHead: st.taperHead, taperTail: st.taperTail }));
 }
 
-function commitStroke(rawPts, wt, op) {
+function commitStroke(rawPts, wt, op, taperOpts) {
   if (rawPts.length < 2) return;
   // Re-zip the baked-per-point .w (brief 19 Task 5) onto jitterPath's
   // output: jitterPath (engine fn) returns fresh {x,y} objects for every
@@ -580,7 +600,13 @@ function commitStroke(rawPts, wt, op) {
   // width algorithm, which disagreed with the live-drawn shape).
   const jittered = jitterPath(rawPts, JITTER_AMPLITUDE);
   const pts = jittered.map((p, i) => ({ x: p.x, y: p.y, w: rawPts[i].w }));
-  const st = { pts, wt, op, index: strokeIndex++ };
+  // Emergence-taper flags (brief 23 Task 3), stored on the committed stroke
+  // so rebuildPersist can reproduce the exact same render later. Defaults
+  // true; false only at the 500-point overflow seam (see stepDoodle).
+  const to = taperOpts || {};
+  const taperHead = to.taperHead !== false;
+  const taperTail = to.taperTail !== false;
+  const st = { pts, wt, op, index: strokeIndex++, taperHead, taperTail };
 
   if (committedStrokes.length >= DOODLE_RESET_THRESHOLD) {
     // Brief 20 Task 2: hard reset, not a rolling fade — the rally holds
@@ -590,7 +616,7 @@ function commitStroke(rawPts, wt, op) {
     rebuildPersist(currentSurface);
   }
   committedStrokes.push(st);
-  renderStrokeAs(persistCx, currentSurface, st.pts, st.wt, st.op, st.index); // incremental
+  renderStrokeAs(persistCx, currentSurface, st.pts, st.wt, st.op, st.index, { taperHead, taperTail }); // incremental
 }
 
 // Two stacked canvases so a surface switch can cross-fade (DESIGN.md §13:
@@ -649,30 +675,92 @@ const paddleR = { y: 430 };
 // width numbers while sharing the exact same bake-on-append math and the
 // same drawPaintRibbon fill (further down, unchanged, already generic).
 // The real engine renderPaintStroke is untouched and still used for the
-// actual end-game artwork (brief 23's job); this stays app-side, per
-// PORT-PLAN.md/BACKLOG.md's explicit deferral of promoting it into
-// paint.js to the brief-25 integration pass.
+// actual end-game artwork (brief 24's job — reveal/results); this stays
+// app-side, per PORT-PLAN.md/BACKLOG.md's explicit deferral of promoting it
+// into paint.js to the brief-26 integration pass.
+// Brief 23 Task 4: every stroke used to get the same treatment (one sine
+// undulation, seeded phase only) — variety was all in the offset, none in
+// the character. Three profiles now, seeded per stroke: flat (0.40, one
+// constant multiplier), ramp (0.35, monotonic thick<->thin across cfg.refLen
+// px), wave (0.25, the original sine — unchanged). Weights/bands below are
+// Shivang's calibration targets, shipped as given.
+const PAINT_PROFILE_FLAT_WEIGHT = 0.40, PAINT_PROFILE_RAMP_WEIGHT = 0.35; // remainder (0.25) is 'wave'
+const PAINT_FLAT_BAND_LO = 0.35, PAINT_FLAT_BAND_HI = 0.80; // middle band of [varMin,varMax] — an extreme is a hairline or a slab, not a stroke
+const PAINT_RAMP_MIN_SEP = 0.4; // fraction of [varMin,varMax] — below this a ramp just reads as a flat
+
 function makePaintTracker(rng, cfg) {
   // cfg: { varMin, varMax, undulationsMin, undulationsMax, refLen, widthVariation }
   // widthVariation mirrors paint.js's renderPaintStroke shape exactly
   // (`1 + (waveMult-1)*widthVariation`) — at widthVariation=1 (both the
   // doodle and the game use 1) this reduces to plain waveMult, so the
   // formula generalises brief 20's doodle-only version losslessly.
+  const RANGE = cfg.varMax - cfg.varMin;
+
   function widthMultAt(arcLen, ball) {
-    const wave = Math.sin((arcLen / ball._paintWavelength) * Math.PI * 2 + ball._paintPhase);
-    const waveMult = cfg.varMin + (wave * 0.5 + 0.5) * (cfg.varMax - cfg.varMin);
+    let waveMult;
+    if (ball._paintProfile === 'flat') {
+      waveMult = ball._paintFlatMult;
+    } else if (ball._paintProfile === 'ramp') {
+      const t = Math.min(1, arcLen / cfg.refLen); // clamped past refLen — brief 23 Task 4
+      waveMult = ball._paintRampA + (ball._paintRampB - ball._paintRampA) * t;
+    } else { // 'wave' — brief 19/20's original sine undulation, unchanged
+      const wave = Math.sin((arcLen / ball._paintWavelength) * Math.PI * 2 + ball._paintPhase);
+      waveMult = cfg.varMin + (wave * 0.5 + 0.5) * RANGE;
+    }
     return 1 + (waveMult - 1) * cfg.widthVariation;
   }
+
   return {
     // Called once whenever a NEW stroke starts (any surface — cheap, and
     // keeps the rng stream surface-independent: see the doodle/game
     // instantiation comments for why that matters to each).
+    //
+    // Determinism invariant (brief 23 Task 4 — do not break this): draws a
+    // FIXED number of rng values (7) on every call regardless of which
+    // profile ends up selected — every draw happens unconditionally, the
+    // profile only decides how the ALREADY-DRAWN numbers get used. A draw
+    // made only inside one profile's branch would make the rng stream
+    // depend on which profile got picked, which desyncs it from any other
+    // path through the same seed (surface switches, replays) — the same
+    // hazard the wavelength/phase draws already had to respect.
     startTrail(ball, x, y) {
       ball.pts = [{ x, y }];
       ball._paintArcLen = 0;
+      ball._paintTaperHead = true; // brief 23 Task 3 — reset true; overflow continuations clear this explicitly
+
+      const profileRoll = rng();
       ball._paintPhase = rng() * Math.PI * 2;
       const undulations = cfg.undulationsMin + rng() * (cfg.undulationsMax - cfg.undulationsMin);
       ball._paintWavelength = cfg.refLen / undulations;
+      const flatRoll = rng();
+      const rampARoll = rng();
+      const rampBRoll = rng();
+      const rampDirRoll = rng();
+
+      if (profileRoll < PAINT_PROFILE_FLAT_WEIGHT) {
+        ball._paintProfile = 'flat';
+        ball._paintFlatMult = cfg.varMin + (PAINT_FLAT_BAND_LO + flatRoll * (PAINT_FLAT_BAND_HI - PAINT_FLAT_BAND_LO)) * RANGE;
+      } else if (profileRoll < PAINT_PROFILE_FLAT_WEIGHT + PAINT_PROFILE_RAMP_WEIGHT) {
+        ball._paintProfile = 'ramp';
+        let lo = cfg.varMin + Math.min(rampARoll, rampBRoll) * RANGE;
+        let hi = cfg.varMin + Math.max(rampARoll, rampBRoll) * RANGE;
+        const minSep = PAINT_RAMP_MIN_SEP * RANGE;
+        if (hi - lo < minSep) {
+          // Push apart around the shared midpoint, then slide the whole
+          // pair back inside [varMin, varMax] if that spilled over an edge
+          // — never re-compresses the separation, unlike a plain clamp.
+          const mid = (lo + hi) / 2;
+          lo = mid - minSep / 2; hi = mid + minSep / 2;
+          if (lo < cfg.varMin) { hi += cfg.varMin - lo; lo = cfg.varMin; }
+          if (hi > cfg.varMax) { lo -= hi - cfg.varMax; hi = cfg.varMax; }
+        }
+        // Direction seeded 50/50 — thick→thin or thin→thick.
+        ball._paintRampA = rampDirRoll < 0.5 ? hi : lo;
+        ball._paintRampB = rampDirRoll < 0.5 ? lo : hi;
+      } else {
+        ball._paintProfile = 'wave';
+      }
+
       ball.pts[0].w = widthMultAt(0, ball);
     },
     // Called once per frame when the current position is appended to the
@@ -716,27 +804,77 @@ const doodlePaintTracker = makePaintTracker(paintWidthRng, {
   widthVariation: 1.0, // doodle never scaled the wave down
 });
 
+// Emergence taper (brief 23 Task 3) — a second, DRAW-TIME width multiplier,
+// separate from the baked-at-append .w above. Zero at a stroke's nearer end,
+// full by PAINT_TAPER_LEN px along the polyline — so the ink comes OUT OF
+// the ball instead of the ball sitting inside a blunt-ended ribbon several
+// times its own diameter. Starting value, tune by eye against a recording.
+const PAINT_TAPER_LEN = 28;
+
+// smoothstep, not t*t: the brief's fallback if the ball still doesn't read
+// as a solid dot against the ink. Shipped as smoothstep after review.
+function paintTaper(distAlongPolyline) {
+  const t = Math.max(0, Math.min(1, distAlongPolyline / PAINT_TAPER_LEN));
+  return t * t * (3 - 2 * t);
+}
+
 // Ribbon fill for a paint stroke — live or committed, doodle or game, same
 // function either way (brief 20 Task 1a, generalised brief 22 Task 1).
 // Same tangent/normal/half-width/rounded-cap construction as paint.js's
 // renderPaintStroke, but driven by each point's PRE-BAKED .w (never
-// recomputed). Raw points only (no Catmull-Rom spine resampling) — this
-// doesn't need the finished-artwork's exact sample density, only a shape
-// that's stable across a stroke's whole life, growing or committed. This
-// is the ONLY function in the app that fills paint-stroke pixels — verify
-// by construction: grep finds exactly one definition, and the engine's own
-// renderPaintStroke is never called anywhere in this file.
-function drawPaintRibbon(ctx, pts, wt, col) {
+// recomputed) TIMES the draw-time emergence taper above. Raw points only
+// (no Catmull-Rom spine resampling) — this doesn't need the finished-
+// artwork's exact sample density, only a shape that's stable across a
+// stroke's whole life, growing or committed. This is the ONLY function in
+// the app that fills paint-stroke pixels — verify by construction: grep
+// finds exactly one definition, and the engine's own renderPaintStroke is
+// never called anywhere in this file.
+//
+// taperOpts = { taperHead, taperTail }, both default true. Both false only
+// at the 500-point overflow seam (brief 23 Task 3's "one seam, named"): the
+// commit that gets cut off skips its tail taper, and the continuation that
+// picks the line back up skips its head taper, so an arbitrary buffer-
+// length boundary doesn't pinch a line that is visibly still travelling.
+//
+// Why this cannot reintroduce brief 20's commit-time pop: distHead/distTail
+// are measured along the CURRENT pts array's own arc length. While a stroke
+// is still growing, its last point IS the ball, so the tail-taper region
+// travels with the ball frame to frame — that motion is the emergence
+// effect, not a bug. The instant the stroke commits, that same last point
+// becomes permanent and every later render (this function, on the exact
+// same frozen array) reproduces the exact same pixels — live and committed
+// are the same function over the same data at every frame, so there is no
+// discontinuity AT the commit frame. The per-point .w baked at append time
+// (brief 19/20's invariant) is still never recomputed; this taper bends
+// "constant per-point width forever" only inside a bounded window that is
+// live NOW and frozen forever after, which is not the same claim.
+function drawPaintRibbon(ctx, pts, wt, col, taperOpts) {
   if (pts.length < 2) return;
+  const taperHead = !taperOpts || taperOpts.taperHead !== false;
+  const taperTail = !taperOpts || taperOpts.taperTail !== false;
+
+  const n = pts.length;
+  const cum = new Array(n);
+  cum[0] = 0;
+  for (let i = 1; i < n; i++) {
+    cum[i] = cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  }
+  const total = cum[n - 1];
+
   const left = [], right = [];
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < n; i++) {
     const p = pts[i];
-    const pPrev = pts[Math.max(i - 1, 0)], pNext = pts[Math.min(i + 1, pts.length - 1)];
+    const pPrev = pts[Math.max(i - 1, 0)], pNext = pts[Math.min(i + 1, n - 1)];
     let tx = pNext.x - pPrev.x, ty = pNext.y - pPrev.y;
     const tl = Math.hypot(tx, ty) || 1;
     tx /= tl; ty /= tl;
     const nx = -ty, ny = tx;
-    const halfW = 0.5 * wt * (p.w != null ? p.w : 1);
+
+    let taper = 1;
+    if (taperHead) taper = Math.min(taper, paintTaper(cum[i]));
+    if (taperTail) taper = Math.min(taper, paintTaper(total - cum[i]));
+
+    const halfW = 0.5 * wt * (p.w != null ? p.w : 1) * taper;
     left.push({ x: p.x + nx * halfW, y: p.y + ny * halfW });
     right.push({ x: p.x - nx * halfW, y: p.y - ny * halfW });
   }
@@ -751,9 +889,9 @@ function drawPaintRibbon(ctx, pts, wt, col) {
   ctx.fill();
   const r0 = Math.hypot(left[0].x - right[0].x, left[0].y - right[0].y) / 2;
   ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, r0, 0, Math.PI * 2); ctx.fill();
-  const n = left.length - 1;
-  const rN = Math.hypot(left[n].x - right[n].x, left[n].y - right[n].y) / 2;
-  ctx.beginPath(); ctx.arc(pts[n].x, pts[n].y, rN, 0, Math.PI * 2); ctx.fill();
+  const last = n - 1;
+  const rN = Math.hypot(left[last].x - right[last].x, left[last].y - right[last].y) / 2;
+  ctx.beginPath(); ctx.arc(pts[last].x, pts[last].y, rN, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
@@ -762,12 +900,12 @@ function drawPaintRibbon(ctx, pts, wt, col) {
 // same inputs in, same pixels out, at every point in a stroke's life.
 // That equality is what makes brief 20 Task 1a's commit-time pop
 // impossible by construction: there is no second algorithm to disagree.
-function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
+function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index, taperOpts) {
   const col = colourFor(surfaceKey, index);
   if (surfaceKey === 'chalk') {
     renderChalkStroke(ctx, pts, col, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
   } else if (surfaceKey === 'paint') {
-    drawPaintRibbon(ctx, pts, wt * DOODLE_PAINT_WIDTH_BASE, col);
+    drawPaintRibbon(ctx, pts, wt * DOODLE_PAINT_WIDTH_BASE, col, taperOpts);
   } else {
     renderStroke(ctx, pts, col, wt, op, DEFAULT_STROKE_PARAMS);
   }
@@ -786,18 +924,24 @@ function stepDoodle() {
   const events = advanceBall(ball, paddleL, paddleR, 0, physRng);
 
   events.forEach(() => {
-    commitStroke(ball.pts, ball.wt, ball.op);
+    commitStroke(ball.pts, ball.wt, ball.op, { taperHead: ball._paintTaperHead, taperTail: true });
     doodlePaintTracker.startTrail(ball, ball.x, ball.y);
   });
   doodlePaintTracker.appendPoint(ball, ball.x, ball.y);
 
   if (ball.pts.length > 500) {
-    commitStroke(ball.pts, ball.wt, ball.op);
+    // Overflow seam (brief 23 Task 3, "the one seam, named"): this commit's
+    // tail is NOT tapered (the line keeps travelling past this arbitrary
+    // buffer boundary), and the continuation's head is marked not to taper
+    // either — arc-length/phase/profile stay untouched, only the taper
+    // flag changes, so this is still the same stroke, not a new one.
+    commitStroke(ball.pts, ball.wt, ball.op, { taperHead: ball._paintTaperHead, taperTail: false });
     ball.pts = ball.pts.slice(-4); // buffer trim only — same stroke continues, arc-length/phase untouched
+    ball._paintTaperHead = false;
   }
 
   if (ball.x < -30 || ball.x > W + 30) {
-    if (ball.pts.length >= 2) commitStroke(ball.pts, ball.wt, ball.op);
+    if (ball.pts.length >= 2) commitStroke(ball.pts, ball.wt, ball.op, { taperHead: ball._paintTaperHead, taperTail: true });
     ball = mkBall(physRng, 1, null, [1.0, 2.4], [0.50, 0.68]);
     doodlePaintTracker.startTrail(ball, ball.x, ball.y);
   }
@@ -810,8 +954,11 @@ function drawFrame() {
   ctx.drawImage(persistCv, 0, 0);
   if (ball.pts.length > 1) {
     // in-flight stroke: raw (unjittered) pts, same as root's live-frame
-    // overlay — jitter is a commit-time effect, not a per-frame one.
-    renderStrokeAs(ctx, currentSurface, ball.pts, ball.wt, ball.op, strokeIndex);
+    // overlay — jitter is a commit-time effect, not a per-frame one. Tail
+    // always tapers live (the last point is the ball itself); head follows
+    // ball._paintTaperHead so an overflow continuation doesn't show a pinch
+    // where the previous piece was just cut off.
+    renderStrokeAs(ctx, currentSurface, ball.pts, ball.wt, ball.op, strokeIndex, { taperHead: ball._paintTaperHead, taperTail: true });
   }
   // Task 4 — ball marker, always visible, every surface: the moving point
   // that makes the doodle legible as a rally, not just accumulating trails.
@@ -854,16 +1001,22 @@ let gamePhysRng, gameGroundSeeds, gamePaintWidthRng;
 // ── Task 1's shared machinery, game-scoped config ─────────────────────
 // PAINT_WIDTH_BASE / PAINT_DEFAULT_WIDTH_VARIATION are paint.js's real,
 // frozen, approved-2026-07-21 product constants — imported above, used
-// here, never re-declared. GAME_PAINT_WIDTH_VAR_MIN/MAX mirror paint.js's
-// own PRIVATE WIDTH_VAR_MIN/MAX (0.15/4.0) — not exported, so (same as the
-// doodle's own PAINT_WIDTH_VAR_MIN/MAX above) mirrored as local constants
-// rather than imported. This session was told not to modify v3/engine/,
-// including adding a trivial export, so this is a deliberate call, not an
-// oversight — flag it if a future session should promote these into real
-// exports instead. undulation range and reference length are shared with
-// the doodle (no different numbers given for the game; that math doesn't
-// depend on width scale).
-const GAME_PAINT_WIDTH_VAR_MIN = 0.15, GAME_PAINT_WIDTH_VAR_MAX = 4.0;
+// here, never re-declared. undulation range and reference length are
+// shared with the doodle (no different numbers given for the game; that
+// math doesn't depend on width scale).
+//
+// GAME_PAINT_WIDTH_VAR_MIN/MAX are NOT a mirror of anything in paint.js —
+// that comment stood here through brief 22, but brief 23 Task 2 made it
+// false, on purpose. paint.js's private WIDTH_VAR_MIN/MAX (0.15/4.0) were
+// approved in the lab on twelve static seeded artworks; the first time that
+// 4.0 was seen in a live rally at 1000×630 with a moving ball, it produced
+// a 57.6px worst case — a bar, not a brush stroke. These are now the live
+// PRODUCT'S OWN values, and paint.js's pair is the one that's stale and
+// pending reconciliation (BACKLOG.md, extended brief 23) — not the reverse.
+// Do NOT "fix" this back to match paint.js; if the numbers still disagree
+// when that reconciliation happens, paint.js moves to these, not this file
+// to paint.js's frozen pair.
+const GAME_PAINT_WIDTH_VAR_MIN = 0.25, GAME_PAINT_WIDTH_VAR_MAX = 1.6; // was 0.15/4.0 — max cut 60% (brief 23 Task 2), min raised so the thin end reads as a hairline brush, not a single pixel
 let gamePaintTracker; // built fresh each game — see startGame()
 
 // ── Task 4 — per-surface ground, paint's neutral-substrate exception ──
@@ -946,12 +1099,12 @@ let gameStrokeIndex = 0;
 // shared drawPaintRibbon, at product width (PAINT_WIDTH_BASE), so a
 // stroke can never be drawn two different ways at two points in its life,
 // rally or reveal.
-function renderGameStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
+function renderGameStrokeAs(ctx, surfaceKey, pts, wt, op, index, taperOpts) {
   const col = gameColourFor(surfaceKey, index);
   if (surfaceKey === 'chalk') {
     renderChalkStroke(ctx, pts, col, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
   } else if (surfaceKey === 'paint') {
-    drawPaintRibbon(ctx, pts, wt * PAINT_WIDTH_BASE, col);
+    drawPaintRibbon(ctx, pts, wt * PAINT_WIDTH_BASE, col, taperOpts);
   } else {
     renderStroke(ctx, pts, col, wt, op, DEFAULT_STROKE_PARAMS);
   }
@@ -960,10 +1113,10 @@ function renderGameStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
 function rebuildGamePersist() {
   gamePersistCx.clearRect(0, 0, W, H);
   gamePersistCx.drawImage(getGameGround(currentSurface), 0, 0); // no filter — see chalk decision above
-  gameCommittedStrokes.forEach(st => renderGameStrokeAs(gamePersistCx, currentSurface, st.pts, st.wt, st.op, st.index));
+  gameCommittedStrokes.forEach(st => renderGameStrokeAs(gamePersistCx, currentSurface, st.pts, st.wt, st.op, st.index, { taperHead: st.taperHead, taperTail: st.taperTail }));
 }
 
-function commitGameStroke(rawPts, wt, op, eventType) {
+function commitGameStroke(rawPts, wt, op, eventType, taperOpts) {
   if (rawPts.length < 2) return;
   // Same re-zip as the doodle's commitStroke (Task 1/brief 20): jitterPath
   // returns fresh {x,y} objects for interior points, dropping the baked
@@ -971,9 +1124,14 @@ function commitGameStroke(rawPts, wt, op, eventType) {
   // exact widths it had live.
   const jittered = jitterPath(rawPts, JITTER_AMPLITUDE);
   const pts = jittered.map((p, i) => ({ x: p.x, y: p.y, w: rawPts[i].w }));
-  const st = { pts, wt, op, index: gameStrokeIndex++, event: eventType };
+  // Emergence-taper flags (brief 23 Task 3) — see commitStroke's doodle
+  // twin. Defaults true; false only at the 500-point overflow seam.
+  const to = taperOpts || {};
+  const taperHead = to.taperHead !== false;
+  const taperTail = to.taperTail !== false;
+  const st = { pts, wt, op, index: gameStrokeIndex++, event: eventType, taperHead, taperTail };
   gameCommittedStrokes.push(st);
-  renderGameStrokeAs(gamePersistCx, currentSurface, st.pts, st.wt, st.op, st.index); // incremental — never cleared mid-game
+  renderGameStrokeAs(gamePersistCx, currentSurface, st.pts, st.wt, st.op, st.index, { taperHead, taperTail }); // incremental — never cleared mid-game
   return st;
 }
 
@@ -992,6 +1150,20 @@ const scorePEl = document.getElementById('pg-score-p');
 const scoreAEl = document.getElementById('pg-score-a');
 const pgPalPillEl = document.getElementById('pg-pal-pill');
 const pgShuffleEl = document.getElementById('pg-shuffle');
+
+// ── Task 1 (brief 23) — paddle-travel guardrails. Static DOM chrome, set
+// once, never touched by the game loop. Positions derived from physics.js's
+// real PAD_MIN/PAD_MAX/PH/W — not the brief's example numbers (38/590) —
+// so this stays correct if those constants ever change.
+(function placeGuardrails() {
+  const topY = PAD_MIN - 2;  // flush above the paddle's highest position
+  const botY = PAD_MAX + PH; // flush below the paddle's lowest bottom edge
+  const rightX = W - 16;     // guard is 16px wide — flush to the right edge
+  document.getElementById('guard-tl').style.cssText = `left:0px; top:${topY}px;`;
+  document.getElementById('guard-bl').style.cssText = `left:0px; top:${botY}px;`;
+  document.getElementById('guard-tr').style.cssText = `left:${rightX}px; top:${topY}px;`;
+  document.getElementById('guard-br').style.cssText = `left:${rightX}px; top:${botY}px;`;
+})();
 
 // Root index.html's own pattern: listen on document (not just the canvas)
 // so the cursor tracks correctly even over the paddles/frame, mapped into
@@ -1101,14 +1273,18 @@ function stepGame() {
 
   const events = advanceBall(gameBall, gamePaddleL, gamePaddleR, padVelL, gamePhysRng);
   events.forEach(ev => {
-    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, ev.type);
+    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, ev.type, { taperHead: gameBall._paintTaperHead, taperTail: true });
     gamePaintTracker.startTrail(gameBall, gameBall.x, gameBall.y);
   });
   gamePaintTracker.appendPoint(gameBall, gameBall.x, gameBall.y);
 
   if (gameBall.pts.length > 500) {
-    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, 'overflow');
+    // Overflow seam (brief 23 Task 3) — see stepDoodle's twin for the full
+    // rationale. Tail not tapered on this piece, head not tapered on the
+    // continuation; geometry/arc-length/profile otherwise untouched.
+    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, 'overflow', { taperHead: gameBall._paintTaperHead, taperTail: false });
     gameBall.pts = gameBall.pts.slice(-4);
+    gameBall._paintTaperHead = false;
   }
 
   ballBall([gameBall], gamePhysRng); // one ball: a no-op today, kept for engine-call parity with simulate.js
@@ -1117,7 +1293,7 @@ function stepGame() {
     const rightMissed = gameBall.x < -30; // ball passed the left edge -> right/AI scores
     const isGameEnd = rightMissed ? (gameAs + 1 >= WIN) : (gamePs + 1 >= WIN);
     if (gameBall.pts.length >= 2) {
-      commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, isGameEnd ? 'gameEnd' : 'score');
+      commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, isGameEnd ? 'gameEnd' : 'score', { taperHead: gameBall._paintTaperHead, taperTail: true });
     }
     if (rightMissed) gameAs++; else gamePs++;
     updateGameScoreUI();
@@ -1146,8 +1322,9 @@ function drawGameFrame() {
   ctx.drawImage(gamePersistCv, 0, 0);
   if (!gameServing && gameBall.pts.length > 1) {
     // in-flight stroke: raw (unjittered) pts — jitter is a commit-time
-    // effect, same as the doodle.
-    renderGameStrokeAs(ctx, currentSurface, gameBall.pts, gameBall.wt, gameBall.op, gameStrokeIndex);
+    // effect, same as the doodle. Taper opts mirror drawFrame's doodle
+    // twin — see stepGame's overflow branch for when taperHead goes false.
+    renderGameStrokeAs(ctx, currentSurface, gameBall.pts, gameBall.wt, gameBall.op, gameStrokeIndex, { taperHead: gameBall._paintTaperHead, taperTail: true });
   }
   if (!gameServing) {
     ctx.save();

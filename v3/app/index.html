@@ -300,12 +300,12 @@
 
 <script type="module">
 import { makeRng } from '../engine/rng.js';
-import { W, H, mkBall, advanceBall } from '../engine/physics.js';
+import { W, H, BR, mkBall, advanceBall } from '../engine/physics.js';
 import { jitterPath, renderStroke, DEFAULT_STROKE_PARAMS } from '../engine/strokes.js';
 import { buildSurface } from '../engine/surface.js';
 import {
-  buildChalkboardSurface, renderChalkStroke,
-  CHALK_DEFAULT_WIDTH_MULT, WHITE_CHALK_HEX,
+  buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE,
+  CHALK_DEFAULT_WIDTH_MULT,
 } from '../engine/chalkboard.js';
 import {
   buildPaintSurface, renderPaintStroke,
@@ -340,12 +340,17 @@ document.getElementById('btn-results-back').addEventListener('click', () => setS
    ════════════════════════════════════════════════════════════════════ */
 const idleEl = document.getElementById('screen-idle');
 
-// One paint palette, built once at load (buildPalette draws from
-// palette.js's curated hue library — never arithmetic hue generation).
-// Frozen for the session: re-rolling it on every surface switch would
-// make "switch back to paint" look like a different painting each time.
-const paintSeed = Math.floor(Math.random() * 1e9);
-const paintPalette = buildPalette(makeRng(paintSeed));
+// ── Fixed seed (brief 19 Task 1) ──────────────────────────────────────
+// The idle doodle is ambiance, not the artwork: one fixed seed, identical
+// every load. This is what makes a surface switch a pure restyle of
+// IDENTICAL stroke geometry (Task 2) instead of a fresh random simulation
+// — every rng stream below is a deterministic salt off this one constant,
+// never Math.random().
+const DOODLE_SEED = 2026;
+
+// One paint palette, built once from the fixed seed (buildPalette draws
+// from palette.js's curated hue library — never arithmetic hue generation).
+const paintPalette = buildPalette(makeRng((DOODLE_SEED ^ 0x5EED1DEA) >>> 0));
 
 // Same weighted/shuffled flattening art-lab.html uses to turn a 3-accent
 // weighted palette into a round-robin array (lab-only bookkeeping, not
@@ -364,12 +369,13 @@ function weightedPaletteArray(palette, seed) {
   return arr;
 }
 
-// Per-surface colour cycle. Chalk defaults to white mode (CHALK_DEFAULT_
-// MODE, chalkboard.js, approved brief 17) — a single hex, not a palette.
+// Per-surface colour cycle. Chalk is tri-colour (brief 19 Task 3) —
+// CHALK_PALETTE, matching how chalk was approved in the lab — not the
+// white-mode override brief 18 shipped.
 const PALETTE_ARRAYS = {
   paper: DEFAULT_PALETTE,
-  chalk: [WHITE_CHALK_HEX],
-  paint: weightedPaletteArray(paintPalette, paintSeed),
+  chalk: CHALK_PALETTE,
+  paint: weightedPaletteArray(paintPalette, (DOODLE_SEED ^ 0x5EED1DEA) >>> 0),
 };
 
 function colourFor(surfaceKey, index) {
@@ -377,12 +383,25 @@ function colourFor(surfaceKey, index) {
   return arr[index % arr.length];
 }
 
+// Fixed, distinct salts so each surface's ground texture is decorrelated
+// from the others but still deterministic off DOODLE_SEED (Task 1).
+const GROUND_SEEDS = {
+  paper: (DOODLE_SEED ^ 0x1A2B3C4D) >>> 0,
+  chalk: (DOODLE_SEED ^ 0x2B3C4D5E) >>> 0,
+  paint: (DOODLE_SEED ^ 0x3C4D5E6F) >>> 0,
+};
+
 function buildGround(surfaceKey, rng) {
   if (surfaceKey === 'chalk') return buildChalkboardSurface(W, H, rng);
   if (surfaceKey === 'paint') return buildPaintSurface(W, H, rng, paintPalette.ground);
   return buildSurface(W, H, rng);
 }
 
+// Committed-stroke renderer — the engine's real renderers, unchanged. A
+// committed stroke's pts/wt/op never change after commit, so calling
+// these repeatedly (every rebuildPersist) always reproduces the same
+// pixels — no morphing risk here. See renderLiveStrokeAs below for why
+// the LIVE/growing stroke can't just call renderPaintStroke directly.
 function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
   const col = colourFor(surfaceKey, index);
   if (surfaceKey === 'chalk') {
@@ -404,12 +423,12 @@ function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
 const MAX_DOODLE_STROKES = 8;
 const JITTER_AMPLITUDE = 0.5; // shared default — paper.js/paint.js both use it
 
-const physRng = makeRng(Math.floor(Math.random() * 1e9));
+const physRng = makeRng(DOODLE_SEED);
 const groundCache = {}; // surfaceKey -> offscreen canvas, built once and reused
 
 function getGround(surfaceKey) {
   if (!groundCache[surfaceKey]) {
-    groundCache[surfaceKey] = buildGround(surfaceKey, makeRng(Math.floor(Math.random() * 1e9)));
+    groundCache[surfaceKey] = buildGround(surfaceKey, makeRng(GROUND_SEEDS[surfaceKey]));
   }
   return groundCache[surfaceKey];
 }
@@ -444,8 +463,9 @@ function commitStroke(rawPts, wt, op) {
 }
 
 // Two stacked canvases so a surface switch can cross-fade (DESIGN.md §13:
-// 400ms linear) instead of popping. Physics/stroke state above is never
-// touched by a switch — only which layer is live and what persistCv holds.
+// 400ms linear) instead of popping. Physics/stroke state below is never
+// touched by a switch (brief 19 Task 2) — only which layer is live and
+// what persistCv holds.
 const layerEls = { A: document.getElementById('doodle-a'), B: document.getElementById('doodle-b') };
 let activeKey = 'A', inactiveKey = 'B';
 layerEls[activeKey].style.opacity = '1';
@@ -471,8 +491,118 @@ function switchSurface(newKey) {
 const paddleL = { y: 180 };
 const paddleR = { y: 430 };
 
+// ── Paint live-ribbon width baking (brief 19 Task 5) ──────────────────
+// paint.js's renderPaintStroke computes each sample's width from the
+// stroke's CURRENT total arc length and CURRENT endpoint (a hash of the
+// last point) — correct for a finished stroke rendered once, but the live
+// doodle called it fresh every frame on a growing pts array: the
+// normalizing length changed every frame, so every earlier point's width
+// (and the wave's phase, tied to the moving endpoint) got rewritten
+// continuously — the writhing bug.
+//
+// Fix: for the LIVE/uncommitted stroke only, bake each point's width
+// multiplier ONCE, at the moment it's appended, from the stroke's
+// ABSOLUTE arc length so far (not normalized to an unknowable final
+// total) and a phase/wavelength fixed at the stroke's first point. Never
+// recomputed afterward. Committed strokes are unaffected — they still go
+// through the real engine renderPaintStroke above, unchanged, since a
+// committed pts array never grows again (the lab render was already
+// correct for exactly this reason, per the brief's own diagnosis).
+//
+// Own rng stream, advanced by exactly 2 draws (phase, undulations) at
+// EVERY new stroke start regardless of which surface is on screen — so
+// the sequence never depends on the player's surface-switching path,
+// which would otherwise desync the "identical geometry" guarantee Task 1
+// exists for (Task 2).
+const paintWidthRng = makeRng((DOODLE_SEED ^ 0x50A17B17) >>> 0);
+const PAINT_WIDTH_VAR_MIN = 0.15, PAINT_WIDTH_VAR_MAX = 4.0;     // mirrors paint.js's own (private) range
+const PAINT_UNDULATIONS_MIN = 0.5, PAINT_UNDULATIONS_MAX = 1.5; // mirrors paint.js's own (private) range
+// paint.js expresses frequency as a cycle-COUNT over the finished stroke's
+// total length — meaningless while growing, since the total isn't known
+// yet. Converted to a fixed spatial wavelength (px) via one reference
+// length, chosen to match this doodle's typical stroke length so the live
+// wave reads at a similar visual frequency to a committed stroke.
+const PAINT_UNDULATION_REF_LEN = 500;
+
+function paintWidthMultAt(arcLen, ball) {
+  const wave = Math.sin((arcLen / ball._paintWavelength) * Math.PI * 2 + ball._paintPhase);
+  return PAINT_WIDTH_VAR_MIN + (wave * 0.5 + 0.5) * (PAINT_WIDTH_VAR_MAX - PAINT_WIDTH_VAR_MIN);
+}
+
+// Called once whenever a NEW stroke starts (any surface — cheap, and
+// keeps the rng stream surface-independent, see above).
+function startBallTrail(ball, x, y) {
+  ball.pts = [{ x, y }];
+  ball._paintArcLen = 0;
+  ball._paintPhase = paintWidthRng() * Math.PI * 2;
+  const undulations = PAINT_UNDULATIONS_MIN + paintWidthRng() * (PAINT_UNDULATIONS_MAX - PAINT_UNDULATIONS_MIN);
+  ball._paintWavelength = PAINT_UNDULATION_REF_LEN / undulations;
+  ball.pts[0].w = paintWidthMultAt(0, ball);
+}
+
+// Called once per frame when the current position is appended to the
+// trail — bakes that ONE new point's width and never touches earlier
+// points (the actual Task 5 fix).
+function appendBallPoint(ball, x, y) {
+  const prev = ball.pts[ball.pts.length - 1];
+  const pt = { x, y };
+  ball._paintArcLen += Math.hypot(x - prev.x, y - prev.y);
+  pt.w = paintWidthMultAt(ball._paintArcLen, ball);
+  ball.pts.push(pt);
+}
+
+// Ribbon fill for the LIVE/uncommitted paint stroke — same tangent/
+// normal/half-width/rounded-cap construction as paint.js's
+// renderPaintStroke, but driven by each point's PRE-BAKED .w (never
+// recomputed) instead of a fresh per-frame wave. Raw points only (no
+// Catmull-Rom spine resampling) — the live preview doesn't need the
+// committed stroke's exact sample density, only a stable, non-writhing
+// shape while it's growing; it settles into the real engine-rendered
+// ribbon the instant it commits.
+function drawLivePaintRibbon(ctx, pts, wt, col) {
+  if (pts.length < 2) return;
+  const left = [], right = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const pPrev = pts[Math.max(i - 1, 0)], pNext = pts[Math.min(i + 1, pts.length - 1)];
+    let tx = pNext.x - pPrev.x, ty = pNext.y - pPrev.y;
+    const tl = Math.hypot(tx, ty) || 1;
+    tx /= tl; ty /= tl;
+    const nx = -ty, ny = tx;
+    const halfW = 0.5 * wt * (p.w != null ? p.w : 1);
+    left.push({ x: p.x + nx * halfW, y: p.y + ny * halfW });
+    right.push({ x: p.x - nx * halfW, y: p.y - ny * halfW });
+  }
+  ctx.save();
+  ctx.globalAlpha = 1.0;
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.moveTo(left[0].x, left[0].y);
+  for (let i = 1; i < left.length; i++) ctx.lineTo(left[i].x, left[i].y);
+  for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x, right[i].y);
+  ctx.closePath();
+  ctx.fill();
+  const r0 = Math.hypot(left[0].x - right[0].x, left[0].y - right[0].y) / 2;
+  ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, r0, 0, Math.PI * 2); ctx.fill();
+  const n = left.length - 1;
+  const rN = Math.hypot(left[n].x - right[n].x, left[n].y - right[n].y) / 2;
+  ctx.beginPath(); ctx.arc(pts[n].x, pts[n].y, rN, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function renderLiveStrokeAs(ctx, surfaceKey, ball, index) {
+  const col = colourFor(surfaceKey, index);
+  if (surfaceKey === 'chalk') {
+    renderChalkStroke(ctx, ball.pts, col, ball.wt, ball.op, CHALK_DEFAULT_WIDTH_MULT, 0);
+  } else if (surfaceKey === 'paint') {
+    drawLivePaintRibbon(ctx, ball.pts, ball.wt * PAINT_WIDTH_BASE, col);
+  } else {
+    renderStroke(ctx, ball.pts, col, ball.wt, ball.op, DEFAULT_STROKE_PARAMS);
+  }
+}
+
 let ball = mkBall(physRng, 1, null, [1.0, 2.4], [0.50, 0.68]);
-ball.pts = [{ x: ball.x, y: ball.y }];
+startBallTrail(ball, ball.x, ball.y);
 
 function stepDoodle() {
   // Faithful to simulate.js/root index.html's update(): advanceBall moves
@@ -485,19 +615,19 @@ function stepDoodle() {
 
   events.forEach(() => {
     commitStroke(ball.pts, ball.wt, ball.op);
-    ball.pts = [{ x: ball.x, y: ball.y }];
+    startBallTrail(ball, ball.x, ball.y);
   });
-  ball.pts.push({ x: ball.x, y: ball.y });
+  appendBallPoint(ball, ball.x, ball.y);
 
   if (ball.pts.length > 500) {
     commitStroke(ball.pts, ball.wt, ball.op);
-    ball.pts = ball.pts.slice(-4);
+    ball.pts = ball.pts.slice(-4); // buffer trim only — same stroke continues, arc-length/phase untouched
   }
 
   if (ball.x < -30 || ball.x > W + 30) {
     if (ball.pts.length >= 2) commitStroke(ball.pts, ball.wt, ball.op);
     ball = mkBall(physRng, 1, null, [1.0, 2.4], [0.50, 0.68]);
-    ball.pts = [{ x: ball.x, y: ball.y }];
+    startBallTrail(ball, ball.x, ball.y);
   }
 }
 
@@ -509,8 +639,17 @@ function drawFrame() {
   if (ball.pts.length > 1) {
     // in-flight stroke: raw (unjittered) pts, same as root's live-frame
     // overlay — jitter is a commit-time effect, not a per-frame one.
-    renderStrokeAs(ctx, currentSurface, ball.pts, ball.wt, ball.op, strokeIndex);
+    renderLiveStrokeAs(ctx, currentSurface, ball, strokeIndex);
   }
+  // Task 4 — ball marker, always visible, every surface: the moving point
+  // that makes the doodle legible as a rally, not just accumulating trails.
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = colourFor(currentSurface, strokeIndex);
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BR * 0.9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function doodleLoop() {

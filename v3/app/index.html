@@ -51,7 +51,15 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: var(--space-l) 0 var(--space-xxl);
+    /* Brief 20 Task 4: was top-anchored with asymmetric padding (32px
+       top / 48px bottom), so the canvas cluster sat high with leftover
+       space only below it on any viewport taller than the content.
+       justify-content:center treats the whole visible .screen (tagline +
+       canvas + palette dock, as one flex column) as a unit and centers
+       it vertically; symmetric padding is just a minimum edge margin on
+       short viewports, not a layout anchor. */
+    justify-content: center;
+    padding: var(--space-l) 0;
   }
 
   .screen { display: flex; flex-direction: column; align-items: center; }
@@ -307,10 +315,7 @@ import {
   buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE,
   CHALK_DEFAULT_WIDTH_MULT,
 } from '../engine/chalkboard.js';
-import {
-  buildPaintSurface, renderPaintStroke,
-  PAINT_WIDTH_BASE, PAINT_DEFAULT_WIDTH_VARIATION,
-} from '../engine/paint.js';
+import { buildPaintSurface } from '../engine/paint.js';
 import { buildPalette } from '../engine/palette.js';
 import { DEFAULT_PALETTE } from '../engine/simulate.js';
 
@@ -397,30 +402,16 @@ function buildGround(surfaceKey, rng) {
   return buildSurface(W, H, rng);
 }
 
-// Committed-stroke renderer — the engine's real renderers, unchanged. A
-// committed stroke's pts/wt/op never change after commit, so calling
-// these repeatedly (every rebuildPersist) always reproduces the same
-// pixels — no morphing risk here. See renderLiveStrokeAs below for why
-// the LIVE/growing stroke can't just call renderPaintStroke directly.
-function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
-  const col = colourFor(surfaceKey, index);
-  if (surfaceKey === 'chalk') {
-    renderChalkStroke(ctx, pts, col, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
-  } else if (surfaceKey === 'paint') {
-    renderPaintStroke(ctx, pts, col, wt * PAINT_WIDTH_BASE, op, { widthVariation: PAINT_DEFAULT_WIDTH_VARIATION });
-  } else {
-    renderStroke(ctx, pts, col, wt, op, DEFAULT_STROKE_PARAMS);
-  }
-}
-
 /* ════════════════════════════════════════════════════════════════════
    TASK 5 — live surface-aware idle doodle.
    ════════════════════════════════════════════════════════════════════ */
 
-// Cap kept low (calm/sparse, brief 18) and cheap enough that a live
-// re-render on surface switch (chalk/paint do per-stroke offscreen work)
-// stays smooth.
-const MAX_DOODLE_STROKES = 8;
+// Accumulate-then-hard-reset (brief 20 Task 2, replaces brief 18/19's
+// rolling one-stroke-at-a-time eviction): a rally builds to this many
+// committed strokes, then the canvas clears to bare ground and a new
+// one begins — no per-stroke fade-out. Kept in the calm/sparse range,
+// same value brief 18 originally calibrated as a rolling cap.
+const DOODLE_RESET_THRESHOLD = 8;
 const JITTER_AMPLITUDE = 0.5; // shared default — paper.js/paint.js both use it
 
 const physRng = makeRng(DOODLE_SEED);
@@ -447,19 +438,50 @@ const persistCx = persistCv.getContext('2d');
 
 function rebuildPersist(surfaceKey) {
   persistCx.clearRect(0, 0, W, H);
-  persistCx.drawImage(getGround(surfaceKey), 0, 0);
+  const ground = getGround(surfaceKey);
+  if (surfaceKey === 'chalk') {
+    // Brief 20 Task 3: buildChalkboardSurface's real texture (smudge
+    // blobs, grain, vignette) is there but reads as flat near-black at
+    // doodle scale — the same "tuned too faint to read" pattern BACKLOG.md
+    // already logged once for this exact module. A presentational
+    // brightness lift on THIS draw call only makes it legible; the
+    // engine's own pixels (and its frozen constants) are untouched.
+    // brightness() is a flat multiply, so it's the right tool for a
+    // near-black image — contrast() pivots around mid-grey and CRUSHES
+    // shadow detail further toward 0 for values this far below it,
+    // which made an earlier attempt at this filter read even flatter.
+    persistCx.filter = 'brightness(2.4)';
+    persistCx.drawImage(ground, 0, 0);
+    persistCx.filter = 'none';
+  } else {
+    persistCx.drawImage(ground, 0, 0);
+  }
   committedStrokes.forEach(st => renderStrokeAs(persistCx, surfaceKey, st.pts, st.wt, st.op, st.index));
 }
 
 function commitStroke(rawPts, wt, op) {
   if (rawPts.length < 2) return;
-  const st = { pts: jitterPath(rawPts, JITTER_AMPLITUDE), wt, op, index: strokeIndex++ };
+  // Re-zip the baked-per-point .w (brief 19 Task 5) onto jitterPath's
+  // output: jitterPath (engine fn) returns fresh {x,y} objects for every
+  // interior point, dropping any extra fields, but it's a 1:1 same-
+  // length map so index correspondence is exact. Without this, a
+  // committed paint stroke would lose its baked widths on every point
+  // except the two endpoints — precisely what caused brief 20 Task 1a's
+  // pop (committed strokes fell back to the engine's OWN independent
+  // width algorithm, which disagreed with the live-drawn shape).
+  const jittered = jitterPath(rawPts, JITTER_AMPLITUDE);
+  const pts = jittered.map((p, i) => ({ x: p.x, y: p.y, w: rawPts[i].w }));
+  const st = { pts, wt, op, index: strokeIndex++ };
+
+  if (committedStrokes.length >= DOODLE_RESET_THRESHOLD) {
+    // Brief 20 Task 2: hard reset, not a rolling fade — the rally holds
+    // at full density for one beat, then this new stroke starts a clean
+    // cycle from bare ground.
+    committedStrokes = [];
+    rebuildPersist(currentSurface);
+  }
   committedStrokes.push(st);
   renderStrokeAs(persistCx, currentSurface, st.pts, st.wt, st.op, st.index); // incremental
-  if (committedStrokes.length > MAX_DOODLE_STROKES) {
-    committedStrokes.shift();
-    rebuildPersist(currentSurface); // can't erase one stroke — full rebuild from what remains
-  }
 }
 
 // Two stacked canvases so a surface switch can cross-fade (DESIGN.md §13:
@@ -491,23 +513,27 @@ function switchSurface(newKey) {
 const paddleL = { y: 180 };
 const paddleR = { y: 430 };
 
-// ── Paint live-ribbon width baking (brief 19 Task 5) ──────────────────
+// ── Paint ribbon width baking (brief 19 Task 5, revised brief 20 Task 1) ─
 // paint.js's renderPaintStroke computes each sample's width from the
 // stroke's CURRENT total arc length and CURRENT endpoint (a hash of the
-// last point) — correct for a finished stroke rendered once, but the live
-// doodle called it fresh every frame on a growing pts array: the
-// normalizing length changed every frame, so every earlier point's width
-// (and the wave's phase, tied to the moving endpoint) got rewritten
-// continuously — the writhing bug.
+// last point) — correct for a finished stroke rendered once, but wrong
+// for anything that grows or gets re-rendered against a different
+// reference. Bake each point's width multiplier ONCE, at the moment it's
+// appended, from the stroke's ABSOLUTE arc length so far (not normalized
+// to an unknowable final total) and a phase/wavelength fixed at the
+// stroke's first point. Never recomputed afterward.
 //
-// Fix: for the LIVE/uncommitted stroke only, bake each point's width
-// multiplier ONCE, at the moment it's appended, from the stroke's
-// ABSOLUTE arc length so far (not normalized to an unknowable final
-// total) and a phase/wavelength fixed at the stroke's first point. Never
-// recomputed afterward. Committed strokes are unaffected — they still go
-// through the real engine renderPaintStroke above, unchanged, since a
-// committed pts array never grows again (the lab render was already
-// correct for exactly this reason, per the brief's own diagnosis).
+// Brief 19 scoped this to the LIVE/uncommitted stroke only, on the theory
+// that a committed pts array never changes again so the engine's own
+// renderPaintStroke was "already correct" for it — true in isolation, but
+// wrong in practice: the engine's algorithm and this baked one are
+// DIFFERENT formulas (independently-derived phase/frequency), so a stroke
+// rendered live-then-committed visibly snapped to a different shape the
+// instant it committed (brief 20 Task 1a's "pop"). Fix: the doodle now
+// uses ONE renderer for a paint stroke's whole life, live or committed —
+// see renderStrokeAs below. The real engine renderPaintStroke is
+// untouched and still used for the actual end-game artwork (a later
+// brief's job); this is doodle-only, per the brief's explicit scoping.
 //
 // Own rng stream, advanced by exactly 2 draws (phase, undulations) at
 // EVERY new stroke start regardless of which surface is on screen — so
@@ -515,7 +541,14 @@ const paddleR = { y: 430 };
 // which would otherwise desync the "identical geometry" guarantee Task 1
 // exists for (Task 2).
 const paintWidthRng = makeRng((DOODLE_SEED ^ 0x50A17B17) >>> 0);
-const PAINT_WIDTH_VAR_MIN = 0.15, PAINT_WIDTH_VAR_MAX = 4.0;     // mirrors paint.js's own (private) range
+// Doodle-scoped width range — NOT paint.js's frozen constants (PAINT_
+// WIDTH_BASE=6.0, 0.15x-4.0x variation). Brief 20 Task 1b: the frozen
+// product values read cartoonish-huge against paper/chalk at doodle
+// scale; toned down here, tuned by eye, while the real frozen constants
+// (brief 16, approved for the end-game artwork) stand untouched in
+// paint.js.
+const DOODLE_PAINT_WIDTH_BASE = 3.0;
+const PAINT_WIDTH_VAR_MIN = 0.15, PAINT_WIDTH_VAR_MAX = 2.2;
 const PAINT_UNDULATIONS_MIN = 0.5, PAINT_UNDULATIONS_MAX = 1.5; // mirrors paint.js's own (private) range
 // paint.js expresses frequency as a cycle-COUNT over the finished stroke's
 // total length — meaningless while growing, since the total isn't known
@@ -551,15 +584,14 @@ function appendBallPoint(ball, x, y) {
   ball.pts.push(pt);
 }
 
-// Ribbon fill for the LIVE/uncommitted paint stroke — same tangent/
-// normal/half-width/rounded-cap construction as paint.js's
-// renderPaintStroke, but driven by each point's PRE-BAKED .w (never
-// recomputed) instead of a fresh per-frame wave. Raw points only (no
-// Catmull-Rom spine resampling) — the live preview doesn't need the
-// committed stroke's exact sample density, only a stable, non-writhing
-// shape while it's growing; it settles into the real engine-rendered
-// ribbon the instant it commits.
-function drawLivePaintRibbon(ctx, pts, wt, col) {
+// Ribbon fill for a doodle paint stroke — live or committed, same
+// function either way (brief 20 Task 1a). Same tangent/normal/half-width/
+// rounded-cap construction as paint.js's renderPaintStroke, but driven by
+// each point's PRE-BAKED .w (never recomputed). Raw points only (no
+// Catmull-Rom spine resampling) — the doodle doesn't need the finished-
+// artwork's exact sample density, only a shape that's stable across its
+// whole life, growing or committed.
+function drawPaintRibbon(ctx, pts, wt, col) {
   if (pts.length < 2) return;
   const left = [], right = [];
   for (let i = 0; i < pts.length; i++) {
@@ -590,14 +622,19 @@ function drawLivePaintRibbon(ctx, pts, wt, col) {
   ctx.restore();
 }
 
-function renderLiveStrokeAs(ctx, surfaceKey, ball, index) {
+// Single stroke renderer for both committed strokes (rebuildPersist,
+// commitStroke) and the live/growing one (drawFrame) — the same function,
+// same inputs in, same pixels out, at every point in a stroke's life.
+// That equality is what makes brief 20 Task 1a's commit-time pop
+// impossible by construction: there is no second algorithm to disagree.
+function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
   const col = colourFor(surfaceKey, index);
   if (surfaceKey === 'chalk') {
-    renderChalkStroke(ctx, ball.pts, col, ball.wt, ball.op, CHALK_DEFAULT_WIDTH_MULT, 0);
+    renderChalkStroke(ctx, pts, col, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
   } else if (surfaceKey === 'paint') {
-    drawLivePaintRibbon(ctx, ball.pts, ball.wt * PAINT_WIDTH_BASE, col);
+    drawPaintRibbon(ctx, pts, wt * DOODLE_PAINT_WIDTH_BASE, col);
   } else {
-    renderStroke(ctx, ball.pts, col, ball.wt, ball.op, DEFAULT_STROKE_PARAMS);
+    renderStroke(ctx, pts, col, wt, op, DEFAULT_STROKE_PARAMS);
   }
 }
 
@@ -639,7 +676,7 @@ function drawFrame() {
   if (ball.pts.length > 1) {
     // in-flight stroke: raw (unjittered) pts, same as root's live-frame
     // overlay — jitter is a commit-time effect, not a per-frame one.
-    renderLiveStrokeAs(ctx, currentSurface, ball, strokeIndex);
+    renderStrokeAs(ctx, currentSurface, ball.pts, ball.wt, ball.op, strokeIndex);
   }
   // Task 4 — ball marker, always visible, every surface: the moving point
   // that makes the doodle legible as a rally, not just accumulating trails.

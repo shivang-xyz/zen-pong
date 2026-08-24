@@ -5,6 +5,53 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-24 — Brief 22: playing screen built and approved; brief 23 queued
+
+Commit `9a9fdbe` on `feature/v3-app`. The real game — mouse + AI paddles,
+engine physics, persistent per-surface trail rendering, score/level, serve
+beat, restart/mute, per-game seed, landing on the results stub. Approved on
+first look ("good build").
+
+### Task 1 landed as specced — one paint renderer for the product's life
+`makePaintTracker(rng, cfg)` is now the single bake-on-append mechanism, two
+instances (doodle at `DOODLE_PAINT_WIDTH_BASE` 3.0, game at `paint.js`'s
+imported `PAINT_WIDTH_BASE` 6.0), feeding the one shared `drawPaintRibbon`.
+`renderPaintStroke` is not called anywhere in the app. This is what keeps
+`DESIGN.md` §13's "marks never move or re-draw" reachable at the reveal.
+
+Plan-stage catch worth keeping: `paint.js`'s `WIDTH_VAR_MIN`/`WIDTH_VAR_MAX`
+(0.15/4.0) are private, not exported, and carry a "do not change (brief 15)"
+comment — so they were mirrored app-side rather than imported, and the engine
+was not touched to add an export. The session flagged this rather than making
+a quiet engine edit. Correct call, and brief 23 has now turned that mirror
+into a deliberate divergence.
+
+### Review verdict — four changes, now brief 23
+1. **Paddle guardrails missing.** With 48px rounded corners and the paddle
+   confined to `PAD_MIN`–`PAD_MAX`, nothing tells the player where their reach
+   ends and the wall begins. The live v2 build already solves this
+   (`drawSlits()`, root `index.html`) — v3 takes its positions, not its
+   treatment: 2px `#888888` marks. DOM chrome, never drawn into the persistent
+   artwork canvas (they would otherwise end up in the saved PNG).
+2. **Paint max width cut 60%** — `GAME_PAINT_WIDTH_VAR_MAX` 4.0 → 1.6, worst
+   case 57.6px → 23.0px. The frozen 4.0 was approved in the lab on static
+   seeded artworks and is simply wrong in a live rally; the product value wins
+   from here (see `BACKLOG.md`).
+3. **The ball is invisible in paint mode** — same colour as its own trail, and
+   the ribbon is several times its diameter. Fix is an emergence taper: the
+   stroke is zero-width at the ball and widens behind it, so the ball is always
+   a clean dot with ink flowing out of it. Measured from the polyline's last
+   point, which means live and committed renders are identical *at* the commit
+   frame — the shape the player watched settle is the shape that is kept, and
+   brief 20's pop is not reintroduced.
+4. **Every stroke has the same character** — one sine profile, varied only by
+   phase, so the composition reads as machine-made. Replaced with seeded
+   per-stroke profiles: flat / ramp / wave.
+
+### Next
+Brief 23 written and committed. `PORT-PLAN.md` renumbered — results/reveal 24,
+share 25, integration + ship 26.
+
 ## 2026-08-24 — Brief 21 reviewed: idle screen approved. Log debt cleared.
 
 Brief 21's doodle passed Shivang's eye — cream paint ground, slate-grey

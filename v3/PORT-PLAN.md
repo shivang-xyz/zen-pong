@@ -74,7 +74,16 @@ row. An earlier version of this line listed a density scrubber here; it was
 written before the design delta landed and is corrected (brief 21 review,
 2026-08-24). Nothing about the painting is adjustable mid-rally.
 
-### Brief 23 — Results / reveal screen
+### Brief 23 — Paint stroke character + paddle guardrails
+Review pass on brief 22. Paddle-travel guardrails (2px `#888888` marks at
+`PAD_MIN`/`PAD_MAX + PH` on both canvas edges, DOM chrome — never drawn into the
+persistent artwork canvas). Paint max stroke width cut 60% (`GAME_PAINT_WIDTH_
+VAR_MAX` 4.0 → 1.6; the app's values deliberately diverge from `paint.js`'s
+frozen private range from here on). Emergence taper so the trail flows out of
+the ball instead of swallowing it. Per-stroke width profiles — flat / ramp /
+wave — so strokes differ in character, not just phase.
+
+### Brief 24 — Results / reveal screen
 The reveal moment: finished artwork resolves (paint ground composites in at game
 end — plain chosen colour or seeded patches). `#timeline-chip` (`DESIGN.md` §10)
 — picks which frame of the accumulated painting to keep; this is a property of
@@ -86,10 +95,10 @@ Blocked on three `DESIGN.md` UNRESOLVED items: the paint reveal ground tokens
 (§2), the slider primitives for `#timeline-chip` (§10), and ratification of the
 §13 motion spec. Resolve them before writing the brief.
 
-### Brief 24 — Share page
+### Brief 25 — Share page
 The greenfield screen — how a finished piece is shown/shared outside the game.
 
-### Brief 25 — Integration polish + audio + ship
+### Brief 26 — Integration polish + audio + ship
 Fold the screens into the final self-contained `index.html`, wire BGM/SFX (the
 protected audio systems from root CLAUDE.md §4), full pass, then replace the live
 root file. Ship.

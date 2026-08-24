@@ -56,8 +56,16 @@ triaging this whole list, not before.
   in a consumer — the wrong side of `v3/CLAUDE.md`'s "labs and app import the
   engine, never copy engine logic into a consumer". Deliberately not moved in
   brief 22: promoting it means touching a frozen merged engine file and
-  re-verifying paper/paint hashes. Do it in the brief-25 integration pass.
-  *Surfaced: brief 22 spec, 2026-08-24.*
+  re-verifying paper/paint hashes. Do it in the brief-26 integration pass.
+  **Extended, brief 23:** the app's `GAME_PAINT_WIDTH_VAR_MIN/MAX` no longer
+  mirror `paint.js`'s private `WIDTH_VAR_MIN`/`WIDTH_VAR_MAX` — they
+  deliberately diverge (max 4.0 → 1.6, a 60% cut). `paint.js`'s 4.0 was
+  approved in the lab on twelve static seeded artworks; it was wrong the first
+  time it was seen in a live rally at 1000×630. The product value wins at
+  reconciliation, and `paint.js` + the lab move to it — not the reverse. The
+  per-stroke width profiles (flat/ramp/wave) and the emergence taper travel
+  with the same promotion. *Surfaced: brief 22 spec, extended brief 23,
+  2026-08-24.*
 - **The lab's density scrubber ships nowhere.** `PORT-PLAN.md` asserted it was
   a product control on the playing screen; `DESIGN.md` §8 Screen 2 and the
   approved design both say no control adjusts the painting mid-rally. Corrected

@@ -46,27 +46,33 @@ colour (not mono), ball visible at all times, and the paint stroke morphing fix
 (per-point width baked once at absolute arc length on append, never recomputed
 as the stroke grows).
 
-### Brief 20 — Playing screen
+### Brief 20 — Idle doodle fixes, round 2
+Second doodle-only pass: paint stroke shape stability (no commit/bounce pop, one
+renderer for a stroke's whole life, doodle-scoped max width — frozen product
+constants untouched), accumulate-then-hard-reset density instead of a rolling
+fade, chalkboard's real textured ground, canvas group centered in the viewport.
+
+### Brief 21 — Playing screen
 Score, live rally rendering through the chosen surface, density scrubber (product
 control — tunes finished composition density, default ~37%), mute. Real ball
 physics from the engine driving live trail accumulation.
 
-### Brief 21 — Results / reveal screen
+### Brief 22 — Results / reveal screen
 The reveal moment: finished artwork resolves (paint ground composites in at game
 end — plain chosen colour or seeded patches). Save artwork, play again. Design
 the transition per the approved design (hard cut / cross-fade / wipe).
 
-### Brief 22 — Share page
+### Brief 23 — Share page
 The greenfield screen — how a finished piece is shown/shared outside the game.
 
-### Brief 23 — Integration polish + audio + ship
+### Brief 24 — Integration polish + audio + ship
 Fold the screens into the final self-contained `index.html`, wire BGM/SFX (the
 protected audio systems from root CLAUDE.md §4), full pass, then replace the live
 root file. Ship.
 
 ## Notes
 
-- Briefs 20–22 get fully specced once designs are approved — their layouts come
+- Briefs 21–23 get fully specced once designs are approved — their layouts come
   from the mockups. Brief 18 is specced now because its foundation is largely
   design-independent.
 - The density scrubber and ground-colour picker are the only lab-style controls

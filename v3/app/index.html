@@ -316,7 +316,7 @@ import {
   CHALK_DEFAULT_WIDTH_MULT,
 } from '../engine/chalkboard.js';
 import { buildPaintSurface } from '../engine/paint.js';
-import { buildPalette } from '../engine/palette.js';
+import { buildPalette, GROUND_LIBRARY } from '../engine/palette.js';
 import { DEFAULT_PALETTE } from '../engine/simulate.js';
 
 /* ════════════════════════════════════════════════════════════════════
@@ -355,7 +355,14 @@ const DOODLE_SEED = 2026;
 
 // One paint palette, built once from the fixed seed (buildPalette draws
 // from palette.js's curated hue library — never arithmetic hue generation).
-const paintPalette = buildPalette(makeRng((DOODLE_SEED ^ 0x5EED1DEA) >>> 0));
+// Brief 21 Task 2: ground pinned to Cream (GROUND_LIBRARY[0], the approved
+// lab default — PAINT-MODE.md / brief 16) instead of letting buildPalette
+// draw a random ground (it had landed on Pale lavender). scheme/baseIndex
+// are left undrawn so the three accents still come from the real scheme
+// system (palette.js's curated hue library + harmony rules), same as the
+// lab — only the ground is fixed, nothing is swapped in from DEFAULT_
+// PALETTE (the unrelated 5-colour game/paddle palette).
+const paintPalette = buildPalette(makeRng((DOODLE_SEED ^ 0x5EED1DEA) >>> 0), { groundHex: GROUND_LIBRARY[0].hex });
 
 // Same weighted/shuffled flattening art-lab.html uses to turn a 3-accent
 // weighted palette into a round-robin array (lab-only bookkeeping, not
@@ -409,9 +416,11 @@ function buildGround(surfaceKey, rng) {
 // Accumulate-then-hard-reset (brief 20 Task 2, replaces brief 18/19's
 // rolling one-stroke-at-a-time eviction): a rally builds to this many
 // committed strokes, then the canvas clears to bare ground and a new
-// one begins — no per-stroke fade-out. Kept in the calm/sparse range,
-// same value brief 18 originally calibrated as a rolling cap.
-const DOODLE_RESET_THRESHOLD = 8;
+// one begins — no per-stroke fade-out. Brief 21 Task 3: brief 20's value
+// (8, inherited unchanged from brief 18's old ROLLING cap) read as a
+// sparse loop for a build-then-clear cycle — raised so the canvas
+// actually fills before it resets. Tuned by eye.
+const DOODLE_RESET_THRESHOLD = 18;
 const JITTER_AMPLITUDE = 0.5; // shared default — paper.js/paint.js both use it
 
 const physRng = makeRng(DOODLE_SEED);
@@ -450,7 +459,23 @@ function rebuildPersist(surfaceKey) {
     // near-black image — contrast() pivots around mid-grey and CRUSHES
     // shadow detail further toward 0 for values this far below it,
     // which made an earlier attempt at this filter read even flatter.
-    persistCx.filter = 'brightness(2.4)';
+    //
+    // Brief 21 Task 1: that brightness lift is also what exposed a denim/
+    // blue cast. CB_BASE (#1A1A1E) and the grain/smudge tint are only
+    // faintly cool by design (chalkboard.js's own comment: "cool tint:
+    // nudge blue a touch above red/green") — invisible at the engine's
+    // native near-black brightness, and correctly so; approved and frozen
+    // at brief 17. A flat brightness() MULTIPLY scales every channel by
+    // the same factor, so it scales that small existing R/G-vs-B gap by
+    // 2.4x too, turning an intentional whisper of cool into an obvious
+    // blue cast. That's a doodle-side artifact of lifting brightness, not
+    // a wrong value in chalkboard.js — grayscale() strips hue/chroma
+    // entirely while leaving the (already brightness-lifted) per-pixel
+    // luminance — i.e. the grain and smudge texture itself — untouched,
+    // landing on neutral slate grey. chalkboard.js is not touched by this
+    // fix; the lab (which never applies this doodle-only filter) is
+    // unaffected by construction.
+    persistCx.filter = 'brightness(2.4) grayscale(1)';
     persistCx.drawImage(ground, 0, 0);
     persistCx.filter = 'none';
   } else {

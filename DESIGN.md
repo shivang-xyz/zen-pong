@@ -43,7 +43,10 @@ All values confirmed from Figma variable collection.
 --color-canvas-border:    #888888;   /* 8px solid border on canvas + frame ring */
 
 /* ── Intro Card ── */
---color-card-bg:          rgba(245, 205, 142, 0.24);  /* warm amber 24% — frosted */
+--color-card-bg:          rgba(245, 205, 142, 0.24);  /* warm amber 24% — frosted.
+  PARKED 2026-08-24: superseded by the opaque .ctrl-chip treatment (§10) as
+  a stylistic choice "for now" — kept defined, not deleted, in case of a
+  future revert. Not referenced by any current screen. */
 
 /* ── Player Colours — paddles, dots, trails, labels ── */
 --color-pink:             #FF68AE;   /* player 1 — left paddle */
@@ -84,7 +87,8 @@ than the page. Blocking: chalkboard cannot ship without this.
 **UNRESOLVED — paint reveal ground.** The paint surface composites a
 coloured ground at game end. The engine lab exposes a ground set (cream and
 others, see `v3/engine/palette.js`) that was never tokenised here. A mockup
-stands in the intro card's `rgba(245,205,142,0.24)` over cream. Needs: the
+stands in `--color-card-bg`'s `rgba(245,205,142,0.24)` (now parked — see §10)
+over cream. Needs: the
 plain-ground palette as tokens, plus a spec for the seeded random-patch
 variant (patch count, size range, whether patches use the accent palette or
 their own).
@@ -118,7 +122,7 @@ When Basier Circle woff2 files are available: add a self-hosted `@font-face` blo
 | Element | Family | Size | Colour |
 |---|---|---|---|
 | `\|ZEN•PONG\|` header | DM Serif Display italic | 18px | #FFFFFF |
-| `\|ZEN•PONG\|` intro card | DM Serif Display italic | 18px | #1E1914 |
+| `\|ZEN•PONG\|` intro card | DM Serif Display italic | 18px | #FFF5E5 (changed 2026-08-24, v3 — was #1E1914, see §10 `#intro-card`) |
 | Tagline "make uncertainty your play" | DM Serif Display italic | 14px | #C5C5C5 |
 | Card subtitle "space to begin…" | DM Serif Display italic | 14px | #777777 |
 | Score numbers | Space Mono 700 | 18px | #FFFFFF |
@@ -180,12 +184,20 @@ No new spacing tokens were needed for v3 — the 4pt grid covered every measurem
 
 ## 5. Border Radius
 
-Two values only. Nothing else.
+Four values. Two core (canvas/frame geometry), two for controls nested
+inside a `.ctrl-chip` — added 2026-08-24 when v3 introduced the surface
+selector and timeline scrubber. Nothing else.
 
 ```css
 --radius:        48px;   /* canvas frame ring, score badge */
 --radius-small:  12px;   /* all ctrl-chip elements, intro card, result buttons */
+--radius-nested: 8px;    /* v3 — nested tile inside a ctrl-chip (surface selector) */
+--radius-track:  4px;    /* v3 — slider track (timeline scrubber) */
 ```
+`--radius-nested` is a genuinely new pixel value. `--radius-track`'s `4px`
+already existed in this doc for paddle bars (below) but was never
+tokenized; promoted to a named token now that the timeline scrubber's track
+reuses the same value.
 
 | Element | Radius |
 |---|---|
@@ -197,15 +209,8 @@ Two values only. Nothing else.
 | Intro overlay card | 12px |
 | Result CTA buttons | 12px |
 | Paddle bars | 4px |
-
-**⚠ OPEN CONFLICT — v3 nested control radius.** Two v3 components each want
-a smaller radius nested inside a 12px `.ctrl-chip`: the surface selector's
-selected tile (`#surface-chip .tile`, §10) proposes **8px**, and the timeline
-scrubber's track (`#timeline-chip`, §10) proposes **4px**. Both directly
-conflict with "Two values only. Nothing else." above — a third and fourth
-radius value. Not applied to the rule or table above. Needs a decision:
-either name an explicit, scoped nested-control-radius token (e.g.
-`--radius-nested`), or find a way to reuse `--radius-small` for both.
+| v3 — Surface selector tile (`#surface-chip .tile`) | 8px (`--radius-nested`) |
+| v3 — Timeline scrubber track (`#timeline-chip` track) | 4px (`--radius-track`) |
 
 ---
 
@@ -221,6 +226,11 @@ box-shadow: 0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px rgba(0,0,0,0.52);
 ```
 
 ### Intro title card
+**Changed 2026-08-24 (v3):** now uses the same elevation as `.ctrl-chip`
+above — `box-shadow: 0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px
+rgba(0,0,0,0.52)`, `background: #464646`, no backdrop blur. See §10 for the
+full current spec. The block below is the superseded frosted-glass
+treatment, kept for reference:
 ```css
 backdrop-filter: blur(9px);
 -webkit-backdrop-filter: blur(9px);
@@ -314,16 +324,15 @@ value here.
     [frame ring overlay: 48px radius, 8px border #888888]
     [idle doodle trails — generative preview animation]
 
-    [intro card: centred over canvas]
-      backdrop blur 9px, rgba(245,205,142,0.24), radius 12px
+    [intro card: centred over canvas, 420px wide]
+      #464646, radius 12px, box-shadow 0 4px 24px rgba(0,0,0,0.29),
+      inset 0 0 5px rgba(0,0,0,0.52)    (changed 2026-08-24, v3 — see §10)
       ← 40px padding →
-      SVG logo (dark version, #1E1914 fill)
+      SVG logo (cream version, #FFF5E5 fill — changed 2026-08-24, was dark)
       8px gap
       "space to begin • mouse to move"    14px DM Serif italic, #777777
-      (v3 mockup proposes a `.ctrl-chip`-style restyle + 420px fixed width
-      for this card — ⚠ conflicts with the spec above, see §10, not applied)
 
-    16px gap    (v3 — new, only when the surface selector below is present)
+    16px gap    (v3 — new)
 
     [v3 — #surface-chip: centred, matched to intro card width]
       3 tiles: PAPER · CHALKBOARD · PAINT — see §10
@@ -382,19 +391,18 @@ happens on results (Screen 3) only.
 
   24px gap
 
-  [two buttons: centred row, 16px gap]
-  [ SAVE ARTWORK ]  [ PLAY AGAIN ]
-  both: #464646, radius 12px, padding 12px 24px, Space Mono 11px uppercase
-  box-shadow: 0 4px 24px rgba(0,0,0,0.16), inset 0 0 5px rgba(0,0,0,0.32)
+  [row: 1000px wide, space-between]    (changed 2026-08-24, v3 — was a
+                                         centred 2-button row; adopted the
+                                         delta as-is, see below)
+    LEFT:  #timeline-chip                                          (§10)
+    RIGHT: [ SAVE ARTWORK ] [ SHARE ] [ PLAY AGAIN ]   gap 16px
+    all three: .rbtn — #464646, radius 12px, padding 12px 24px,
+    Space Mono 11px uppercase, box-shadow 0 4px 24px rgba(0,0,0,0.16),
+    inset 0 0 5px rgba(0,0,0,0.32). Not `.rbtn-primary` — that hierarchy is
+    reserved for the share screen's single CTA (Screen 4).
 ```
-
-**⚠ OPEN CONFLICT — v3 results row.** A v3 mockup replaces the row above
-with a 1000px-wide `space-between` layout: `#timeline-chip` (§10) on the
-left, three buttons on the right (`SAVE ARTWORK`, `SHARE`, `PLAY AGAIN`,
-16px gap, using the new `.rbtn`/`.rbtn-primary` hierarchy, §10). This
-conflicts with the two-button spec above — not applied. Open question the
-mockup itself raises: if the row must stay at exactly two buttons, share
-folds into save instead of getting its own button.
+Share now has its own entry point from results, alongside the new
+timeline-chip control for picking which frame of the painting to keep.
 
 ### Screen 4 — Share (new, v3)
 ```
@@ -485,36 +493,23 @@ Hover: opacity 0.85.
 
 ### Intro card `#intro-card`
 ```css
-background:       rgba(245, 205, 142, 0.24);
-backdrop-filter:  blur(9px);
--webkit-backdrop-filter: blur(9px);
-border-radius:    12px;
-padding:          24px 40px;
-box-shadow:       0 4px 24px rgba(0,0,0,0.16);
-text-align:       center;
+width:         420px;
+background:    #464646;
+border-radius: 12px;
+padding:       24px 40px;
+box-shadow:    0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px rgba(0,0,0,0.52);
+text-align:    center;
 ```
-
-**⚠ OPEN CONFLICT — v3 `#intro-card` restyle.** A v3 mockup proposes
-replacing the treatment above with the `.ctrl-chip` treatment, so the card
-reads as one object with the new surface selector below it (see
-`#surface-chip` below) and stays legible over any of the three surface
-grounds:
-```css
-#intro-card {
-  width:         420px;
-  background:    #464646;
-  border-radius: 12px;
-  padding:       24px 40px;
-  box-shadow:    0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px rgba(0,0,0,0.52);
-}
-```
-Not applied — conflicts with the spec above (background, backdrop-filter,
-box-shadow all differ; width is new information, not currently specified).
-If approved, it also implies: the card logo swaps to the cream (`#FFF5E5`)
-SVG instead of the dark (`#1E1914`) version used today, and the
-`rgba(245,205,142,0.24)` card token (§2) plus the 9px backdrop blur become
-unused everywhere — which would need a deliberate retire, not a silent drop,
-since both are still declared as current spec above and in §2/§6.
+**Changed 2026-08-24 (v3, stylistic choice for now):** swapped from the
+frosted amber-glass treatment to the opaque `.ctrl-chip` treatment, so the
+card reads as one object with the new surface selector below it
+(`#surface-chip`) and stays legible over any of the three surface grounds.
+Width (420px) is new — matched to the surface selector. Card logo is now
+the cream (`#FFF5E5`) SVG, not the dark (`#1E1914`) version — see §3. The
+old `rgba(245,205,142,0.24)` frosted treatment (backdrop blur 9px, single
+shadow) is superseded here but the `--color-card-bg` token (§2) is kept
+parked, not deleted, since this is stated as the current choice, not a
+permanent one.
 
 ### v3 — `#surface-chip` (surface selector)
 New in v3. Sits **inside** the canvas, directly under the intro card,
@@ -530,7 +525,7 @@ matched to the card's width.
 #surface-chip .tile {
   flex:          1;
   height:        32px;
-  border-radius: 8px;   /* ⚠ unresolved — conflicts with §5's two-value rule */
+  border-radius: var(--radius-nested);   /* 8px — see §5 */
   gap:           8px;
   background:    transparent;   /* selected: --color-chip-selected, UNRESOLVED — see §2 */
   cursor:        pointer;
@@ -570,13 +565,14 @@ property of the artwork, not a game control.
 ```
 
 **UNRESOLVED — slider primitives.** This doc has no existing slider spec to
-extend; every value below is a mockup proposal, not a decision:
+extend; every value below is still a mockup proposal, not a decision, except
+track radius (resolved, §5):
 
 | Part | Proposed |
 |---|---|
 | Track width | 320px |
 | Track height | 4px (`--space-xs`) |
-| Track radius | 4px — ⚠ a fourth radius value, same open conflict as §5 |
+| Track radius | `--radius-track` (4px) — resolved, see §5 |
 | Track colour | `#383838` |
 | Fill colour | `#C5C5C5` |
 | Thumb | 16px circle, `#FFF5E5`, `0 4px 24px rgba(0,0,0,0.29)` |

@@ -177,14 +177,55 @@
   .sw-chalk { background: var(--color-canvas-chalk); }
   .sw-paint { background: var(--color-orange); }
 
-  /* ── Palette pill · DESIGN.md §10 #pal-pill (idle only, static) ── */
+  /* ── Palette pill · DESIGN.md §10 #pal-pill ──
+     Idle: static 5-dot display. Playing (brief 22): dots injected by JS,
+     per-surface VARIABLE count — never assume five (5 paper / 3 chalk /
+     3 paint, see #pg-pal-pill wiring). */
   .pal-pill { padding: 0 var(--space-xm); gap: var(--space-s); }
   .pal-pill .dot { width: 10px; height: 10px; border-radius: 50%; transition: transform 150ms; }
   .pal-pill .dot:hover { transform: scale(1.2); }
   .pal-pill .shuffle { margin-left: var(--space-s); cursor: pointer; }
   .pal-pill .shuffle:hover { stroke: #FFFFFF; }
 
-  /* ── Playing/Results stubs (Task 1 — screen-state scaffold only) ── */
+  /* ── Playing screen control row · DESIGN.md §8 Screen 2 / §10 ──
+     3-column grid, 1000px wide: pal-pill left, score-pill centred,
+     restart+mute right. No surface selector, no density/timeline control —
+     nothing about the painting is adjustable mid-rally. */
+  #ctrl-row-playing {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    width: 1000px;
+    max-width: 100%;
+  }
+  #ctrl-row-playing > :first-child { justify-self: start; }
+  #ctrl-row-playing > :last-child { justify-self: end; display: flex; gap: var(--space-xm); }
+  #pg-score-pill {
+    gap: var(--space-l);
+    padding: 0 var(--space-m);
+    min-width: 120px;
+    justify-content: center;
+  }
+  #pg-score-pill span {
+    font-family: 'Space Mono', monospace; font-style: normal; font-weight: 700;
+    font-size: 18px; letter-spacing: 0.1em; color: #FFFFFF;
+  }
+  .icon-pill { padding: 0 14px; border: 0; cursor: pointer; }
+  .icon-pill svg { opacity: 0.8; display: block; }
+  .icon-pill:hover svg { opacity: 1; }
+
+  /* Serve indicator · DESIGN.md §7 — grey ball outside the canvas
+     top-left, shown between points while the next ball is pending. Never
+     shown while a ball is in flight. */
+  .serve-dot {
+    position: absolute; left: -32px; top: -40px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--color-canvas-border);
+    z-index: 3;
+  }
+  .serve-dot[hidden] { display: none; }
+
+  /* ── Results stub (brief 23 builds this screen) ── */
   .stub-label { color: #FFFFFF; margin: 0 0 var(--space-m); }
   .stub-back {
     background: var(--color-cta);
@@ -266,7 +307,7 @@
     </div>
   </section>
 
-  <!-- ══════════════════ PLAYING (stub — brief 19) ══════════════════ -->
+  <!-- ══════════════════════════ PLAYING SCREEN ══════════════════════════ -->
   <section id="screen-playing" class="screen" hidden>
     <div class="app-header">
       <svg width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
@@ -282,8 +323,49 @@
 <circle cx="60" cy="14" r="3" fill="#FFFFFF"/>
 </svg>
     </div>
-    <p class="stub-label mono">state: playing (brief 19 builds this screen)</p>
-    <button class="stub-back mono" id="btn-playing-back">back to idle</button>
+    <div class="spacer-m"></div>
+
+    <div class="stage">
+      <div class="serve-dot" id="serve-dot" hidden></div>
+      <div class="canvas-wrap">
+        <canvas id="game-canvas" width="1000" height="630"></canvas>
+      </div>
+      <div class="frame"></div>
+
+      <div class="paddle paddle-left" id="game-paddle-left" style="top:283px">
+        <div class="bar"></div><div class="dot"></div><span class="you">you</span>
+      </div>
+      <div class="paddle paddle-right" id="game-paddle-right" style="top:283px">
+        <div class="bar"></div><div class="dot"></div>
+      </div>
+    </div>
+
+    <div class="spacer-m"></div>
+
+    <div id="ctrl-row-playing">
+      <div class="ctrl-chip pal-pill" id="pg-pal-pill">
+        <svg class="shuffle" id="pg-shuffle" width="20" height="20" viewBox="0 0 20 20" fill="none"
+             stroke="#C5C5C5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="13,3 17,6.5 13,10"/><path d="M2 6.5h15"/>
+          <polyline points="7,10 3,13.5 7,17"/><path d="M18 13.5H3"/>
+        </svg>
+      </div>
+
+      <div class="ctrl-chip" id="pg-score-pill"><span id="pg-score-p">0</span><span id="pg-score-a">0</span></div>
+
+      <div id="pg-icons">
+        <button class="ctrl-chip icon-pill" id="pg-restart" aria-label="Restart">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5">
+            <path d="M15 9a6 6 0 1 1-2-4.5"/><polyline points="15,2 15,5 12,5"/>
+          </svg>
+        </button>
+        <button class="ctrl-chip icon-pill" id="pg-mute" aria-label="Mute">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5">
+            <polygon points="2,7 5,7 9,3 9,15 5,11 2,11"/><line x1="12" y1="6" x2="16" y2="12"/><line x1="16" y1="6" x2="12" y2="12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
   </section>
 
   <!-- ══════════════════ RESULTS (stub — brief 20) ══════════════════ -->
@@ -308,14 +390,17 @@
 
 <script type="module">
 import { makeRng } from '../engine/rng.js';
-import { W, H, BR, mkBall, advanceBall } from '../engine/physics.js';
+import {
+  W, H, BR, PH, PAD_MIN, PAD_MAX, WIN,
+  mkBall, advanceBall, ballBall, levelUp, pickTargetY, updatePaddleAI,
+} from '../engine/physics.js';
 import { jitterPath, renderStroke, DEFAULT_STROKE_PARAMS } from '../engine/strokes.js';
 import { buildSurface } from '../engine/surface.js';
 import {
   buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE,
   CHALK_DEFAULT_WIDTH_MULT,
 } from '../engine/chalkboard.js';
-import { buildPaintSurface } from '../engine/paint.js';
+import { buildPaintSurface, PAINT_WIDTH_BASE, PAINT_DEFAULT_WIDTH_VARIATION } from '../engine/paint.js';
 import { buildPalette, GROUND_LIBRARY } from '../engine/palette.js';
 import { DEFAULT_PALETTE } from '../engine/simulate.js';
 
@@ -334,8 +419,7 @@ function setScreen(next) {
   screenState = next;
   Object.entries(screens).forEach(([k, el]) => { el.hidden = (k !== next); });
 }
-// Stub transitions (brief 19/20 build these screens for real).
-document.getElementById('btn-playing-back').addEventListener('click', () => setScreen('idle'));
+// Results stub transition (brief 23 builds the real reveal).
 document.getElementById('btn-results-back').addEventListener('click', () => setScreen('idle'));
 
 /* ════════════════════════════════════════════════════════════════════
@@ -538,84 +622,110 @@ function switchSurface(newKey) {
 const paddleL = { y: 180 };
 const paddleR = { y: 430 };
 
-// ── Paint ribbon width baking (brief 19 Task 5, revised brief 20 Task 1) ─
+// ── Shared paint-ribbon machinery (brief 19 Task 5, revised brief 20 Task
+// 1a, generalised brief 22 Task 1) ───────────────────────────────────────
 // paint.js's renderPaintStroke computes each sample's width from the
 // stroke's CURRENT total arc length and CURRENT endpoint (a hash of the
-// last point) — correct for a finished stroke rendered once, but wrong
-// for anything that grows or gets re-rendered against a different
-// reference. Bake each point's width multiplier ONCE, at the moment it's
-// appended, from the stroke's ABSOLUTE arc length so far (not normalized
-// to an unknowable final total) and a phase/wavelength fixed at the
-// stroke's first point. Never recomputed afterward.
+// last point) — correct for a finished stroke rendered once, but wrong for
+// anything that grows or gets re-rendered against a different reference.
+// Bake each point's width multiplier ONCE, at the moment it's appended,
+// from the stroke's ABSOLUTE arc length so far (not normalized to an
+// unknowable final total) and a phase/wavelength fixed at the stroke's
+// first point. Never recomputed afterward.
 //
-// Brief 19 scoped this to the LIVE/uncommitted stroke only, on the theory
-// that a committed pts array never changes again so the engine's own
-// renderPaintStroke was "already correct" for it — true in isolation, but
-// wrong in practice: the engine's algorithm and this baked one are
-// DIFFERENT formulas (independently-derived phase/frequency), so a stroke
-// rendered live-then-committed visibly snapped to a different shape the
-// instant it committed (brief 20 Task 1a's "pop"). Fix: the doodle now
-// uses ONE renderer for a paint stroke's whole life, live or committed —
-// see renderStrokeAs below. The real engine renderPaintStroke is
-// untouched and still used for the actual end-game artwork (a later
-// brief's job); this is doodle-only, per the brief's explicit scoping.
-//
-// Own rng stream, advanced by exactly 2 draws (phase, undulations) at
-// EVERY new stroke start regardless of which surface is on screen — so
-// the sequence never depends on the player's surface-switching path,
-// which would otherwise desync the "identical geometry" guarantee Task 1
-// exists for (Task 2).
-const paintWidthRng = makeRng((DOODLE_SEED ^ 0x50A17B17) >>> 0);
-// Doodle-scoped width range — NOT paint.js's frozen constants (PAINT_
-// WIDTH_BASE=6.0, 0.15x-4.0x variation). Brief 20 Task 1b: the frozen
-// product values read cartoonish-huge against paper/chalk at doodle
-// scale; toned down here, tuned by eye, while the real frozen constants
-// (brief 16, approved for the end-game artwork) stand untouched in
-// paint.js.
-const DOODLE_PAINT_WIDTH_BASE = 3.0;
-const PAINT_WIDTH_VAR_MIN = 0.15, PAINT_WIDTH_VAR_MAX = 2.2;
+// Brief 19 scoped this to the doodle's live/uncommitted stroke only, on
+// the theory that a committed pts array never changes again so the
+// engine's own renderPaintStroke was "already correct" for it — true in
+// isolation, but wrong in practice: the engine's algorithm and this baked
+// one are DIFFERENT formulas (independently-derived phase/frequency), so a
+// stroke rendered live-then-committed visibly snapped to a different shape
+// the instant it committed (brief 20 Task 1a's "pop"). Brief 20's fix: one
+// renderer for a paint stroke's WHOLE life, live or committed, in the
+// doodle. Brief 22 Task 1: the live game has the identical growing-stroke
+// problem, plus DESIGN.md §13 forbids the reveal from re-drawing marks
+// differently than the rally showed them — so this has to be the SAME
+// mechanism, not a second copy of it. makePaintTracker below is that one
+// mechanism, parameterised so the doodle and the game can use different
+// width numbers while sharing the exact same bake-on-append math and the
+// same drawPaintRibbon fill (further down, unchanged, already generic).
+// The real engine renderPaintStroke is untouched and still used for the
+// actual end-game artwork (brief 23's job); this stays app-side, per
+// PORT-PLAN.md/BACKLOG.md's explicit deferral of promoting it into
+// paint.js to the brief-25 integration pass.
+function makePaintTracker(rng, cfg) {
+  // cfg: { varMin, varMax, undulationsMin, undulationsMax, refLen, widthVariation }
+  // widthVariation mirrors paint.js's renderPaintStroke shape exactly
+  // (`1 + (waveMult-1)*widthVariation`) — at widthVariation=1 (both the
+  // doodle and the game use 1) this reduces to plain waveMult, so the
+  // formula generalises brief 20's doodle-only version losslessly.
+  function widthMultAt(arcLen, ball) {
+    const wave = Math.sin((arcLen / ball._paintWavelength) * Math.PI * 2 + ball._paintPhase);
+    const waveMult = cfg.varMin + (wave * 0.5 + 0.5) * (cfg.varMax - cfg.varMin);
+    return 1 + (waveMult - 1) * cfg.widthVariation;
+  }
+  return {
+    // Called once whenever a NEW stroke starts (any surface — cheap, and
+    // keeps the rng stream surface-independent: see the doodle/game
+    // instantiation comments for why that matters to each).
+    startTrail(ball, x, y) {
+      ball.pts = [{ x, y }];
+      ball._paintArcLen = 0;
+      ball._paintPhase = rng() * Math.PI * 2;
+      const undulations = cfg.undulationsMin + rng() * (cfg.undulationsMax - cfg.undulationsMin);
+      ball._paintWavelength = cfg.refLen / undulations;
+      ball.pts[0].w = widthMultAt(0, ball);
+    },
+    // Called once per frame when the current position is appended to the
+    // trail — bakes that ONE new point's width and never touches earlier
+    // points (the actual fix).
+    appendPoint(ball, x, y) {
+      const prev = ball.pts[ball.pts.length - 1];
+      const pt = { x, y };
+      ball._paintArcLen += Math.hypot(x - prev.x, y - prev.y);
+      pt.w = widthMultAt(ball._paintArcLen, ball);
+      ball.pts.push(pt);
+    },
+  };
+}
+
+// paint.js expresses undulation frequency as a cycle-COUNT over the
+// finished stroke's total length — meaningless while growing, since the
+// total isn't known yet. Converted to a fixed spatial wavelength (px) via
+// one reference length, chosen to match a typical stroke's length so the
+// live wave reads at a similar visual frequency to a committed stroke.
+// Shared by doodle and game: the wavelength math is independent of width
+// base, and no brief has asked for a different reference length or
+// undulation range for the game.
 const PAINT_UNDULATIONS_MIN = 0.5, PAINT_UNDULATIONS_MAX = 1.5; // mirrors paint.js's own (private) range
-// paint.js expresses frequency as a cycle-COUNT over the finished stroke's
-// total length — meaningless while growing, since the total isn't known
-// yet. Converted to a fixed spatial wavelength (px) via one reference
-// length, chosen to match this doodle's typical stroke length so the live
-// wave reads at a similar visual frequency to a committed stroke.
 const PAINT_UNDULATION_REF_LEN = 500;
 
-function paintWidthMultAt(arcLen, ball) {
-  const wave = Math.sin((arcLen / ball._paintWavelength) * Math.PI * 2 + ball._paintPhase);
-  return PAINT_WIDTH_VAR_MIN + (wave * 0.5 + 0.5) * (PAINT_WIDTH_VAR_MAX - PAINT_WIDTH_VAR_MIN);
-}
+// Doodle instance — own rng stream, advanced by exactly 2 draws (phase,
+// undulations) at EVERY new stroke start regardless of which surface is on
+// screen, so the sequence never depends on the player's surface-switching
+// path (would otherwise desync Task 1/2's "identical geometry" guarantee).
+// Width range is doodle-scoped (brief 20 Task 1b: paint.js's frozen
+// product values read cartoonish-huge against paper/chalk at ambient
+// doodle scale) — NOT paint.js's PAINT_WIDTH_BASE/variation, which the
+// GAME instance uses instead (see the game-state section below).
+const paintWidthRng = makeRng((DOODLE_SEED ^ 0x50A17B17) >>> 0);
+const DOODLE_PAINT_WIDTH_BASE = 3.0;
+const doodlePaintTracker = makePaintTracker(paintWidthRng, {
+  varMin: 0.15, varMax: 2.2,
+  undulationsMin: PAINT_UNDULATIONS_MIN, undulationsMax: PAINT_UNDULATIONS_MAX,
+  refLen: PAINT_UNDULATION_REF_LEN,
+  widthVariation: 1.0, // doodle never scaled the wave down
+});
 
-// Called once whenever a NEW stroke starts (any surface — cheap, and
-// keeps the rng stream surface-independent, see above).
-function startBallTrail(ball, x, y) {
-  ball.pts = [{ x, y }];
-  ball._paintArcLen = 0;
-  ball._paintPhase = paintWidthRng() * Math.PI * 2;
-  const undulations = PAINT_UNDULATIONS_MIN + paintWidthRng() * (PAINT_UNDULATIONS_MAX - PAINT_UNDULATIONS_MIN);
-  ball._paintWavelength = PAINT_UNDULATION_REF_LEN / undulations;
-  ball.pts[0].w = paintWidthMultAt(0, ball);
-}
-
-// Called once per frame when the current position is appended to the
-// trail — bakes that ONE new point's width and never touches earlier
-// points (the actual Task 5 fix).
-function appendBallPoint(ball, x, y) {
-  const prev = ball.pts[ball.pts.length - 1];
-  const pt = { x, y };
-  ball._paintArcLen += Math.hypot(x - prev.x, y - prev.y);
-  pt.w = paintWidthMultAt(ball._paintArcLen, ball);
-  ball.pts.push(pt);
-}
-
-// Ribbon fill for a doodle paint stroke — live or committed, same
-// function either way (brief 20 Task 1a). Same tangent/normal/half-width/
-// rounded-cap construction as paint.js's renderPaintStroke, but driven by
-// each point's PRE-BAKED .w (never recomputed). Raw points only (no
-// Catmull-Rom spine resampling) — the doodle doesn't need the finished-
-// artwork's exact sample density, only a shape that's stable across its
-// whole life, growing or committed.
+// Ribbon fill for a paint stroke — live or committed, doodle or game, same
+// function either way (brief 20 Task 1a, generalised brief 22 Task 1).
+// Same tangent/normal/half-width/rounded-cap construction as paint.js's
+// renderPaintStroke, but driven by each point's PRE-BAKED .w (never
+// recomputed). Raw points only (no Catmull-Rom spine resampling) — this
+// doesn't need the finished-artwork's exact sample density, only a shape
+// that's stable across a stroke's whole life, growing or committed. This
+// is the ONLY function in the app that fills paint-stroke pixels — verify
+// by construction: grep finds exactly one definition, and the engine's own
+// renderPaintStroke is never called anywhere in this file.
 function drawPaintRibbon(ctx, pts, wt, col) {
   if (pts.length < 2) return;
   const left = [], right = [];
@@ -664,7 +774,7 @@ function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
 }
 
 let ball = mkBall(physRng, 1, null, [1.0, 2.4], [0.50, 0.68]);
-startBallTrail(ball, ball.x, ball.y);
+doodlePaintTracker.startTrail(ball, ball.x, ball.y);
 
 function stepDoodle() {
   // Faithful to simulate.js/root index.html's update(): advanceBall moves
@@ -677,9 +787,9 @@ function stepDoodle() {
 
   events.forEach(() => {
     commitStroke(ball.pts, ball.wt, ball.op);
-    startBallTrail(ball, ball.x, ball.y);
+    doodlePaintTracker.startTrail(ball, ball.x, ball.y);
   });
-  appendBallPoint(ball, ball.x, ball.y);
+  doodlePaintTracker.appendPoint(ball, ball.x, ball.y);
 
   if (ball.pts.length > 500) {
     commitStroke(ball.pts, ball.wt, ball.op);
@@ -689,7 +799,7 @@ function stepDoodle() {
   if (ball.x < -30 || ball.x > W + 30) {
     if (ball.pts.length >= 2) commitStroke(ball.pts, ball.wt, ball.op);
     ball = mkBall(physRng, 1, null, [1.0, 2.4], [0.50, 0.68]);
-    startBallTrail(ball, ball.x, ball.y);
+    doodlePaintTracker.startTrail(ball, ball.x, ball.y);
   }
 }
 
@@ -723,6 +833,383 @@ function doodleLoop() {
 }
 rebuildPersist(currentSurface);
 requestAnimationFrame(doodleLoop);
+
+/* ════════════════════════════════════════════════════════════════════════
+   BRIEF 22 — THE PLAYING SCREEN. Everything below is game-scoped: its own
+   persistent canvas, ground cache, committed strokes, palette state and
+   paint tracker, separate from the doodle's (which keeps running, paused,
+   in the background — screenState gates both loops so they never step
+   concurrently). Surface is chosen at idle and locked for the rally: the
+   game never calls switchSurface; it just reads currentSurface once.
+   ════════════════════════════════════════════════════════════════════════ */
+
+// ── Task 6 — per-game seed ────────────────────────────────────────────
+// One seed per game; every other stream in this section is a fixed salt
+// off it via makeRng, mirroring DOODLE_SEED's pattern exactly. This
+// Math.random() call — inside startGame(), one line, commented — is the
+// only one in the render/physics path for the whole game.
+let gameSeed = 0;
+let gamePhysRng, gameGroundSeeds, gamePaintWidthRng;
+
+// ── Task 1's shared machinery, game-scoped config ─────────────────────
+// PAINT_WIDTH_BASE / PAINT_DEFAULT_WIDTH_VARIATION are paint.js's real,
+// frozen, approved-2026-07-21 product constants — imported above, used
+// here, never re-declared. GAME_PAINT_WIDTH_VAR_MIN/MAX mirror paint.js's
+// own PRIVATE WIDTH_VAR_MIN/MAX (0.15/4.0) — not exported, so (same as the
+// doodle's own PAINT_WIDTH_VAR_MIN/MAX above) mirrored as local constants
+// rather than imported. This session was told not to modify v3/engine/,
+// including adding a trivial export, so this is a deliberate call, not an
+// oversight — flag it if a future session should promote these into real
+// exports instead. undulation range and reference length are shared with
+// the doodle (no different numbers given for the game; that math doesn't
+// depend on width scale).
+const GAME_PAINT_WIDTH_VAR_MIN = 0.15, GAME_PAINT_WIDTH_VAR_MAX = 4.0;
+let gamePaintTracker; // built fresh each game — see startGame()
+
+// ── Task 4 — per-surface ground, paint's neutral-substrate exception ──
+const gameGroundCache = {};
+function getGameGround(surfaceKey) {
+  if (!gameGroundCache[surfaceKey]) {
+    if (surfaceKey === 'chalk') {
+      gameGroundCache[surfaceKey] = buildChalkboardSurface(W, H, makeRng(gameGroundSeeds.chalk));
+    } else if (surfaceKey === 'paint') {
+      // PAINT-MODE.md §4 (LOCKED): "The ground does not exist during
+      // play. The player paints on a neutral substrate; at game end the
+      // artwork re-renders with the ground composited beneath the marks."
+      // The neutral substrate is --color-canvas-paint-base (DESIGN.md §2)
+      // = #FFF5E5, i.e. the PAPER ground — so this deliberately calls
+      // buildSurface (paper's real ground function), not buildPaintSurface.
+      // The chosen paint ground (gamePaintPalette.ground, picked in
+      // startGame()) composites in only at the reveal — brief 23's job.
+      gameGroundCache[surfaceKey] = buildSurface(W, H, makeRng(gameGroundSeeds.paint));
+    } else {
+      gameGroundCache[surfaceKey] = buildSurface(W, H, makeRng(gameGroundSeeds.paper));
+    }
+  }
+  return gameGroundCache[surfaceKey];
+}
+
+// Chalk brightness/grayscale lift decision (brief 22 Task 4 explicitly
+// asks for one, stated, not silently inherited): the doodle's
+// brightness(2.4) grayscale(1) filter (briefs 20/21) exists because the
+// idle doodle sits at ambient scale behind a card, easy to glance past.
+// The game is the foreground — DESIGN.md's own Verification for this
+// brief asks for the real engine grounds with no mention of a lift — so
+// NO filter is applied here. getGameGround's chalk branch returns
+// buildChalkboardSurface's pixels completely as-drawn.
+
+// ── Task 5 — per-surface palette state (game-scoped, independently
+// shufflable — never touches the doodle's fixed PALETTE_ARRAYS) ────────
+let gamePaperOrder;   // shuffled index map into DEFAULT_PALETTE (5)
+let gameChalkOrder;   // shuffled index map into CHALK_PALETTE (3)
+let gamePaintPalette; // buildPalette() result — ground fixed once per game, not touched by shuffle
+let gamePaintArray;   // weightedPaletteArray(gamePaintPalette, ...) — a flattened, weighted 20-slot
+                       // round-robin CYCLE used for stroke colour assignment, NOT the dot list —
+                       // see gamePalPillHexesFor for the 3 distinct accents shown in the pill.
+
+function gamePaletteArrayFor(surfaceKey) {
+  if (surfaceKey === 'chalk') return gameChalkOrder.map(i => CHALK_PALETTE[i]);
+  if (surfaceKey === 'paint') return gamePaintArray;
+  return gamePaperOrder.map(i => DEFAULT_PALETTE[i]);
+}
+function gameColourFor(surfaceKey, index) {
+  const arr = gamePaletteArrayFor(surfaceKey);
+  return arr[index % arr.length];
+}
+// Task 5's own table: "Paint | the three accents from buildPalette | 3" —
+// the pill shows distinct swatches, not the weighted cycling array above.
+function gamePalPillHexesFor(surfaceKey) {
+  if (surfaceKey === 'chalk') return gameChalkOrder.map(i => CHALK_PALETTE[i]);
+  if (surfaceKey === 'paint') return gamePaintPalette.accents.map(a => a.hex);
+  return gamePaperOrder.map(i => DEFAULT_PALETTE[i]);
+}
+function shuffleArrayInPlace(arr, rng) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+// ── Persistent canvas + stroke commit — same architecture as the doodle
+// (and root index.html's drawCv): ground + all committed strokes, never
+// cleared except a new game. One canvas only — unlike the doodle, the
+// game's surface never switches mid-rally, so there's no cross-fade need.
+const gamePersistCv = document.createElement('canvas');
+gamePersistCv.width = W; gamePersistCv.height = H;
+const gamePersistCx = gamePersistCv.getContext('2d');
+
+let gameCommittedStrokes = [];
+let gameStrokeIndex = 0;
+
+// Single stroke renderer for the game, live or committed — same principle
+// as the doodle's renderStrokeAs (Task 1): paint routes through the ONE
+// shared drawPaintRibbon, at product width (PAINT_WIDTH_BASE), so a
+// stroke can never be drawn two different ways at two points in its life,
+// rally or reveal.
+function renderGameStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
+  const col = gameColourFor(surfaceKey, index);
+  if (surfaceKey === 'chalk') {
+    renderChalkStroke(ctx, pts, col, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
+  } else if (surfaceKey === 'paint') {
+    drawPaintRibbon(ctx, pts, wt * PAINT_WIDTH_BASE, col);
+  } else {
+    renderStroke(ctx, pts, col, wt, op, DEFAULT_STROKE_PARAMS);
+  }
+}
+
+function rebuildGamePersist() {
+  gamePersistCx.clearRect(0, 0, W, H);
+  gamePersistCx.drawImage(getGameGround(currentSurface), 0, 0); // no filter — see chalk decision above
+  gameCommittedStrokes.forEach(st => renderGameStrokeAs(gamePersistCx, currentSurface, st.pts, st.wt, st.op, st.index));
+}
+
+function commitGameStroke(rawPts, wt, op, eventType) {
+  if (rawPts.length < 2) return;
+  // Same re-zip as the doodle's commitStroke (Task 1/brief 20): jitterPath
+  // returns fresh {x,y} objects for interior points, dropping the baked
+  // .w — re-attach it by index so a committed paint stroke keeps the
+  // exact widths it had live.
+  const jittered = jitterPath(rawPts, JITTER_AMPLITUDE);
+  const pts = jittered.map((p, i) => ({ x: p.x, y: p.y, w: rawPts[i].w }));
+  const st = { pts, wt, op, index: gameStrokeIndex++, event: eventType };
+  gameCommittedStrokes.push(st);
+  renderGameStrokeAs(gamePersistCx, currentSurface, st.pts, st.wt, st.op, st.index); // incremental — never cleared mid-game
+  return st;
+}
+
+// ── Task 3 — the game loop ─────────────────────────────────────────────
+let gameBall, gamePaddleL, gamePaddleR;
+let gamePs = 0, gameAs = 0, gameLv = 1, gameAiSpd = 2.6;
+let gameMouseY = H / 2, gamePrevMouseY = H / 2;
+let gameServing = false; // true during the short beat between a miss and the next spawn
+let gameLastEndedStrokes = null; // handoff for brief 23 — {strokes, seed, surface}
+
+const gameCanvas = document.getElementById('game-canvas');
+const gamePaddleLEl = document.getElementById('game-paddle-left');
+const gamePaddleREl = document.getElementById('game-paddle-right');
+const serveDotEl = document.getElementById('serve-dot');
+const scorePEl = document.getElementById('pg-score-p');
+const scoreAEl = document.getElementById('pg-score-a');
+const pgPalPillEl = document.getElementById('pg-pal-pill');
+const pgShuffleEl = document.getElementById('pg-shuffle');
+
+// Root index.html's own pattern: listen on document (not just the canvas)
+// so the cursor tracks correctly even over the paddles/frame, mapped into
+// canvas coordinate space via getBoundingClientRect. Gated to the playing
+// screen only.
+document.addEventListener('mousemove', (e) => {
+  if (screenState !== 'playing') return;
+  const r = gameCanvas.getBoundingClientRect();
+  gameMouseY = (e.clientY - r.top) * (H / r.height);
+});
+
+function updateGameScoreUI() {
+  scorePEl.textContent = String(gamePs);
+  scoreAEl.textContent = String(gameAs);
+}
+
+function updateGamePalPill() {
+  pgPalPillEl.querySelectorAll('.dot').forEach(d => d.remove());
+  gamePalPillHexesFor(currentSurface).forEach(hex => {
+    const dot = document.createElement('i');
+    dot.className = 'dot';
+    dot.style.background = hex;
+    pgPalPillEl.insertBefore(dot, pgShuffleEl);
+  });
+}
+
+// Ported verbatim from simulate.js's checkLevel — every 2 total points,
+// lv++, aiSpd = min(2.6 + lv*0.40, 7.5), levelUp(balls). One ball at a
+// time (MAX_B = 1, as in the live build), so levelUp/pickTargetY are
+// called with a 1-element array.
+function checkGameLevel() {
+  const tot = gamePs + gameAs;
+  if (tot > 0 && tot % 2 === 0) {
+    gameLv++;
+    gameAiSpd = Math.min(2.6 + gameLv * 0.40, 7.5);
+    levelUp([gameBall]);
+  }
+}
+
+function spawnGameBall() {
+  gameBall = mkBall(gamePhysRng, gameLv, null, [1.0, 2.4], [0.50, 0.68]);
+  gamePaintTracker.startTrail(gameBall, gameBall.x, gameBall.y);
+  gameServing = false;
+  serveDotEl.hidden = true;
+}
+
+function startGame() {
+  // Task 6 — the one permitted Math.random() call, generating this game's
+  // single seed; every stream below is makeRng(seed ^ salt), never
+  // Math.random() again.
+  gameSeed = Math.floor(Math.random() * 1e9);
+  gamePhysRng = makeRng(gameSeed);
+  gameGroundSeeds = {
+    paper: (gameSeed ^ 0x1A2B3C4D) >>> 0,
+    chalk: (gameSeed ^ 0x2B3C4D5E) >>> 0,
+    paint: (gameSeed ^ 0x3C4D5E6F) >>> 0,
+  };
+  gamePaintWidthRng = makeRng((gameSeed ^ 0x50A17B18) >>> 0); // distinct salt from the doodle's own 0x50A17B17
+  gamePaintTracker = makePaintTracker(gamePaintWidthRng, {
+    varMin: GAME_PAINT_WIDTH_VAR_MIN, varMax: GAME_PAINT_WIDTH_VAR_MAX,
+    undulationsMin: PAINT_UNDULATIONS_MIN, undulationsMax: PAINT_UNDULATIONS_MAX,
+    refLen: PAINT_UNDULATION_REF_LEN,
+    widthVariation: PAINT_DEFAULT_WIDTH_VARIATION, // imported — paint.js's real frozen default (1.0)
+  });
+
+  // Palette: paper/chalk start in identity order (re-shuffled only via
+  // Task 5's shuffle control — PAINT-MODE.md §2 is LOCKED, never generate
+  // a colour); paint draws a real scheme via the curated hue library.
+  gamePaperOrder = DEFAULT_PALETTE.map((_, i) => i);
+  gameChalkOrder = CHALK_PALETTE.map((_, i) => i);
+  gamePaintPalette = buildPalette(makeRng((gameSeed ^ 0x6A2F1C9E) >>> 0));
+  gamePaintArray = weightedPaletteArray(gamePaintPalette, (gameSeed ^ 0x6A2F1C9E) >>> 0);
+
+  Object.keys(gameGroundCache).forEach(k => delete gameGroundCache[k]);
+  gameCommittedStrokes = [];
+  gameStrokeIndex = 0;
+  gamePs = 0; gameAs = 0; gameLv = 1; gameAiSpd = 2.6;
+  gamePaddleL = { y: (PAD_MIN + PAD_MAX) / 2 };
+  gamePaddleR = { y: (PAD_MIN + PAD_MAX) / 2 };
+  gamePrevMouseY = gameMouseY;
+
+  rebuildGamePersist();
+  updateGameScoreUI();
+  updateGamePalPill();
+  spawnGameBall();
+}
+
+function stepGame() {
+  if (gameServing) return; // short beat — ball not moving yet, nothing to advance
+
+  // Left paddle: mouse-driven. padVelL is this frame's RAW mouse-Y delta
+  // (before clamping) — matching root index.html's update(), not
+  // simulate.js's tVirtual stand-in — because sweptHit's paddle-velocity
+  // spin transfer is a core physics behaviour, not a detail.
+  const padVelL = gameMouseY - gamePrevMouseY;
+  gamePrevMouseY = gameMouseY;
+  gamePaddleL.y = Math.max(PAD_MIN, Math.min(PAD_MAX, gameMouseY - PH / 2));
+
+  // Right paddle: AI, via the engine's real updatePaddleAI, fed REAL
+  // wall-clock time (Date.now()) rather than simulate.js's tVirtual —
+  // tVirtual/PHASE_OFFSET_L/REACTION_DELAY_FRAMES exist only for
+  // simulate.js's headless player STAND-IN (no wall clock, no human
+  // input) and do not belong in the live game, which has both. Not "fixed"
+  // to tVirtual — this is the deliberate, documented choice.
+  const targetR = pickTargetY([gameBall], 'R');
+  updatePaddleAI(gamePaddleR, targetR, gameAiSpd, Date.now(), 0);
+
+  const events = advanceBall(gameBall, gamePaddleL, gamePaddleR, padVelL, gamePhysRng);
+  events.forEach(ev => {
+    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, ev.type);
+    gamePaintTracker.startTrail(gameBall, gameBall.x, gameBall.y);
+  });
+  gamePaintTracker.appendPoint(gameBall, gameBall.x, gameBall.y);
+
+  if (gameBall.pts.length > 500) {
+    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, 'overflow');
+    gameBall.pts = gameBall.pts.slice(-4);
+  }
+
+  ballBall([gameBall], gamePhysRng); // one ball: a no-op today, kept for engine-call parity with simulate.js
+
+  if (gameBall.x < -30 || gameBall.x > W + 30) {
+    const rightMissed = gameBall.x < -30; // ball passed the left edge -> right/AI scores
+    const isGameEnd = rightMissed ? (gameAs + 1 >= WIN) : (gamePs + 1 >= WIN);
+    if (gameBall.pts.length >= 2) {
+      commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, isGameEnd ? 'gameEnd' : 'score');
+    }
+    if (rightMissed) gameAs++; else gamePs++;
+    updateGameScoreUI();
+    checkGameLevel();
+
+    if (gamePs >= WIN || gameAs >= WIN) {
+      gameLastEndedStrokes = { strokes: gameCommittedStrokes.slice(), seed: gameSeed, surface: currentSurface };
+      setScreen('results'); // brief 23 builds the real reveal on top of this handoff
+      return;
+    }
+
+    gameServing = true;
+    serveDotEl.hidden = false;
+    setTimeout(() => { if (screenState === 'playing') spawnGameBall(); }, 550); // brief serve beat — a rally game, not a menu
+  }
+}
+
+function updateGamePaddleDOM() {
+  gamePaddleLEl.style.top = gamePaddleL.y + 'px';
+  gamePaddleREl.style.top = gamePaddleR.y + 'px';
+}
+
+function drawGameFrame() {
+  const ctx = gameCanvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(gamePersistCv, 0, 0);
+  if (!gameServing && gameBall.pts.length > 1) {
+    // in-flight stroke: raw (unjittered) pts — jitter is a commit-time
+    // effect, same as the doodle.
+    renderGameStrokeAs(ctx, currentSurface, gameBall.pts, gameBall.wt, gameBall.op, gameStrokeIndex);
+  }
+  if (!gameServing) {
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = gameColourFor(currentSurface, gameStrokeIndex);
+    ctx.beginPath();
+    ctx.arc(gameBall.x, gameBall.y, BR * 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  updateGamePaddleDOM();
+}
+
+function gameLoop() {
+  if (screenState === 'playing') {
+    stepGame();
+    drawGameFrame();
+  }
+  requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+
+// ── Task 5 — shuffle. Re-rolls the palette AND re-renders the whole
+// painting through the new colours (never just the next stroke onward —
+// that produces a two-palette painting and reads as broken). Paint draws
+// a genuinely new scheme; paper/chalk re-roll the assignment ORDER, never
+// the hexes (PAINT-MODE.md §2, LOCKED). Entropy comes from Date.now(), not
+// Math.random() — Task 6 keeps that to exactly the one line in
+// startGame(); a shuffle click is a live UI action, not part of the
+// reproducible physics/render stream, but it still doesn't need a second
+// raw-random call to get fresh entropy each click. Measured cost is
+// logged to the console — see the session report for the number.
+let shuffleNonce = 0;
+pgShuffleEl.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const shuffleSeed = (Date.now() ^ (shuffleNonce++)) >>> 0;
+  const shuffleRng = makeRng(shuffleSeed);
+  const t0 = performance.now();
+  if (currentSurface === 'paint') {
+    gamePaintPalette = buildPalette(shuffleRng, { groundHex: gamePaintPalette.ground }); // ground fixed — not part of shuffle
+    gamePaintArray = weightedPaletteArray(gamePaintPalette, shuffleSeed);
+  } else if (currentSurface === 'chalk') {
+    shuffleArrayInPlace(gameChalkOrder, shuffleRng);
+  } else {
+    shuffleArrayInPlace(gamePaperOrder, shuffleRng);
+  }
+  rebuildGamePersist(); // restyle the WHOLE painting — committed strokes keep geometry, only colour changes
+  updateGamePalPill();
+  const ms = performance.now() - t0;
+  console.log(`[brief 22 Task 5] pal-pill shuffle re-render: ${ms.toFixed(1)}ms — ${gameCommittedStrokes.length} strokes, ${currentSurface}`);
+});
+
+// ── Task 7 — restart and mute ──────────────────────────────────────────
+document.getElementById('pg-restart').addEventListener('click', () => {
+  // Fresh seed, cleared canvas, score 0-0, level 1, SAME surface — does
+  // not return to idle. startGame() already does exactly this.
+  startGame();
+});
+document.getElementById('pg-mute').addEventListener('click', () => {
+  muted = !muted;
+  if (muted) stopBGM(); else startBGM();
+});
 
 /* ════════════════════════════════════════════════════════════════════
    TASK 4 — surface selector. Ships as product UI (brief 18 Task 4).
@@ -795,7 +1282,8 @@ function armIdle() {
 
 function beginGame() {
   if (idleEl.dataset.idleStep !== 'armed') return;
-  setScreen('playing'); // brief 19 builds the real playing screen
+  setScreen('playing');
+  startGame(); // brief 22 Task 3 — real game, replacing the brief-18/19/20/21 stub
 }
 
 function onGesture(e) {
@@ -810,16 +1298,10 @@ window.addEventListener('keydown', (e) => {
 document.getElementById('screen-idle').addEventListener('click', onGesture);
 document.getElementById('screen-idle').addEventListener('touchstart', onGesture, { passive: true });
 
-// Leaving idle for playing (stub) fades BGM back down until brief 22 wires
-// the real playing/results audio lifecycle — keeps the protected stopBGM
-// path exercised rather than dormant.
-document.getElementById('btn-playing-back').addEventListener('click', () => {
-  idleEl.dataset.idleStep = 'attract';
-  idleSub.textContent = 'space to begin · mouse to move';
-  document.querySelectorAll('#surface-chip .tile').forEach(t => {
-    t.setAttribute('aria-pressed', String(t.dataset.pick === 'paper'));
-  });
-});
+// Brief 22 Task 7: BGM continues across idle -> playing uninterrupted —
+// armIdle() (above) already started it on the idle screen's first gesture.
+// Brief 18's stub had a fade-down-on-leaving-idle hook here; removed per
+// this brief's explicit instruction (scaffolding, not a real audio rule).
 document.getElementById('btn-results-back').addEventListener('click', () => stopBGM());
 </script>
 </body>

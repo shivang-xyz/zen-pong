@@ -27,12 +27,28 @@ app. The app is a consumer — no engine code copied in. Confirm the app can
 run a live simulation and render a stroke through each of the three surface
 renderers.
 
-## Task 3 — Idle screen
+## Task 3 — Idle screen, TWO steps
 
-Per the approved design: intro card (inline SVG logo, never text — root CLAUDE.md
-rule), tagline, start affordance (space / click / touch), and the surface
-selector. All values from DESIGN.md. Page background `#383838`, canvas warm
-cream, 48px radius, DOM paddles, grey frame ring.
+Design reference: `v3/design/1-idle.html`. Intro card uses the inline SVG logo,
+never text (root CLAUDE.md rule). All values from DESIGN.md. Page background
+`#383838`, canvas warm cream, 48px radius, DOM paddles, grey frame ring.
+
+The idle screen has two sub-states:
+
+**Step A — welcome.** Only the central card, showing "space to begin · mouse to
+move" (per design). No surface selector yet. The doodle (Task 5) plays behind
+in the default surface.
+
+**Step B — surface select.** On the first user gesture (spacebar / click /
+touch), the surface selector slides up from under the card (per design), and the
+player picks Paper / Chalkboard / Paint before starting the game.
+
+**That first gesture is also the audio-unlock trigger.** Per root CLAUDE.md §4,
+AudioContext can only unlock on click / spacebar / touchstart (never mousemove).
+Use the Step A → B gesture to `await actx.resume()` and start BGM, following the
+protected `startBGM()` pattern. Do not attempt to unlock audio on mousemove.
+Wire the audio hook here even if full BGM/SFX integration is finalised in brief
+22 — the unlock gesture must live at this exact moment.
 
 ## Task 4 — Surface selector
 

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zen Pong — idle</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ── Colour · DESIGN.md §2 ── */
+    --color-bg:            #383838;
+    --color-cta:           #464646;
+    --color-disabled:      #777777;
+    --color-lightest-grey: #C5C5C5;
+    --color-canvas:        #FFF5E5;
+    --color-canvas-border: #888888;
+    --color-pink:          #FF68AE;
+    --color-blue:          #689AFF;
+    --color-green:         #8CFFB4;
+    --color-orange:        #FFAE68;
+    --color-cyan:          #68D7FF;
+
+    /* NEW — DESIGN-DELTA.md §1. UNRESOLVED: chalkboard ground borrows the
+       page background, so the canvas loses its edge against the page. */
+    --color-canvas-chalk:  #383838;
+    --color-chip-selected: #383838;
+
+    /* ── Spacing · DESIGN.md §4 ── */
+    --space-xs: 4px;  --space-s: 8px;   --space-xxm: 12px; --space-xm: 16px;
+    --space-m: 24px;  --space-l: 32px;  --space-xl: 40px;  --space-xxl: 48px;
+
+    /* ── Radius · DESIGN.md §5 ── */
+    --radius:        48px;
+    --radius-small:  12px;
+    --radius-nested: 8px;   /* NEW — UNRESOLVED, third radius value */
+
+    /* ── Elevation · DESIGN.md §6 ── */
+    --shadow-chip:   0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px rgba(0,0,0,0.52);
+    --shadow-canvas: 0 4px 24px rgba(0,0,0,0.28);
+    --shadow-btn:    0 4px 24px rgba(0,0,0,0.16), inset 0 0 5px rgba(0,0,0,0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-bg);
+    font-family: 'DM Serif Display', serif;
+    font-style: italic;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-l) 0 var(--space-xxl);
+  }
+
+  /* ── Canvas · DESIGN.md §7 ── */
+  .stage { position: relative; width: 1000px; height: 630px; }
+  .canvas {
+    position: absolute; inset: 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--color-canvas);
+    box-shadow: var(--shadow-canvas);
+    transition: background 400ms linear;
+  }
+  .frame {
+    position: absolute; inset: 0;
+    border-radius: var(--radius);
+    border: 8px solid var(--color-canvas-border);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .grain, .trails { position: absolute; inset: 0; }
+  .trails polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Paddles · DESIGN.md §7 + DESIGN-DELTA.md §2b ──
+     DOM divs, never drawn on canvas. The handle is DETACHED from the
+     bar: 12px dot sitting 8px clear; label right-anchored 10px clear of the dot. */
+  .paddle { position: absolute; width: 8px; height: 64px; z-index: 3; }
+  .paddle .bar { position: absolute; inset: 0; border-radius: 4px; }
+  .paddle .dot { position: absolute; top: 26px; width: 12px; height: 12px; border-radius: 50%; }
+  .paddle-left  { left: 0; }
+  .paddle-left  .bar, .paddle-left  .dot { background: var(--color-pink); }
+  .paddle-left  .dot { left: -20px; }
+  .paddle-right { right: 0; }
+  .paddle-right .bar, .paddle-right .dot { background: var(--color-blue); }
+  .paddle-right .dot { right: -20px; }
+  /* Right-anchored, not left-offset: the 10px gap to the dot must not
+     drift with glyph width or a font fallback. */
+  .you {
+    position: absolute; right: calc(100% + 30px); top: 20px;
+    white-space: nowrap;
+    font-size: 12px; color: var(--color-pink);
+  }
+
+  /* ── Control elevation · DESIGN.md §6/§10 ── */
+  .ctrl-chip {
+    height: var(--space-xxl);
+    border-radius: var(--radius-small);
+    background: var(--color-cta);
+    box-shadow: var(--shadow-chip);
+    display: flex;
+    align-items: center;
+  }
+
+  /* ── Palette chip · DESIGN.md §10 + DESIGN-DELTA.md §4 ──
+     Dot count is per-surface and VARIABLE — never assume five. */
+  .pal-pill { padding: 0 var(--space-xm); gap: var(--space-s); }
+  .pal-pill .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .pal-pill .shuffle { margin-left: var(--space-s); cursor: pointer; }
+  .pal-pill .shuffle:hover { stroke: #FFFFFF; }
+
+  /* ── Type · DESIGN.md §3 ── */
+  .tagline { font-size: 14px; color: var(--color-lightest-grey); margin: 0; }
+  .haiku   { font-size: 14px; color: var(--color-lightest-grey); margin: 0; }
+  .mono {
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+
+  /* ── Buttons · DESIGN.md §10 ── */
+  .rbtn {
+    background: var(--color-cta);
+    border: 0;
+    border-radius: var(--radius-small);
+    padding: var(--space-xxm) var(--space-m);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #FFFFFF;
+    box-shadow: var(--shadow-btn);
+    cursor: pointer;
+  }
+  .rbtn:hover { opacity: 0.85; }
+
+  .spacer-s { height: var(--space-s); }
+  .spacer-m { height: var(--space-m); }
+  .spacer-l { height: var(--space-l); }
+
+  /* ── Idle doodle · live animated state ──
+     Plays continuously behind the card. Switching surface re-grounds the
+     canvas and re-materialises the stroke WITHOUT clearing or restarting
+     it: colour and weight cross-fade over 400ms while the same stroke
+     keeps drawing. Engine owns real stroke rendering — these are
+     placeholders for weight and density only. Chalkboard's real
+     appearance differs materially. */
+  @keyframes zp-draw {
+    0%   { stroke-dashoffset: 3200; }
+    55%  { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: 0; }
+  }
+  .trails { opacity: var(--o); }
+  .trails polyline {
+    stroke-dasharray: 3200;
+    stroke-width: var(--w);
+    animation: zp-draw 9s linear infinite;
+    transition: stroke 400ms linear, stroke-width 400ms linear;
+  }
+  .trails polyline:nth-child(2) { animation-delay: 1.2s; }
+  .trails polyline:nth-child(3) { animation-delay: 2.4s; }
+  .trails polyline:nth-child(4) { animation-delay: 0.6s; }
+  .trails polyline:nth-child(5) { animation-delay: 1.8s; }
+  .trails polyline:nth-child(6) { animation-delay: 3s; }
+  .trails polyline:nth-child(1) { stroke: var(--s1); }
+  .trails polyline:nth-child(2) { stroke: var(--s2); }
+  .trails polyline:nth-child(3) { stroke: var(--s3); }
+  .trails polyline:nth-child(4) { stroke: var(--s4); }
+  .trails polyline:nth-child(5) { stroke: var(--s5); }
+  .trails polyline:nth-child(6) { stroke: var(--s6); }
+
+  /* Surface materials — placeholder values, engine output differs */
+  [data-surface="paper"] .canvas { background: var(--color-canvas); }
+  [data-surface="paper"] .trails {
+    --s1: var(--color-pink); --s2: var(--color-pink); --s3: var(--color-pink);
+    --s4: var(--color-blue); --s5: var(--color-blue); --s6: var(--color-blue);
+    --w: 1.5px; --o: 0.7;
+  }
+  [data-surface="chalk"] .canvas { background: var(--color-canvas-chalk); }
+  [data-surface="chalk"] .trails {
+    --s1: var(--color-lightest-grey); --s2: var(--color-pink); --s3: var(--color-lightest-grey);
+    --s4: var(--color-cyan); --s5: var(--color-lightest-grey); --s6: var(--color-blue);
+    --w: 5px; --o: 0.45;
+  }
+  [data-surface="paint"] .canvas { background: var(--color-canvas); }
+  [data-surface="paint"] .trails {
+    --s1: var(--color-pink); --s2: var(--color-orange); --s3: var(--color-green);
+    --s4: var(--color-blue); --s5: var(--color-cyan); --s6: var(--color-orange);
+    --w: 20px; --o: 0.9;
+  }
+
+  /* ── Intro card · replaces DESIGN.md §10 #intro-card ──
+     ctrl-chip styling at the selector's width, so the two read as one
+     object and stay legible over any ground. */
+  .intro-stack {
+    position: absolute; inset: 0; z-index: 4;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: var(--space-xm);
+  }
+  #intro-card {
+    width: 420px;
+    background: var(--color-cta);
+    border-radius: var(--radius-small);
+    padding: var(--space-m) var(--space-xl);
+    box-shadow: var(--shadow-chip);
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-s);
+  }
+  #intro-card .sub { font-size: 14px; color: var(--color-lightest-grey); margin: 0; }
+
+  /* ── NEW component · surface selector (DESIGN-DELTA.md §4) ──
+     Absent in the attract state. Slides up on the player's first gesture
+     and never leaves. That gesture also starts the background audio —
+     browsers disallow sound before a real interaction. */
+  @keyframes zp-slide-up {
+    from { transform: translateY(64px); opacity: 0; }
+    to   { transform: translateY(0);     opacity: 1; }
+  }
+  #surface-chip {
+    width: 420px; padding: 0 var(--space-s); gap: var(--space-s);
+    display: none;
+  }
+  [data-state="armed"] #surface-chip {
+    display: flex;
+    animation: zp-slide-up 400ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  #surface-chip .tile {
+    flex: 1; height: 32px;
+    border: 0;
+    border-radius: var(--radius-nested);
+    background: transparent;
+    display: flex; align-items: center; justify-content: center; gap: var(--space-s);
+    cursor: pointer;
+    transition: background 200ms linear;
+  }
+  #surface-chip .tile span { color: var(--color-lightest-grey); }
+  #surface-chip .tile[aria-pressed="true"] { background: var(--color-chip-selected); }
+  #surface-chip .tile[aria-pressed="true"] span { color: #FFFFFF; }
+  #surface-chip .swatch { width: 12px; height: 12px; border-radius: 4px; }
+  .sw-paper { background: var(--color-canvas); }
+  .sw-chalk { background: var(--color-canvas-chalk); }
+  .sw-paint { background: var(--color-orange); }
+</style>
+</head>
+<body data-surface="paper" data-state="attract">
+
+  <p class="tagline">make uncertainty your play</p>
+  <div class="spacer-m"></div>
+
+  <div class="stage">
+    <div class="canvas">
+      <svg class="grain" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">
+        <filter id="grain-idle"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3"/></filter>
+        <rect width="100%" height="100%" filter="url(#grain-idle)" opacity="0.12"/>
+      </svg>
+      <svg class="trails" viewBox="0 0 1000 630" preserveAspectRatio="none" aria-hidden="true">
+        <polyline points="10,420 355,95"/>
+        <polyline points="355,95 660,600 900,505"/>
+        <polyline points="0,355 895,415"/>
+        <polyline points="355,560 640,105"/>
+        <polyline points="640,105 900,320"/>
+        <polyline points="360,600 1000,250"/>
+      </svg>
+    </div>
+    <div class="frame"></div>
+
+    <div class="intro-stack">
+      <div id="intro-card">
+        <svg class="logo" width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFF5E5"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFF5E5"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFF5E5"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFF5E5"/>
+<rect width="2" height="27" rx="1" fill="#FFF5E5"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
+<circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
+</svg>
+        <p class="sub" id="sub">press space or click to begin</p>
+      </div>
+
+      <div id="surface-chip" class="ctrl-chip" role="group" aria-label="Surface">
+        <button class="tile" data-pick="paper" aria-pressed="true">
+          <i class="swatch sw-paper"></i><span class="mono">paper</span>
+        </button>
+        <button class="tile" data-pick="chalk" aria-pressed="false">
+          <i class="swatch sw-chalk"></i><span class="mono">chalkboard</span>
+        </button>
+        <button class="tile" data-pick="paint" aria-pressed="false">
+          <i class="swatch sw-paint"></i><span class="mono">paint</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="paddle paddle-left" style="top:180px">
+      <div class="bar"></div><div class="dot"></div><span class="you">you</span>
+    </div>
+    <div class="paddle paddle-right" style="top:430px">
+      <div class="bar"></div><div class="dot"></div>
+    </div>
+  </div>
+
+  <div class="spacer-m"></div>
+
+  <div class="ctrl-chip pal-pill" id="pal-pill">
+    <svg class="shuffle" width="20" height="20" viewBox="0 0 20 20" fill="none"
+           stroke="#C5C5C5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="13,3 17,6.5 13,10"/><path d="M2 6.5h15"/>
+        <polyline points="7,10 3,13.5 7,17"/><path d="M18 13.5H3"/>
+      </svg>
+  </div>
+
+<script>
+  /* Per-surface palettes — variable length. Chalkboard reports three where
+     paper and paint report five; the chip lays out whatever it is given.
+     Real palettes come from the engine. See DESIGN-DELTA.md §1. */
+  var PALETTES = {
+    paper: ['#FF68AE', '#689AFF', '#8CFFB4', '#FFAE68', '#68D7FF'],
+    chalk: ['#C5C5C5', '#FF68AE', '#68D7FF'],
+    paint: ['#FF68AE', '#689AFF', '#8CFFB4', '#FFAE68', '#68D7FF']
+  };
+
+  var body = document.body;
+  var pill = document.getElementById('pal-pill');
+  var shuffle = pill.querySelector('.shuffle');
+
+  function paintPalette(surface) {
+    pill.querySelectorAll('.dot').forEach(function (d) { d.remove(); });
+    PALETTES[surface].forEach(function (c) {
+      var dot = document.createElement('i');
+      dot.className = 'dot';
+      dot.style.background = c;
+      pill.insertBefore(dot, shuffle);
+    });
+  }
+  paintPalette('paper');
+
+  /* First gesture arms the screen: the selector slides up, the card copy
+     changes, and this is where background audio would start. */
+  function arm() {
+    if (body.dataset.state === 'armed') return;
+    body.dataset.state = 'armed';
+    document.getElementById('sub').textContent = 'choose a surface, then space to serve';
+    /* startAudio(); — first real gesture, required by browser autoplay policy */
+  }
+  window.addEventListener('keydown', function (e) { if (e.code === 'Space') { e.preventDefault(); arm(); } });
+  window.addEventListener('click', arm);
+
+  /* Surface switch. Only the ground, stroke material and palette change —
+     the doodle animation is never reset, so the drawing in progress
+     carries straight through the switch. */
+  document.querySelectorAll('#surface-chip .tile').forEach(function (tile) {
+    tile.addEventListener('click', function (e) {
+      e.stopPropagation();
+      document.querySelectorAll('#surface-chip .tile').forEach(function (t) {
+        t.setAttribute('aria-pressed', String(t === tile));
+      });
+      body.dataset.surface = tile.dataset.pick;
+      paintPalette(tile.dataset.pick);
+    });
+  });
+</script>
+</body>
+</html>

@@ -83,7 +83,22 @@ frozen private range from here on). Emergence taper so the trail flows out of
 the ball instead of swallowing it. Per-stroke width profiles — flat / ramp /
 wave — so strokes differ in character, not just phase.
 
-### Brief 24 — Results / reveal screen
+### Brief 24 — Paint polish + guardrail fix
+Second review pass on brief 22. Guardrails contained entirely within the 8px
+frame border at `#C5C5C5` — lighter than the frame they sit on, nothing in the
+cream (brief 23 had them poking 8px inward, which was wrong). Live
+physics-driven splatter during the rally — mid-flight only, never on a hit
+(brief 02's boundary-pinning mistake), ~3-8 marks a game, offset clear of the
+trail. `PAINT-MODE.md` §5 D, specced since brief 11, never built until now.
+Paint
+base width 6.0 → 3.5 (widest stroke ~13px). Brief 23's emergence taper removed —
+it made every stroke uniform at both ends — replaced by a ~10px gap between the
+ball and its live trail, with the ball solid black (`INK_HEX`) in paint mode.
+Committed strokes composited at 70% during play, 100% at game end, via a
+ground/strokes layer split (the same split brief 25's reveal needs). Paint
+palette pill shows all 5 slots — ground, ink, 3 accents — matching the lab.
+
+### Brief 25 — Results / reveal screen
 The reveal moment: finished artwork resolves (paint ground composites in at game
 end — plain chosen colour or seeded patches). `#timeline-chip` (`DESIGN.md` §10)
 — picks which frame of the accumulated painting to keep; this is a property of
@@ -95,10 +110,10 @@ Blocked on three `DESIGN.md` UNRESOLVED items: the paint reveal ground tokens
 (§2), the slider primitives for `#timeline-chip` (§10), and ratification of the
 §13 motion spec. Resolve them before writing the brief.
 
-### Brief 25 — Share page
+### Brief 26 — Share page
 The greenfield screen — how a finished piece is shown/shared outside the game.
 
-### Brief 26 — Integration polish + audio + ship
+### Brief 27 — Integration polish + audio + ship
 Fold the screens into the final self-contained `index.html`, wire BGM/SFX (the
 protected audio systems from root CLAUDE.md §4), full pass, then replace the live
 root file. Ship.

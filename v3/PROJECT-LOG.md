@@ -5,6 +5,92 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-24 — Brief 23 reviewed: three of four kept, the taper reversed
+
+Guardrails, the 60% width cut, per-stroke profiles and the emergence taper all
+built. Reviewed in-browser and against the lab. Verdict: keep three, reverse
+one, plus three new items. Now brief 24.
+
+### The taper is reversed — it solved one problem and created another
+Brief 23's emergence taper (stroke width ramps from zero at the ball) did make
+the ball visible, and the commit-frame convergence argument held. But it applies
+to every stroke at both ends, so every stroke became thin-at-both-ends — which
+directly undoes brief 23's own Task 4, whose whole point was that strokes should
+differ in character. Solving ball visibility by imposing a uniform silhouette on
+the entire composition was the wrong trade.
+
+Replaced with Shivang's own alternative: a ~10px gap between the ball and its
+live trail. The stroke keeps whatever width its profile gives it, blunt ends
+included; the ball sits in clean space ahead of the ink. Simpler, and it leaves
+the stroke's shape entirely alone. Ball also goes solid black (`INK_HEX`) in
+paint mode for good measure.
+
+Worth recording: the gap does change something at commit — the last ~10px fills
+in when the stroke lands. That is a stroke *completing*, not a stroke changing
+shape, which is a different thing from brief 20's pop. The distinction is
+subtle enough that it is commented at the code site.
+
+### Kept
+- **Guardrails** — right idea, wrong geometry. Brief 23 put them inside the 8px
+  frame border, i.e. light grey on grey, invisible. Shivang's reference image
+  (measured at 2x: `#888888`, 2px tall, 16px long spanning canvas x 0-16) puts
+  them poking 8px *inward* from the frame into the cream. Note his written ask
+  was "much lighter grey" but the reference measures as the frame grey exactly
+  — the reference wins, and the contrast problem was position, not tone.
+- **Width cut** — right direction, not far enough. Brief 24 cuts the base as
+  well (6.0 → 3.5, widest stroke 23px → ~13px). Found while checking: the lab's
+  own BASE WIDTH slider sits at **4.5**, so `paint.js`'s frozen 6.0 already
+  matched neither the lab nor the product. The divergence logged in brief 23
+  is wider than it looked.
+- **Per-stroke profiles** — flat/ramp/wave, kept as built.
+
+### New in brief 24
+- **Committed strokes at 70% during play, 100% at game end** — so the live line
+  reads against everything already down. Built as a ground/strokes layer split
+  rather than per-stroke alpha: per-stroke alpha double-darkens at crossings,
+  and the split is what brief 25's reveal needs anyway (ground composites
+  *under* the marks). Building that seam now instead of unpicking
+  `gamePersistCv` next brief.
+- **Paint palette pill shows 5 slots, not 3** — ground, ink, A, B, C, matching
+  the lab's swatch row (`PAINT-MODE.md` §2.3). Stroke colours unchanged: the
+  rally still cycles the three accents, exactly as `art-lab.html` does. The pill
+  shows the artwork's palette, not the stroke cycle.
+- **Doc drift found** — `PAINT-MODE.md` §2.2 says ink is the *line* colour
+  ("this is not a variable"). The lab has never done that; lines are accents,
+  ink is splatter. Approved that way through briefs 11-16, so live code wins and
+  the app matches the lab. Logged in `BACKLOG.md` rather than resolved here.
+
+### Corrections to brief 24, same session
+- **Guardrails: I read the two reference screenshots backwards.** The image
+  showing a `#888888` tick extending 8px into the cream was the *current*
+  brief-23 build, not the target; the light-grey tick contained inside the frame
+  border was the target. Re-measured: `#C5C5C5`, 2px tall, 8px long, spanning
+  canvas x 0-8 — entirely on the frame, nothing in the cream. The contrast comes
+  from tone, not position, which is what "much lighter grey" meant all along.
+  My earlier note claiming Shivang's words and his reference contradicted each
+  other was wrong; they agreed and I had the wrong image.
+- **Live splatter added as Task 6.** The lab's artworks carry splatter and the
+  game has never had any — `buildSplatter`/`buildIntersectionBlotches` are
+  never called by the app. Wanted: rare marks that aren't part of the trail,
+  thrown off the ball mid-rally. This is `PAINT-MODE.md` §5 D, specced since
+  brief 11 and never built.
+
+  The constraint that shapes it: emission must be **mid-flight, never on a
+  paddle or wall hit**. `splatter.js`'s own header records why — brief 02's
+  hit-triggered ink bloom pinned every mark to the canvas edge, because hits are
+  always on the boundary, and it was cut for that. Placement is also offset
+  perpendicular to travel so a mark lands clear of the line rather than reading
+  as a blob in it. Sizes mirrored down ~0.58x from the engine's private
+  constants, which were tuned against a 24px stroke the game no longer has.
+
+  Flagged forward to brief 25: if the reveal also runs the lab's density-placed
+  splatter pass over the finished strokes, the canvas gets both. That is a
+  decision to make knowing live splatter now exists, not by default.
+
+### Next
+Brief 24 written and committed. `PORT-PLAN.md` renumbered — results/reveal 25,
+share 26, integration + ship 27.
+
 ## 2026-08-24 — Brief 22: playing screen built and approved; brief 23 queued
 
 Commit `9a9fdbe` on `feature/v3-app`. The real game — mouse + AI paddles,

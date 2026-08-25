@@ -63,9 +63,21 @@ triaging this whole list, not before.
   approved in the lab on twelve static seeded artworks; it was wrong the first
   time it was seen in a live rally at 1000×630. The product value wins at
   reconciliation, and `paint.js` + the lab move to it — not the reverse. The
-  per-stroke width profiles (flat/ramp/wave) and the emergence taper travel
-  with the same promotion. *Surfaced: brief 22 spec, extended brief 23,
-  2026-08-24.*
+  per-stroke width profiles (flat/ramp/wave) travel with the same promotion.
+  **Extended again, brief 24:** base width also diverges —
+  `GAME_PAINT_WIDTH_BASE` 3.5 vs `paint.js`'s frozen `PAINT_WIDTH_BASE` 6.0.
+  Note the lab's own BASE WIDTH slider sits at 4.5, so `paint.js`'s 6.0 already
+  matches neither the lab nor the product. Brief 23's emergence taper was
+  removed in brief 24 and is not part of the promotion. *Surfaced: brief 22
+  spec, extended briefs 23 and 24, 2026-08-24.*
+- **Doc drift — `PAINT-MODE.md` §2.2 says ink is the line colour.** "Every
+  reference in the restrained family uses a near-black line; this is not a
+  variable." The lab has always drawn lines from the three accents and used ink
+  only for splatter/blotches, and that is what has been approved through briefs
+  11-16. Live code wins (`ARCHITECT.md`), so the app matches the lab. Either
+  the spec sentence is stale or a near-black line variant was never built —
+  decide which before the artwork spec is treated as settled.
+  *Surfaced: brief 24 spec, 2026-08-24.*
 - **The lab's density scrubber ships nowhere.** `PORT-PLAN.md` asserted it was
   a product control on the playing screen; `DESIGN.md` §8 Screen 2 and the
   approved design both say no control adjusts the painting mid-rally. Corrected

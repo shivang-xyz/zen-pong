@@ -133,10 +133,20 @@ all the feel work in one pass gives the game a single motion and sound
 language instead of two that were designed apart. The cost of the other order
 is doing audio twice.
 
-### Brief 28 — Share page
+### Brief 28 — Navigation, audio mix, results breathing room
+Review pass on 26/27. Mute icon fixed for real — `hidden` is an `HTMLElement`
+IDL property and an `<svg>` is an `SVGElement`, so `svg.hidden = x` was writing
+a JS expando and never touching the attribute the CSS matched on. New home
+button (left of restart) and PLAY AGAIN both route to idle-armed, so the surface
+selector is always reachable. Results gets air and is allowed to scroll. Audio:
+one `sfxBus` + limiter at 2.5x rather than 2.5x on every literal (which would
+clip and wreck the mix), BGM ducked to 0.58 in play and results, point and
+game-over rebuilt as inharmonic struck bells, frame glow stronger and longer.
+
+### Brief 29 — Share page
 The greenfield screen — how a finished piece is shown/shared outside the game.
 
-### Brief 29 — Integration polish + ship
+### Brief 30 — Integration polish + ship
 Fold the screens into the final self-contained `index.html`, wire BGM/SFX (the
 protected audio systems from root CLAUDE.md §4), full pass, then replace the live
 root file. Ship.

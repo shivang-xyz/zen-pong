@@ -5,6 +5,58 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-24 — Brief 27 reviewed. Brief 28 written.
+
+Sound and interactions landed. Feedback split into a navigation gap, a real
+bug, and an audio-mix pass.
+
+### The mute icon: diagnosed properly on the third report
+Reported three times, "fixed" twice, and both fixes were correct in isolation —
+which is the tell that the diagnosis was wrong each time. The actual cause:
+
+`hidden` is an IDL attribute defined on **`HTMLElement`**. An `<svg>` is an
+`SVGElement`, which inherits from `Element`, not `HTMLElement`, and therefore
+has no `hidden` property. `svgEl.hidden = true` silently creates a plain JS
+expando and never touches the attribute. The CSS added in brief 26
+(`.icon-pill svg[hidden] { display:none }`) is correct and simply never matches.
+The initial state looked right only because the attribute is hand-written into
+the markup.
+
+Fix is `toggleAttribute('hidden', …)`. Brief 28 also requires auditing the whole
+file for the same mistake — `#serve-dot` has a matching `[hidden]` rule and is a
+likely second instance. Lesson worth keeping: when a fix is correct and the
+symptom survives, stop refining the fix and go find a different mechanism.
+
+### Navigation gap
+There was no route from a finished game back to the surface selector — PLAY
+AGAIN restarted on the same surface, and idle's selector only appears after a
+gesture. Both a new home button (left of restart, playing screen) and PLAY AGAIN
+now go to idle in its **armed** state, selector already showing. Restart stays
+an immediate same-surface replay and is now the only control that does.
+
+### Audio mix — why not 2.5x on every number
+Shivang asked for everything ~2.5x louder. Multiplying each literal would push
+several gains past 1.0 (`sndScratch`'s click is already 0.49), clip on the
+summing bus, and destroy the relative balance that makes the sounds read as
+distinct objects. Instead: one `sfxBus` GainNode at 2.5 feeding a
+`DynamicsCompressor` limiter, with every individual gain left at root's tuned
+value. One knob, mix preserved, peaks caught.
+
+Also: BGM ducked 0.72 → 0.58 for play **and** results (not just play — otherwise
+it would swell back up exactly as `sndGameOver` is ringing).
+
+`sndPoint` and `sndGameOver` were both single sine tones with no attack, which
+is why they vanished under the BGM. Rebuilt as struck bells — inharmonic partial
+stacks with hard attacks and long exponential decays, each with a slightly
+detuned beat partner (×1.003 / ×1.004) because that beating is what separates
+struck metal from a synth tone. Integer partial ratios would give an organ.
+Game over is the deeper bowl at 4.5s, deliberately still ringing under the
+900ms ground wipe and into the haiku at 1300ms — the overlap this whole
+sequencing decision was made for.
+
+### Next
+28 → 29 (share page) → 30 (integration + ship).
+
 ## 2026-08-24 — Brief 26 done (results/reveal approved). Brief 27 written.
 
 Results/reveal built and approved — commit `7f1536c`. The reveal lands, so the

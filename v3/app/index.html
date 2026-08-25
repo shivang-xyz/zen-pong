@@ -112,17 +112,27 @@
     font-size: 12px; color: var(--color-pink);
   }
 
-  /* ── Paddle-travel guardrails · brief 23 Task 1 ── Playing screen only:
-     2px marks at PAD_MIN/PAD_MAX+PH on both canvas edges, telling the
-     player where their reach ends and the wall begins. DOM chrome, same
-     layer treatment as the paddles — above the canvas, below the frame
-     ring — and positioned entirely by JS from physics.js's real constants
-     (never hardcoded here). Never drawn into gamePersistCv: that canvas is
-     the artwork, these are not marks the player made. */
+  /* ── Paddle-travel guardrails · brief 23 Task 1, geometry fixed brief 24
+     Task 1 ── Playing screen only: marks at PAD_MIN/PAD_MAX+PH on both
+     canvas edges, telling the player where their reach ends and the wall
+     begins. DOM chrome, positioned entirely by JS from physics.js's real
+     constants (never hardcoded here). Never drawn into gameStrokesCv: that
+     canvas is the artwork, these are not marks the player made.
+     Brief 23 built these 16px long spanning canvas x 0->16 in #888888 — the
+     same colour as the frame they sat on, AND long enough that half of them
+     (the outer 8px) poked past the frame border into the cream, reading as
+     the frame breaking into the canvas. Both wrong. Fixed: 8px long — exactly
+     the frame border's own thickness, so the mark sits ENTIRELY within the
+     border, nothing in the cream, nothing in the dark page area — and
+     #C5C5C5, deliberately lighter than the #888888 frame it sits on, so the
+     contrast comes from tone, not position. z-index 3 (paddle layer, same as
+     brief 23) — ABOVE .frame's z-index 2, since these paint on top of the
+     frame ring, not underneath it; under the frame they would not render at
+     all. */
   .guard {
-    position: absolute; width: 16px; height: 2px;
-    background: var(--color-canvas-border); /* #888888 — same grey as .frame */
-    z-index: 1;
+    position: absolute; width: 8px; height: 2px;
+    background: var(--color-lightest-grey); /* #C5C5C5 — lighter than the #888888 frame it sits on */
+    z-index: 3;
   }
 
   /* ── Control elevation · DESIGN.md §6/§10 ── */
@@ -409,9 +419,9 @@
   </section>
 
 <script type="module">
-import { makeRng } from '../engine/rng.js';
+import { makeRng, weightedPick } from '../engine/rng.js';
 import {
-  W, H, BR, PH, PAD_MIN, PAD_MAX, WIN,
+  W, H, BR, PH, PAD_MIN, PAD_MAX, WIN, BASE_SPD, MAX_SPD,
   mkBall, advanceBall, ballBall, levelUp, pickTargetY, updatePaddleAI,
 } from '../engine/physics.js';
 import { jitterPath, renderStroke, DEFAULT_STROKE_PARAMS } from '../engine/strokes.js';
@@ -420,9 +430,10 @@ import {
   buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE,
   CHALK_DEFAULT_WIDTH_MULT,
 } from '../engine/chalkboard.js';
-import { buildPaintSurface, PAINT_WIDTH_BASE, PAINT_DEFAULT_WIDTH_VARIATION } from '../engine/paint.js';
-import { buildPalette, GROUND_LIBRARY } from '../engine/palette.js';
+import { buildPaintSurface, PAINT_DEFAULT_WIDTH_VARIATION } from '../engine/paint.js';
+import { buildPalette, GROUND_LIBRARY, INK_HEX } from '../engine/palette.js';
 import { DEFAULT_PALETTE } from '../engine/simulate.js';
+import { renderSplatterMark } from '../engine/splatter.js';
 
 /* ════════════════════════════════════════════════════════════════════
    TASK 1 — screen-state machine. Three states only: idle / playing /
@@ -585,10 +596,10 @@ function rebuildPersist(surfaceKey) {
   } else {
     persistCx.drawImage(ground, 0, 0);
   }
-  committedStrokes.forEach(st => renderStrokeAs(persistCx, surfaceKey, st.pts, st.wt, st.op, st.index, { taperHead: st.taperHead, taperTail: st.taperTail }));
+  committedStrokes.forEach(st => renderStrokeAs(persistCx, surfaceKey, st.pts, st.wt, st.op, st.index));
 }
 
-function commitStroke(rawPts, wt, op, taperOpts) {
+function commitStroke(rawPts, wt, op) {
   if (rawPts.length < 2) return;
   // Re-zip the baked-per-point .w (brief 19 Task 5) onto jitterPath's
   // output: jitterPath (engine fn) returns fresh {x,y} objects for every
@@ -600,13 +611,7 @@ function commitStroke(rawPts, wt, op, taperOpts) {
   // width algorithm, which disagreed with the live-drawn shape).
   const jittered = jitterPath(rawPts, JITTER_AMPLITUDE);
   const pts = jittered.map((p, i) => ({ x: p.x, y: p.y, w: rawPts[i].w }));
-  // Emergence-taper flags (brief 23 Task 3), stored on the committed stroke
-  // so rebuildPersist can reproduce the exact same render later. Defaults
-  // true; false only at the 500-point overflow seam (see stepDoodle).
-  const to = taperOpts || {};
-  const taperHead = to.taperHead !== false;
-  const taperTail = to.taperTail !== false;
-  const st = { pts, wt, op, index: strokeIndex++, taperHead, taperTail };
+  const st = { pts, wt, op, index: strokeIndex++ };
 
   if (committedStrokes.length >= DOODLE_RESET_THRESHOLD) {
     // Brief 20 Task 2: hard reset, not a rolling fade — the rally holds
@@ -616,7 +621,7 @@ function commitStroke(rawPts, wt, op, taperOpts) {
     rebuildPersist(currentSurface);
   }
   committedStrokes.push(st);
-  renderStrokeAs(persistCx, currentSurface, st.pts, st.wt, st.op, st.index, { taperHead, taperTail }); // incremental
+  renderStrokeAs(persistCx, currentSurface, st.pts, st.wt, st.op, st.index); // incremental
 }
 
 // Two stacked canvases so a surface switch can cross-fade (DESIGN.md §13:
@@ -726,7 +731,6 @@ function makePaintTracker(rng, cfg) {
     startTrail(ball, x, y) {
       ball.pts = [{ x, y }];
       ball._paintArcLen = 0;
-      ball._paintTaperHead = true; // brief 23 Task 3 — reset true; overflow continuations clear this explicitly
 
       const profileRoll = rng();
       ball._paintPhase = rng() * Math.PI * 2;
@@ -804,63 +808,31 @@ const doodlePaintTracker = makePaintTracker(paintWidthRng, {
   widthVariation: 1.0, // doodle never scaled the wave down
 });
 
-// Emergence taper (brief 23 Task 3) — a second, DRAW-TIME width multiplier,
-// separate from the baked-at-append .w above. Zero at a stroke's nearer end,
-// full by PAINT_TAPER_LEN px along the polyline — so the ink comes OUT OF
-// the ball instead of the ball sitting inside a blunt-ended ribbon several
-// times its own diameter. Starting value, tune by eye against a recording.
-const PAINT_TAPER_LEN = 28;
-
-// smoothstep, not t*t: the brief's fallback if the ball still doesn't read
-// as a solid dot against the ink. Shipped as smoothstep after review.
-function paintTaper(distAlongPolyline) {
-  const t = Math.max(0, Math.min(1, distAlongPolyline / PAINT_TAPER_LEN));
-  return t * t * (3 - 2 * t);
-}
-
 // Ribbon fill for a paint stroke — live or committed, doodle or game, same
 // function either way (brief 20 Task 1a, generalised brief 22 Task 1).
 // Same tangent/normal/half-width/rounded-cap construction as paint.js's
 // renderPaintStroke, but driven by each point's PRE-BAKED .w (never
-// recomputed) TIMES the draw-time emergence taper above. Raw points only
-// (no Catmull-Rom spine resampling) — this doesn't need the finished-
-// artwork's exact sample density, only a shape that's stable across a
-// stroke's whole life, growing or committed. This is the ONLY function in
-// the app that fills paint-stroke pixels — verify by construction: grep
-// finds exactly one definition, and the engine's own renderPaintStroke is
-// never called anywhere in this file.
+// recomputed). Raw points only (no Catmull-Rom spine resampling) — this
+// doesn't need the finished-artwork's exact sample density, only a shape
+// that's stable across a stroke's whole life, growing or committed. This
+// is the ONLY function in the app that fills paint-stroke pixels — verify
+// by construction: grep finds exactly one definition, and the engine's own
+// renderPaintStroke is never called anywhere in this file.
 //
-// taperOpts = { taperHead, taperTail }, both default true. Both false only
-// at the 500-point overflow seam (brief 23 Task 3's "one seam, named"): the
-// commit that gets cut off skips its tail taper, and the continuation that
-// picks the line back up skips its head taper, so an arbitrary buffer-
-// length boundary doesn't pinch a line that is visibly still travelling.
-//
-// Why this cannot reintroduce brief 20's commit-time pop: distHead/distTail
-// are measured along the CURRENT pts array's own arc length. While a stroke
-// is still growing, its last point IS the ball, so the tail-taper region
-// travels with the ball frame to frame — that motion is the emergence
-// effect, not a bug. The instant the stroke commits, that same last point
-// becomes permanent and every later render (this function, on the exact
-// same frozen array) reproduces the exact same pixels — live and committed
-// are the same function over the same data at every frame, so there is no
-// discontinuity AT the commit frame. The per-point .w baked at append time
-// (brief 19/20's invariant) is still never recomputed; this taper bends
-// "constant per-point width forever" only inside a bounded window that is
-// live NOW and frozen forever after, which is not the same claim.
-function drawPaintRibbon(ctx, pts, wt, col, taperOpts) {
+// Brief 23 Task 3 added a draw-time emergence taper here (zero width at
+// each end, ramping to full over PAINT_TAPER_LEN) to solve the ball being
+// invisible inside its own trail. Brief 24 Task 3 REMOVES it: it fixed ball
+// visibility but forced every stroke thin-at-both-ends, which is exactly
+// the uniformity brief 23's OWN Task 4 (per-stroke profiles) was trying to
+// break — a stroke can no longer just start and stop at its own width. Ball
+// visibility is solved differently now: a gap between the ball and its live
+// trail (trimStrokeForGap, below) plus a solid-black ball in paint mode
+// (drawGameFrame/drawFrame) — neither touches this function or the stroke's
+// own shape. Do not re-add a taper here; if ball legibility regresses again,
+// the gap width is the knob, not this function.
+function drawPaintRibbon(ctx, pts, wt, col) {
   if (pts.length < 2) return;
-  const taperHead = !taperOpts || taperOpts.taperHead !== false;
-  const taperTail = !taperOpts || taperOpts.taperTail !== false;
-
   const n = pts.length;
-  const cum = new Array(n);
-  cum[0] = 0;
-  for (let i = 1; i < n; i++) {
-    cum[i] = cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-  }
-  const total = cum[n - 1];
-
   const left = [], right = [];
   for (let i = 0; i < n; i++) {
     const p = pts[i];
@@ -870,11 +842,7 @@ function drawPaintRibbon(ctx, pts, wt, col, taperOpts) {
     tx /= tl; ty /= tl;
     const nx = -ty, ny = tx;
 
-    let taper = 1;
-    if (taperHead) taper = Math.min(taper, paintTaper(cum[i]));
-    if (taperTail) taper = Math.min(taper, paintTaper(total - cum[i]));
-
-    const halfW = 0.5 * wt * (p.w != null ? p.w : 1) * taper;
+    const halfW = 0.5 * wt * (p.w != null ? p.w : 1);
     left.push({ x: p.x + nx * halfW, y: p.y + ny * halfW });
     right.push({ x: p.x - nx * halfW, y: p.y - ny * halfW });
   }
@@ -895,17 +863,64 @@ function drawPaintRibbon(ctx, pts, wt, col, taperOpts) {
   ctx.restore();
 }
 
+// Ball-visibility fix, brief 24 Task 3 (replaces brief 23's emergence
+// taper — see the note on drawPaintRibbon above). PAINT_BALL_GAP px of arc
+// length are left undrawn at the tail of the LIVE, still-growing stroke
+// only — the ball then sits in that clear gap instead of inside the ink.
+// Walks back from the stroke's last point accumulating arc length and
+// interpolates a fresh cut point exactly at the gap boundary (not just
+// dropping whole points), so the visible edge of the ink doesn't jump in
+// point-sized steps frame to frame. Returns a NEW array — pts and its
+// point objects (including their baked .w) are never mutated, per the
+// brief's explicit instruction; the stroke's own data is untouched. Returns
+// null if the whole stroke is shorter than the gap (nothing to draw yet).
+//
+// What changes at commit, and why this isn't brief 20's pop: this function
+// is called ONLY for the live in-flight render (drawFrame/drawGameFrame's
+// paint branch) — never for a committed stroke, which always draws its full
+// pts array complete. So the frame a stroke commits, the last ~10px of ink
+// that was being held back simply appears — the stroke completes, nothing
+// that was already visible moves or changes width. Brief 20's pop was a
+// SECOND ALGORITHM re-rendering already-drawn ink differently; this is the
+// same one algorithm drawing more of the same data than it was showing a
+// moment ago. Do not "fix" this by baking the gap into .w — that would
+// resurrect exactly the bug brief 19/20 spent two briefs killing.
+const PAINT_BALL_GAP = 10;
+
+function trimStrokeForGap(pts, gapLen) {
+  const n = pts.length;
+  if (n < 2) return null;
+  let acc = 0;
+  for (let i = n - 1; i > 0; i--) {
+    const a = pts[i - 1], b = pts[i];
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+    if (acc + segLen >= gapLen) {
+      const remain = gapLen - acc;
+      const t = segLen > 0 ? 1 - remain / segLen : 0;
+      const cut = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, w: a.w + (b.w - a.w) * t };
+      const trimmed = pts.slice(0, i).concat([cut]);
+      return trimmed.length >= 2 ? trimmed : null;
+    }
+    acc += segLen;
+  }
+  return null; // gap longer than the whole stroke so far
+}
+
 // Single stroke renderer for both committed strokes (rebuildPersist,
 // commitStroke) and the live/growing one (drawFrame) — the same function,
 // same inputs in, same pixels out, at every point in a stroke's life.
 // That equality is what makes brief 20 Task 1a's commit-time pop
 // impossible by construction: there is no second algorithm to disagree.
-function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index, taperOpts) {
+// (The brief 24 gap above is applied by the CALLER trimming `pts` before
+// this function ever sees them, for the live paint case only — this
+// function itself still just draws whatever pts array it's handed, live or
+// committed, exactly as before.)
+function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
   const col = colourFor(surfaceKey, index);
   if (surfaceKey === 'chalk') {
     renderChalkStroke(ctx, pts, col, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
   } else if (surfaceKey === 'paint') {
-    drawPaintRibbon(ctx, pts, wt * DOODLE_PAINT_WIDTH_BASE, col, taperOpts);
+    drawPaintRibbon(ctx, pts, wt * DOODLE_PAINT_WIDTH_BASE, col);
   } else {
     renderStroke(ctx, pts, col, wt, op, DEFAULT_STROKE_PARAMS);
   }
@@ -924,24 +939,18 @@ function stepDoodle() {
   const events = advanceBall(ball, paddleL, paddleR, 0, physRng);
 
   events.forEach(() => {
-    commitStroke(ball.pts, ball.wt, ball.op, { taperHead: ball._paintTaperHead, taperTail: true });
+    commitStroke(ball.pts, ball.wt, ball.op);
     doodlePaintTracker.startTrail(ball, ball.x, ball.y);
   });
   doodlePaintTracker.appendPoint(ball, ball.x, ball.y);
 
   if (ball.pts.length > 500) {
-    // Overflow seam (brief 23 Task 3, "the one seam, named"): this commit's
-    // tail is NOT tapered (the line keeps travelling past this arbitrary
-    // buffer boundary), and the continuation's head is marked not to taper
-    // either — arc-length/phase/profile stay untouched, only the taper
-    // flag changes, so this is still the same stroke, not a new one.
-    commitStroke(ball.pts, ball.wt, ball.op, { taperHead: ball._paintTaperHead, taperTail: false });
+    commitStroke(ball.pts, ball.wt, ball.op);
     ball.pts = ball.pts.slice(-4); // buffer trim only — same stroke continues, arc-length/phase untouched
-    ball._paintTaperHead = false;
   }
 
   if (ball.x < -30 || ball.x > W + 30) {
-    if (ball.pts.length >= 2) commitStroke(ball.pts, ball.wt, ball.op, { taperHead: ball._paintTaperHead, taperTail: true });
+    if (ball.pts.length >= 2) commitStroke(ball.pts, ball.wt, ball.op);
     ball = mkBall(physRng, 1, null, [1.0, 2.4], [0.50, 0.68]);
     doodlePaintTracker.startTrail(ball, ball.x, ball.y);
   }
@@ -952,19 +961,22 @@ function drawFrame() {
   const ctx = el.getContext('2d');
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(persistCv, 0, 0);
-  if (ball.pts.length > 1) {
-    // in-flight stroke: raw (unjittered) pts, same as root's live-frame
-    // overlay — jitter is a commit-time effect, not a per-frame one. Tail
-    // always tapers live (the last point is the ball itself); head follows
-    // ball._paintTaperHead so an overflow continuation doesn't show a pinch
-    // where the previous piece was just cut off.
-    renderStrokeAs(ctx, currentSurface, ball.pts, ball.wt, ball.op, strokeIndex, { taperHead: ball._paintTaperHead, taperTail: true });
+  // in-flight stroke: raw (unjittered) pts, same as root's live-frame
+  // overlay — jitter is a commit-time effect, not a per-frame one. Paint
+  // only (brief 24 Task 3): trim the last PAINT_BALL_GAP px so the ball
+  // sits in clear space ahead of its own ink, instead of a taper.
+  const livePts = currentSurface === 'paint' ? trimStrokeForGap(ball.pts, PAINT_BALL_GAP) : ball.pts;
+  if (livePts && livePts.length > 1) {
+    renderStrokeAs(ctx, currentSurface, livePts, ball.wt, ball.op, strokeIndex);
   }
   // Task 4 — ball marker, always visible, every surface: the moving point
   // that makes the doodle legible as a rally, not just accumulating trails.
+  // Brief 24 Task 3: solid black (INK_HEX) in paint mode — unmistakable
+  // against ink of any stroke colour or width; paper/chalk keep the
+  // stroke-coloured ball, unchanged.
   ctx.save();
   ctx.globalAlpha = 0.9;
-  ctx.fillStyle = colourFor(currentSurface, strokeIndex);
+  ctx.fillStyle = currentSurface === 'paint' ? INK_HEX : colourFor(currentSurface, strokeIndex);
   ctx.beginPath();
   ctx.arc(ball.x, ball.y, BR * 0.9, 0, Math.PI * 2);
   ctx.fill();
@@ -999,24 +1011,32 @@ let gameSeed = 0;
 let gamePhysRng, gameGroundSeeds, gamePaintWidthRng;
 
 // ── Task 1's shared machinery, game-scoped config ─────────────────────
-// PAINT_WIDTH_BASE / PAINT_DEFAULT_WIDTH_VARIATION are paint.js's real,
-// frozen, approved-2026-07-21 product constants — imported above, used
-// here, never re-declared. undulation range and reference length are
-// shared with the doodle (no different numbers given for the game; that
-// math doesn't depend on width scale).
+// PAINT_DEFAULT_WIDTH_VARIATION is paint.js's real, frozen, approved-
+// 2026-07-21 product constant — imported above, used here, never
+// re-declared. undulation range and reference length are shared with the
+// doodle (no different numbers given for the game; that math doesn't
+// depend on width scale).
 //
-// GAME_PAINT_WIDTH_VAR_MIN/MAX are NOT a mirror of anything in paint.js —
-// that comment stood here through brief 22, but brief 23 Task 2 made it
-// false, on purpose. paint.js's private WIDTH_VAR_MIN/MAX (0.15/4.0) were
+// GAME_PAINT_WIDTH_VAR_MIN/MAX and (brief 24) GAME_PAINT_WIDTH_BASE are NOT
+// mirrors of anything in paint.js — that comment stood here through brief
+// 22, but brief 23 Task 2 made the range false on purpose, and brief 24
+// Task 2 extends the same divergence to the base. paint.js's private
+// WIDTH_VAR_MIN/MAX (0.15/4.0) and its exported PAINT_WIDTH_BASE (6.0) were
 // approved in the lab on twelve static seeded artworks; the first time that
-// 4.0 was seen in a live rally at 1000×630 with a moving ball, it produced
-// a 57.6px worst case — a bar, not a brush stroke. These are now the live
-// PRODUCT'S OWN values, and paint.js's pair is the one that's stale and
-// pending reconciliation (BACKLOG.md, extended brief 23) — not the reverse.
-// Do NOT "fix" this back to match paint.js; if the numbers still disagree
-// when that reconciliation happens, paint.js moves to these, not this file
-// to paint.js's frozen pair.
+// combination was seen in a live rally at 1000×630 with a moving ball, it
+// produced a 57.6px worst case — a bar, not a brush stroke. Brief 23 cut the
+// range (worst case → 23px); still too heavy, so brief 24 cuts the BASE
+// instead (6.0 → 3.5, worst case → ~13px) — no longer even importing
+// PAINT_WIDTH_BASE, since the game never uses it now. Reference point: the
+// lab's own BASE WIDTH slider sits at 4.5, not 6.0 — paint.js's frozen
+// constant already didn't match the lab, before it's compared to the game.
+// These three are the live PRODUCT'S OWN values, and paint.js's pair is the
+// one that's stale and pending reconciliation (BACKLOG.md, extended briefs
+// 23 and 24) — not the reverse. Do NOT "fix" these back to match paint.js;
+// if the numbers still disagree when that reconciliation happens, paint.js
+// moves to these, not this file to paint.js's frozen pair.
 const GAME_PAINT_WIDTH_VAR_MIN = 0.25, GAME_PAINT_WIDTH_VAR_MAX = 1.6; // was 0.15/4.0 — max cut 60% (brief 23 Task 2), min raised so the thin end reads as a hairline brush, not a single pixel
+const GAME_PAINT_WIDTH_BASE = 3.5; // was paint.js's imported 6.0 — brief 24 Task 2, new worst case 2.4 x 3.5 x 1.6 = 13.44px
 let gamePaintTracker; // built fresh each game — see startGame()
 
 // ── Task 4 — per-surface ground, paint's neutral-substrate exception ──
@@ -1069,11 +1089,20 @@ function gameColourFor(surfaceKey, index) {
   const arr = gamePaletteArrayFor(surfaceKey);
   return arr[index % arr.length];
 }
-// Task 5's own table: "Paint | the three accents from buildPalette | 3" —
-// the pill shows distinct swatches, not the weighted cycling array above.
+// Brief 24 Task 5: the paint pill shows all FIVE of the artwork's colour
+// slots — ground, ink, then the three accents in A/B/C (dominant/secondary/
+// minor) order — matching the lab and PAINT-MODE.md §2.3, not just the 3
+// accents brief 22 shipped. Stroke colours are UNCHANGED by this: the rally
+// still only ever cycles the 3 accents (gamePaletteArrayFor/gameColourFor,
+// untouched) — ink only ever appears as splatter (Task 6) or, later, the
+// brief-25 reveal ground. This function is the pill's own display list, not
+// the stroke-colour source; paper/chalk are unaffected (they have no
+// ground/ink concept, still just their own N distinct swatches).
 function gamePalPillHexesFor(surfaceKey) {
   if (surfaceKey === 'chalk') return gameChalkOrder.map(i => CHALK_PALETTE[i]);
-  if (surfaceKey === 'paint') return gamePaintPalette.accents.map(a => a.hex);
+  if (surfaceKey === 'paint') {
+    return [gamePaintPalette.ground, gamePaintPalette.ink, ...gamePaintPalette.accents.map(a => a.hex)];
+  }
   return gamePaperOrder.map(i => DEFAULT_PALETTE[i]);
 }
 function shuffleArrayInPlace(arr, rng) {
@@ -1083,40 +1112,56 @@ function shuffleArrayInPlace(arr, rng) {
   }
 }
 
-// ── Persistent canvas + stroke commit — same architecture as the doodle
-// (and root index.html's drawCv): ground + all committed strokes, never
-// cleared except a new game. One canvas only — unlike the doodle, the
-// game's surface never switches mid-rally, so there's no cross-fade need.
-const gamePersistCv = document.createElement('canvas');
-gamePersistCv.width = W; gamePersistCv.height = H;
-const gamePersistCx = gamePersistCv.getContext('2d');
+// ── Committed-strokes layer + stroke commit — brief 24 Task 4 splits what
+// was one "persist" canvas (ground + strokes baked together) into TWO:
+// getGameGround(surfaceKey) already IS the opaque ground layer (built once,
+// cached, per Task 4/brief 22 — no separate copy needed here), and
+// gameStrokesCv below holds committed strokes ONLY, transparent background.
+// drawGameFrame composites ground at alpha 1, then this layer at the
+// current dim/full alpha, then the live stroke at alpha 1, then the ball —
+// so "committed strokes sit back during play, snap to full at game end" is
+// a single alpha number on ONE drawImage call, not a per-stroke property.
+// A per-stroke alpha instead would double-darken wherever strokes overlap
+// (each layer's semi-transparent paint stacks); compositing the whole layer
+// once dims everything evenly regardless of how busy an area is. This same
+// split is what brief 25's reveal needs anyway — the paint ground has to
+// composite in UNDERNEATH the marks — so it's built now, not unpicked from
+// a combined canvas next brief.
+const gameStrokesCv = document.createElement('canvas');
+gameStrokesCv.width = W; gameStrokesCv.height = H;
+const gameStrokesCx = gameStrokesCv.getContext('2d');
+
+// 70% while playing, 100% once the game ends (see stepGame's win branch) —
+// starting value, tune by eye and report. One number, not a re-render.
+const GAME_COMMITTED_ALPHA = 0.70;
+let gameStrokesAlpha = GAME_COMMITTED_ALPHA;
 
 let gameCommittedStrokes = [];
 let gameStrokeIndex = 0;
 
 // Single stroke renderer for the game, live or committed — same principle
 // as the doodle's renderStrokeAs (Task 1): paint routes through the ONE
-// shared drawPaintRibbon, at product width (PAINT_WIDTH_BASE), so a
-// stroke can never be drawn two different ways at two points in its life,
-// rally or reveal.
-function renderGameStrokeAs(ctx, surfaceKey, pts, wt, op, index, taperOpts) {
+// shared drawPaintRibbon, at product width, so a stroke can never be drawn
+// two different ways at two points in its life, rally or reveal. (Brief 23's
+// taperOpts param is gone — brief 24 Task 3 removed the taper entirely;
+// see drawPaintRibbon's own comment.)
+function renderGameStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
   const col = gameColourFor(surfaceKey, index);
   if (surfaceKey === 'chalk') {
     renderChalkStroke(ctx, pts, col, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
   } else if (surfaceKey === 'paint') {
-    drawPaintRibbon(ctx, pts, wt * PAINT_WIDTH_BASE, col, taperOpts);
+    drawPaintRibbon(ctx, pts, wt * GAME_PAINT_WIDTH_BASE, col);
   } else {
     renderStroke(ctx, pts, col, wt, op, DEFAULT_STROKE_PARAMS);
   }
 }
 
-function rebuildGamePersist() {
-  gamePersistCx.clearRect(0, 0, W, H);
-  gamePersistCx.drawImage(getGameGround(currentSurface), 0, 0); // no filter — see chalk decision above
-  gameCommittedStrokes.forEach(st => renderGameStrokeAs(gamePersistCx, currentSurface, st.pts, st.wt, st.op, st.index, { taperHead: st.taperHead, taperTail: st.taperTail }));
+function rebuildGameStrokes() {
+  gameStrokesCx.clearRect(0, 0, W, H); // transparent, NOT the ground — see the layer-split comment above
+  gameCommittedStrokes.forEach(st => renderGameStrokeAs(gameStrokesCx, currentSurface, st.pts, st.wt, st.op, st.index));
 }
 
-function commitGameStroke(rawPts, wt, op, eventType, taperOpts) {
+function commitGameStroke(rawPts, wt, op, eventType) {
   if (rawPts.length < 2) return;
   // Same re-zip as the doodle's commitStroke (Task 1/brief 20): jitterPath
   // returns fresh {x,y} objects for interior points, dropping the baked
@@ -1124,14 +1169,9 @@ function commitGameStroke(rawPts, wt, op, eventType, taperOpts) {
   // exact widths it had live.
   const jittered = jitterPath(rawPts, JITTER_AMPLITUDE);
   const pts = jittered.map((p, i) => ({ x: p.x, y: p.y, w: rawPts[i].w }));
-  // Emergence-taper flags (brief 23 Task 3) — see commitStroke's doodle
-  // twin. Defaults true; false only at the 500-point overflow seam.
-  const to = taperOpts || {};
-  const taperHead = to.taperHead !== false;
-  const taperTail = to.taperTail !== false;
-  const st = { pts, wt, op, index: gameStrokeIndex++, event: eventType, taperHead, taperTail };
+  const st = { pts, wt, op, index: gameStrokeIndex++, event: eventType };
   gameCommittedStrokes.push(st);
-  renderGameStrokeAs(gamePersistCx, currentSurface, st.pts, st.wt, st.op, st.index, { taperHead, taperTail }); // incremental — never cleared mid-game
+  renderGameStrokeAs(gameStrokesCx, currentSurface, st.pts, st.wt, st.op, st.index); // incremental — never cleared mid-game
   return st;
 }
 
@@ -1140,7 +1180,127 @@ let gameBall, gamePaddleL, gamePaddleR;
 let gamePs = 0, gameAs = 0, gameLv = 1, gameAiSpd = 2.6;
 let gameMouseY = H / 2, gamePrevMouseY = H / 2;
 let gameServing = false; // true during the short beat between a miss and the next spawn
-let gameLastEndedStrokes = null; // handoff for brief 23 — {strokes, seed, surface}
+let gameLastEndedStrokes = null; // handoff for brief 25 (results/reveal) — {strokes, seed, surface}
+
+// ── Task 6 (brief 24) — live splatter, paint only ──────────────────────
+// PAINT-MODE.md §5 D, specced since brief 11, never built until now: ink
+// thrown off the ball mid-rally, separate from the line it's drawing.
+// Density-placed buildSplatter/buildIntersectionBlotches (splatter.js) are
+// NOT used here on purpose — those place marks over a FINISHED stroke set,
+// which is a different mechanism from "the ball sheds ink as it travels."
+// This is physics-driven emission instead: evaluated once per frame,
+// probability scaling with |ball.spin| and speed, so a fast spinning ball
+// sheds ink and a slow straight one doesn't. Marks are built app-side and
+// handed straight to the engine's own exported renderSplatterMark — the
+// actual fill code (irregular blob / teardrop+satellites) is never
+// duplicated, only the placement/sizing decision is app-side.
+//
+// Never on a hit. splatter.js's own header records why density-placement
+// replaced event-triggering in the first place: brief 02's hit-triggered
+// ink bloom pinned every mark to the canvas edge, because paddle/wall hits
+// are structurally always on the boundary. stepGame gates this to frames
+// with NO hit event and NO miss this frame — see the call site.
+const GAME_SPLATTER_COOLDOWN_FRAMES = 40; // hard floor between marks, per brief
+const GAME_SPLATTER_CAP = 10; // safety ceiling — target 3-8/game comes from GAME_SPLATTER_BASE_P, this just bounds the worst case
+const GAME_SPLATTER_SPIN_REF = 0.15; // |ball.spin| normalisation — see physics.js's sweptHit/finishWallBounce for typical magnitudes
+const GAME_SPLATTER_BASE_P = 0.016; // PROVISIONAL — tuned against the measured rate, see PROJECT-LOG for the number actually observed
+const GAME_SPLATTER_FLUNG_RATIO = 0.4; // ~60/40 drops:flung baseline, matching splatter.js's FLUNG_RATIO — spin skews this up per-mark, see buildLiveSplatterMark
+const GAME_SPLATTER_OFFSET_MIN = 14, GAME_SPLATTER_OFFSET_RANGE = 18; // px clear of the ball, perpendicular to travel — clears the widest (~13px) stroke plus the mark's own radius
+
+// splatter.js's own size constants (DROP_R, FLUNG_LEN, FLUNG_HEAD_R) are
+// private/unexported, tuned against a 24px-wide stroke the game no longer
+// has (~13px widest now, brief 24 Task 2) — mirrored here at ~0.58x per the
+// brief's own numbers, same pattern and same BACKLOG.md reconciliation item
+// as the width constants above.
+const GAME_SPLATTER_DROP_R_MIN = 2.5, GAME_SPLATTER_DROP_R_MAX = 12.0;
+const GAME_SPLATTER_DROP_SIZE_POWER = 3.5; // mirrors splatter.js's DROP_SIZE_POWER — heavy-tailed toward small
+const GAME_SPLATTER_FLUNG_LEN_MIN = 15, GAME_SPLATTER_FLUNG_LEN_MAX = 35;
+const GAME_SPLATTER_HEAD_R_MIN = 4, GAME_SPLATTER_HEAD_R_MAX = 9;
+const GAME_SPLATTER_SATELLITE_COUNT_MIN = 2, GAME_SPLATTER_SATELLITE_COUNT_MAX = 5; // a count, not a size — unscaled
+const GAME_SPLATTER_INK_WEIGHT = 0.15; // mirrors splatter.js's private INK_WEIGHT
+
+let gameSplatterRng; // own stream, salted off the per-game seed like every other — see startGame()
+let gameSplatterCooldown = 0;
+let gameSplatterMarkCount = 0;
+
+// Mirrors splatter.js's private splatterColorWeights(palette) — ink at a
+// minor weight alongside the 3 accents at their own weights. Not exported,
+// so mirrored, same as the size constants above.
+function gameSplatterColorWeights(palette) {
+  return [
+    { value: palette.ink, weight: GAME_SPLATTER_INK_WEIGHT },
+    ...palette.accents.map(a => ({ value: a.hex, weight: a.weight })),
+  ];
+}
+
+// Builds one mark descriptor at the ball's CURRENT position, offset
+// perpendicular to travel (brief: "far enough that it lands clear of the
+// trail... a mark that lands on top of the stroke reads as a blob in the
+// line"). This is deliberately NOT splatter.js's nearestDirection (which
+// orients a flung mark ALONG the local stroke tangent, for density-placed
+// marks found after the fact) — a live mark is oriented perpendicular,
+// away from the line it's leaving, matching "flung off the ball" physically.
+function buildLiveSplatterMark(ball, palette, rng) {
+  const spd = Math.hypot(ball.vx, ball.vy) || 1;
+  const tx = ball.vx / spd, ty = ball.vy / spd; // travel direction (unit)
+  const nx = -ty, ny = tx;                      // perpendicular to travel (unit)
+  const sign = rng() < 0.5 ? 1 : -1;             // randomise which side
+  const offset = GAME_SPLATTER_OFFSET_MIN + rng() * GAME_SPLATTER_OFFSET_RANGE;
+  const mx = ball.x + nx * sign * offset, my = ball.y + ny * sign * offset;
+
+  const colorHex = weightedPick(rng, gameSplatterColorWeights(palette));
+
+  // High spin favours 'flung' (brief 24 Task 6), oriented perpendicular to
+  // travel — not the ~60/40 flat ratio alone.
+  const spinNorm = Math.min(1, Math.abs(ball.spin) / GAME_SPLATTER_SPIN_REF);
+  const flungChance = Math.min(0.85, GAME_SPLATTER_FLUNG_RATIO + spinNorm * 0.4);
+
+  if (rng() < flungChance) {
+    const dx = nx * sign, dy = ny * sign; // fling continues outward along the same perpendicular
+    const headR = GAME_SPLATTER_HEAD_R_MIN + rng() * (GAME_SPLATTER_HEAD_R_MAX - GAME_SPLATTER_HEAD_R_MIN);
+    const length = GAME_SPLATTER_FLUNG_LEN_MIN + rng() * (GAME_SPLATTER_FLUNG_LEN_MAX - GAME_SPLATTER_FLUNG_LEN_MIN);
+    const satelliteCount = GAME_SPLATTER_SATELLITE_COUNT_MIN
+      + Math.floor(rng() * (GAME_SPLATTER_SATELLITE_COUNT_MAX - GAME_SPLATTER_SATELLITE_COUNT_MIN + 1));
+    const satellites = [];
+    for (let i = 0; i < satelliteCount; i++) {
+      const t = 1.1 + i * 0.35 + rng() * 0.25;
+      const perp = (rng() - 0.5) * headR * (1.2 + i * 0.6); // scatter along the ORIGINAL travel axis, off the fling line
+      satellites.push({
+        x: mx + dx * length * t + tx * perp,
+        y: my + dy * length * t + ty * perp,
+        r: Math.max(0.5, headR * (0.4 - i * 0.05) * (0.7 + rng() * 0.5)),
+      });
+    }
+    return { type: 'flung', x: mx, y: my, dx, dy, headR, length, colorHex, satellites };
+  }
+
+  const rNorm = Math.pow(rng(), GAME_SPLATTER_DROP_SIZE_POWER); // heavy-tailed toward small
+  const r = GAME_SPLATTER_DROP_R_MIN + (GAME_SPLATTER_DROP_R_MAX - GAME_SPLATTER_DROP_R_MIN) * rNorm;
+  const irregularity = 0.12 + rng() * 0.13;
+  const seedAngle = rng() * Math.PI * 2;
+  return { type: 'drop', x: mx, y: my, r, irregularity, seedAngle, colorHex };
+}
+
+// Called once per frame from stepGame, only on frames with no hit event and
+// no miss this frame (see the call site) — "mid-flight, between bounces."
+function maybeEmitSplatter() {
+  if (gameSplatterCooldown > 0) { gameSplatterCooldown--; return; }
+  if (gameSplatterMarkCount >= GAME_SPLATTER_CAP) return;
+
+  const spd = Math.hypot(gameBall.vx, gameBall.vy);
+  const spinNorm = Math.min(1, Math.abs(gameBall.spin) / GAME_SPLATTER_SPIN_REF);
+  const speedNorm = Math.min(1, Math.max(0, (spd - BASE_SPD) / (MAX_SPD - BASE_SPD)));
+  const p = GAME_SPLATTER_BASE_P * spinNorm * (0.4 + 0.6 * speedNorm);
+  if (gameSplatterRng() >= p) return;
+
+  const mark = buildLiveSplatterMark(gameBall, gamePaintPalette, gameSplatterRng);
+  // Splatter is artwork, not chrome (brief 24 Task 6) — into gameStrokesCx,
+  // so it dims with everything else during play and comes up to full at
+  // game end (Task 4), same as a committed stroke.
+  renderSplatterMark(gameStrokesCx, mark);
+  gameSplatterMarkCount++;
+  gameSplatterCooldown = GAME_SPLATTER_COOLDOWN_FRAMES;
+}
 
 const gameCanvas = document.getElementById('game-canvas');
 const gamePaddleLEl = document.getElementById('game-paddle-left');
@@ -1151,14 +1311,16 @@ const scoreAEl = document.getElementById('pg-score-a');
 const pgPalPillEl = document.getElementById('pg-pal-pill');
 const pgShuffleEl = document.getElementById('pg-shuffle');
 
-// ── Task 1 (brief 23) — paddle-travel guardrails. Static DOM chrome, set
-// once, never touched by the game loop. Positions derived from physics.js's
-// real PAD_MIN/PAD_MAX/PH/W — not the brief's example numbers (38/590) —
-// so this stays correct if those constants ever change.
+// ── Task 1 (brief 23, geometry fixed brief 24) — paddle-travel guardrails.
+// Static DOM chrome, set once, never touched by the game loop. Positions
+// derived from physics.js's real PAD_MIN/PAD_MAX/PH/W — not either brief's
+// example numbers — so this stays correct if those constants ever change.
+// rightX uses an 8px guard width (brief 24: the mark is exactly the frame
+// border's own thickness, so it sits entirely on the border).
 (function placeGuardrails() {
   const topY = PAD_MIN - 2;  // flush above the paddle's highest position
   const botY = PAD_MAX + PH; // flush below the paddle's lowest bottom edge
-  const rightX = W - 16;     // guard is 16px wide — flush to the right edge
+  const rightX = W - 8;      // guard is 8px wide — flush to the right edge
   document.getElementById('guard-tl').style.cssText = `left:0px; top:${topY}px;`;
   document.getElementById('guard-bl').style.cssText = `left:0px; top:${botY}px;`;
   document.getElementById('guard-tr').style.cssText = `left:${rightX}px; top:${topY}px;`;
@@ -1228,6 +1390,10 @@ function startGame() {
     refLen: PAINT_UNDULATION_REF_LEN,
     widthVariation: PAINT_DEFAULT_WIDTH_VARIATION, // imported — paint.js's real frozen default (1.0)
   });
+  gameSplatterRng = makeRng((gameSeed ^ 0x53504C41) >>> 0); // 'SPLA' — own stream, Task 6
+  gameSplatterCooldown = 0;
+  gameSplatterMarkCount = 0;
+  gameStrokesAlpha = GAME_COMMITTED_ALPHA; // Task 4 — reset dim, snaps to 1.0 at this game's own end
 
   // Palette: paper/chalk start in identity order (re-shuffled only via
   // Task 5's shuffle control — PAINT-MODE.md §2 is LOCKED, never generate
@@ -1245,7 +1411,7 @@ function startGame() {
   gamePaddleR = { y: (PAD_MIN + PAD_MAX) / 2 };
   gamePrevMouseY = gameMouseY;
 
-  rebuildGamePersist();
+  rebuildGameStrokes();
   updateGameScoreUI();
   updateGamePalPill();
   spawnGameBall();
@@ -1272,19 +1438,16 @@ function stepGame() {
   updatePaddleAI(gamePaddleR, targetR, gameAiSpd, Date.now(), 0);
 
   const events = advanceBall(gameBall, gamePaddleL, gamePaddleR, padVelL, gamePhysRng);
+  const hadHitEvent = events.length > 0; // Task 6 — splatter must never fire on the same frame as a hit
   events.forEach(ev => {
-    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, ev.type, { taperHead: gameBall._paintTaperHead, taperTail: true });
+    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, ev.type);
     gamePaintTracker.startTrail(gameBall, gameBall.x, gameBall.y);
   });
   gamePaintTracker.appendPoint(gameBall, gameBall.x, gameBall.y);
 
   if (gameBall.pts.length > 500) {
-    // Overflow seam (brief 23 Task 3) — see stepDoodle's twin for the full
-    // rationale. Tail not tapered on this piece, head not tapered on the
-    // continuation; geometry/arc-length/profile otherwise untouched.
-    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, 'overflow', { taperHead: gameBall._paintTaperHead, taperTail: false });
+    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, 'overflow');
     gameBall.pts = gameBall.pts.slice(-4);
-    gameBall._paintTaperHead = false;
   }
 
   ballBall([gameBall], gamePhysRng); // one ball: a no-op today, kept for engine-call parity with simulate.js
@@ -1293,22 +1456,30 @@ function stepGame() {
     const rightMissed = gameBall.x < -30; // ball passed the left edge -> right/AI scores
     const isGameEnd = rightMissed ? (gameAs + 1 >= WIN) : (gamePs + 1 >= WIN);
     if (gameBall.pts.length >= 2) {
-      commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, isGameEnd ? 'gameEnd' : 'score', { taperHead: gameBall._paintTaperHead, taperTail: true });
+      commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, isGameEnd ? 'gameEnd' : 'score');
     }
     if (rightMissed) gameAs++; else gamePs++;
     updateGameScoreUI();
     checkGameLevel();
 
     if (gamePs >= WIN || gameAs >= WIN) {
+      gameStrokesAlpha = 1.0; // Task 4 — full strength at game end, one-line change, no re-render
       gameLastEndedStrokes = { strokes: gameCommittedStrokes.slice(), seed: gameSeed, surface: currentSurface };
-      setScreen('results'); // brief 23 builds the real reveal on top of this handoff
+      setScreen('results'); // brief 25 builds the real reveal on top of this handoff
       return;
     }
 
     gameServing = true;
     serveDotEl.hidden = false;
     setTimeout(() => { if (screenState === 'playing') spawnGameBall(); }, 550); // brief serve beat — a rally game, not a menu
+    return; // a miss this frame — no splatter (see maybeEmitSplatter's call site below)
   }
+
+  // Task 6 — live splatter, paint only, mid-flight only: this line is only
+  // reached on a frame with no hit event (checked above) and no miss (the
+  // block above always returns before here on a miss) — exactly "between
+  // bounces, where the ball actually is," never on a boundary contact.
+  if (currentSurface === 'paint' && !hadHitEvent) maybeEmitSplatter();
 }
 
 function updateGamePaddleDOM() {
@@ -1319,17 +1490,34 @@ function updateGamePaddleDOM() {
 function drawGameFrame() {
   const ctx = gameCanvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
-  ctx.drawImage(gamePersistCv, 0, 0);
+
+  // Task 4 — composite order: ground opaque, committed strokes at the
+  // current dim/full alpha, live stroke at full, ball on top. Reset
+  // globalAlpha explicitly after the strokes layer so the live stroke and
+  // ball never inherit the dim value.
+  ctx.globalAlpha = 1.0;
+  ctx.drawImage(getGameGround(currentSurface), 0, 0); // no filter — see chalk decision, brief 22 Task 4
+  ctx.globalAlpha = gameStrokesAlpha;
+  ctx.drawImage(gameStrokesCv, 0, 0);
+  ctx.globalAlpha = 1.0;
+
   if (!gameServing && gameBall.pts.length > 1) {
     // in-flight stroke: raw (unjittered) pts — jitter is a commit-time
-    // effect, same as the doodle. Taper opts mirror drawFrame's doodle
-    // twin — see stepGame's overflow branch for when taperHead goes false.
-    renderGameStrokeAs(ctx, currentSurface, gameBall.pts, gameBall.wt, gameBall.op, gameStrokeIndex, { taperHead: gameBall._paintTaperHead, taperTail: true });
+    // effect, same as the doodle. Paint only (brief 24 Task 3): trim the
+    // last PAINT_BALL_GAP px so the ball sits in clear space ahead of its
+    // own ink, instead of brief 23's taper.
+    const livePts = currentSurface === 'paint' ? trimStrokeForGap(gameBall.pts, PAINT_BALL_GAP) : gameBall.pts;
+    if (livePts && livePts.length > 1) {
+      renderGameStrokeAs(ctx, currentSurface, livePts, gameBall.wt, gameBall.op, gameStrokeIndex);
+    }
   }
   if (!gameServing) {
+    // Brief 24 Task 3: solid black (INK_HEX) in paint mode, unmistakable
+    // against ink of any stroke colour or width; paper/chalk keep the
+    // stroke-coloured ball, unchanged.
     ctx.save();
     ctx.globalAlpha = 0.9;
-    ctx.fillStyle = gameColourFor(currentSurface, gameStrokeIndex);
+    ctx.fillStyle = currentSurface === 'paint' ? INK_HEX : gameColourFor(currentSurface, gameStrokeIndex);
     ctx.beginPath();
     ctx.arc(gameBall.x, gameBall.y, BR * 0.9, 0, Math.PI * 2);
     ctx.fill();
@@ -1371,7 +1559,7 @@ pgShuffleEl.addEventListener('click', (e) => {
   } else {
     shuffleArrayInPlace(gamePaperOrder, shuffleRng);
   }
-  rebuildGamePersist(); // restyle the WHOLE painting — committed strokes keep geometry, only colour changes
+  rebuildGameStrokes(); // restyle the WHOLE painting — committed strokes keep geometry, only colour changes
   updateGamePalPill();
   const ms = performance.now() - t0;
   console.log(`[brief 22 Task 5] pal-pill shuffle re-render: ${ms.toFixed(1)}ms — ${gameCommittedStrokes.length} strokes, ${currentSurface}`);

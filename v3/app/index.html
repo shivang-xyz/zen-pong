@@ -116,9 +116,30 @@
     pointer-events: none;
     z-index: 2;
   }
+  /* Brief 27 Task 4 — ported verbatim from root index.html (~line 74).
+     Scoped to #game-frame (playing only), not the shared .frame class, so
+     idle/results never pick it up by accident.
+     KNOWN DOC CONFLICT, resolved in favour of the live build + an explicit
+     request (brief's own instruction): DESIGN.md §1 bans "neon glows or
+     coloured drop shadows to game elements" and §6 allows a shadow only on
+     .ctrl-chip. The live v2 build has shipped this exact glow since launch
+     and Shivang asked for it back — logged as doc drift in BACKLOG.md
+     rather than softened to split the difference. */
+  #game-frame.canvas-glow {
+    box-shadow: 0 0 0 4px rgba(255,215,140,0.22), 0 0 28px rgba(255,215,140,0.22) !important;
+  }
 
   /* ── Paddles · DESIGN.md §7/§8 — DOM divs, never canvas ── */
   .paddle { position: absolute; width: 8px; height: 64px; z-index: 3; }
+  /* Brief 27 Task 3 — ported verbatim from root (~line 146). Applied to the
+     .paddle WRAPPER (bar + dot + "you" label flash together), not .bar
+     alone — matches root exactly. */
+  @keyframes paddle-flash {
+    0%   { filter: brightness(1); }
+    15%  { filter: brightness(3.5); }
+    100% { filter: brightness(1); }
+  }
+  .paddle-hit { animation: paddle-flash 0.15s ease-out forwards; }
   .paddle .bar { position: absolute; inset: 0; border-radius: 4px; }
   .paddle .dot { position: absolute; top: 26px; width: 12px; height: 12px; border-radius: 50%; }
   .paddle-left  { left: 0; }
@@ -260,6 +281,15 @@
     font-family: 'Space Mono', monospace; font-style: normal; font-weight: 700;
     font-size: 18px; letter-spacing: 0.1em; color: #FFFFFF;
   }
+  /* Brief 27 Task 5 — ported verbatim from root (~line 238). Only the
+     number that changed gets this class (updateGameScoreUI compares the
+     previous value first) — never both. */
+  @keyframes score-pulse {
+    0%   { color: #FFFFFF; }
+    30%  { color: #FFAE68; }
+    100% { color: #FFFFFF; }
+  }
+  .score-pop { animation: score-pulse 0.4s ease-out forwards; }
   .icon-pill { padding: 0 14px; border: 0; cursor: pointer; }
   .icon-pill svg { opacity: 0.8; display: block; }
   .icon-pill:hover svg { opacity: 1; }
@@ -446,7 +476,7 @@
       <div class="canvas-wrap">
         <canvas id="game-canvas" width="1000" height="630"></canvas>
       </div>
-      <div class="frame"></div>
+      <div class="frame" id="game-frame"></div>
 
       <!-- Paddle-travel guardrails (brief 23 Task 1) — positions set by JS
            from physics.js's PAD_MIN/PAD_MAX/PH/W, never hardcoded. -->
@@ -1542,6 +1572,7 @@ function maybeEmitSplatter() {
 }
 
 const gameCanvas = document.getElementById('game-canvas');
+const gameFrameEl = document.getElementById('game-frame');
 const gamePaddleLEl = document.getElementById('game-paddle-left');
 const gamePaddleREl = document.getElementById('game-paddle-right');
 const serveDotEl = document.getElementById('serve-dot');
@@ -1549,6 +1580,22 @@ const scorePEl = document.getElementById('pg-score-p');
 const scoreAEl = document.getElementById('pg-score-a');
 const pgPalPillEl = document.getElementById('pg-pal-pill');
 const pgShuffleEl = document.getElementById('pg-shuffle');
+
+// Brief 27 Tasks 3/4 — shared remove/reflow/add retrigger idiom (root's
+// own pattern, ~lines 915-917/1011-1014): without the forced reflow, a
+// fast rally only flashes on the FIRST hit — re-adding a class that's
+// already applied does not replay a finished CSS animation.
+function flashPaddle(el) {
+  el.classList.remove('paddle-hit');
+  void el.offsetWidth;
+  el.classList.add('paddle-hit');
+}
+function flashGameFrame() {
+  gameFrameEl.classList.remove('canvas-glow');
+  void gameFrameEl.offsetWidth;
+  gameFrameEl.classList.add('canvas-glow');
+  setTimeout(() => gameFrameEl.classList.remove('canvas-glow'), 700);
+}
 
 // ── Task 1 (brief 23, geometry fixed brief 24, y fixed brief 26 Task 0.2) —
 // paddle-travel guardrails. Static DOM chrome, set once, never touched by
@@ -1590,9 +1637,17 @@ document.addEventListener('mousemove', (e) => {
   gameMouseY = (e.clientY - r.top) * (H / r.height);
 });
 
+// Brief 27 Task 5 — root's own idiom (~lines 1198-1211): read the OLD value
+// off the DOM text itself before overwriting it, so only the side that
+// actually increased gets the pop — never both, even though this function
+// runs once per point for whichever side scored.
 function updateGameScoreUI() {
+  const prevPs = parseInt(scorePEl.textContent, 10) || 0;
+  const prevAs = parseInt(scoreAEl.textContent, 10) || 0;
   scorePEl.textContent = String(gamePs);
   scoreAEl.textContent = String(gameAs);
+  if (gamePs > prevPs) { scorePEl.classList.remove('score-pop'); void scorePEl.offsetWidth; scorePEl.classList.add('score-pop'); }
+  if (gameAs > prevAs) { scoreAEl.classList.remove('score-pop'); void scoreAEl.offsetWidth; scoreAEl.classList.add('score-pop'); }
 }
 
 function updateGamePalPill() {
@@ -1615,6 +1670,7 @@ function checkGameLevel() {
     gameLv++;
     gameAiSpd = Math.min(2.6 + gameLv * 0.40, 7.5);
     levelUp([gameBall]);
+    sndLevelUp(); // brief 27 Task 2
   }
 }
 
@@ -1704,6 +1760,17 @@ function stepGame() {
   events.forEach(ev => {
     commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, ev.type);
     gamePaintTracker.startTrail(gameBall, gameBall.x, gameBall.y);
+    // Brief 27 Task 2 — fired INSIDE the branch for this exact event type,
+    // in the same forEach that already commits strokes. The protected
+    // rule (root CLAUDE.md §4): chalk SFX fires exactly once per paddle
+    // hit, here, never on a frame clock — advanceBall's typed event array
+    // is what makes that free, there is nothing to debounce.
+    if (ev.type === 'paddleHit') {
+      sndScratch(); sndChalk();
+      flashPaddle(ev.side === 'L' ? gamePaddleLEl : gamePaddleREl); // left flashes on a left hit, right on a right hit, never both
+    } else if (ev.type === 'wallHit') {
+      sndThud();
+    }
   });
   gamePaintTracker.appendPoint(gameBall, gameBall.x, gameBall.y);
 
@@ -1712,7 +1779,11 @@ function stepGame() {
     gameBall.pts = gameBall.pts.slice(-4);
   }
 
-  ballBall([gameBall], gamePhysRng); // one ball: a no-op today, kept for engine-call parity with simulate.js
+  // one ball: ballBall's collide-event branch is unreachable today (MAX_B
+  // is 1), but the return value is still consumed for real — see
+  // sndCollide's own comment for why this is deliberate, not dead code.
+  const collideEvents = ballBall([gameBall], gamePhysRng);
+  collideEvents.forEach(() => sndCollide()); // brief 27 Task 2
 
   if (gameBall.x < -30 || gameBall.x > W + 30) {
     const rightMissed = gameBall.x < -30; // ball passed the left edge -> right/AI scores
@@ -1722,10 +1793,13 @@ function stepGame() {
     }
     if (rightMissed) gameAs++; else gamePs++;
     updateGameScoreUI();
+    sndPoint(); // brief 27 Task 2 — every point, win or not, matching root's own unconditional call site
     checkGameLevel();
+    flashGameFrame(); // brief 27 Task 4 — a point scored, either side
 
     if (gamePs >= WIN || gameAs >= WIN) {
       gameStrokesAlpha = 1.0; // Task 4 — full strength at game end, one-line change, no re-render
+      sndGameOver(); flashGameFrame(); // brief 27 Task 6 — fires on the final frame, same moment the chrome leaves
       // One rng draw, seeded off this game — same reproducibility contract
       // as everything else (brief 26 Task 5): identical seed -> identical
       // haiku, so the share screen (brief 28) can show the same piece twice.
@@ -2209,6 +2283,194 @@ function stopBGM() {
   ooGain.gain.setValueAtTime(ooGain.gain.value, t);
   ooGain.gain.linearRampToValueAtTime(0, t + 2.5);
   setTimeout(() => { ooAudio.pause(); }, 2600);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   BRIEF 27 — SFX. Ported VERBATIM from root index.html (~line 651-789):
+   same oscillator types, frequencies, ramps, durations, gains — tuned by
+   ear over the live build's whole history, not re-derived here. root
+   CLAUDE.md §4 is binding: all seven functions always present, never
+   removed or merged, wrapped in try/catch so a failed oscillator can never
+   take down the game loop (kept from root, unchanged).
+
+   The one deliberate adaptation: root's ac() lazily CREATES an
+   AudioContext on any call, from anywhere. Here every function early-
+   returns if actx is null instead — actx only exists after the idle
+   screen's first real gesture (brief 18 Task 3, root CLAUDE.md §4: a
+   gesture is what's allowed to unlock Web Audio, and a stray SFX call
+   during idle is not one). Never creating a second context, never a
+   console error from calling into a null one. */
+function tone(p = {}) {
+  if (muted || !actx) return;
+  const { freq = 440, type = 'sine', gain = 0.1, dur = 0.1, freqEnd = null, attack = 0.003, detune = 0 } = p;
+  try {
+    const a = actx, o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination); o.type = type;
+    o.frequency.setValueAtTime(freq, a.currentTime); o.detune.setValueAtTime(detune, a.currentTime);
+    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, a.currentTime + dur);
+    g.gain.setValueAtTime(0, a.currentTime); g.gain.linearRampToValueAtTime(gain, a.currentTime + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    o.start(a.currentTime); o.stop(a.currentTime + dur + 0.02);
+  } catch (e) {}
+}
+
+function nz(p = {}) {
+  if (muted || !actx) return;
+  const { gain = 0.06, dur = 0.04, freq = 800, q = 10 } = p;
+  try {
+    const a = actx, buf = a.createBuffer(1, a.sampleRate * dur, a.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = a.createBufferSource(); src.buffer = buf;
+    const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    const g = a.createGain(); src.connect(f); f.connect(g); g.connect(a.destination);
+    g.gain.setValueAtTime(gain, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    src.start(); src.stop(a.currentTime + dur + 0.02);
+  } catch (e) {}
+}
+
+// Paddle hit — sharp click transient + wooden body resonance.
+function sndScratch() {
+  if (muted || !actx) return;
+  try {
+    const a = actx;
+    const clickDur = 0.018;
+    const cbuf = a.createBuffer(1, Math.ceil(a.sampleRate * clickDur), a.sampleRate);
+    const cd = cbuf.getChannelData(0);
+    for (let i = 0; i < cd.length; i++) cd[i] = (Math.random() * 2 - 1) * 0.7;
+    const csrc = a.createBufferSource(); csrc.buffer = cbuf;
+    const cf = a.createBiquadFilter(); cf.type = 'bandpass';
+    cf.frequency.value = 1800; cf.Q.value = 0.8;
+    const cg = a.createGain();
+    cg.gain.setValueAtTime(0.49, a.currentTime);
+    cg.gain.exponentialRampToValueAtTime(0.001, a.currentTime + clickDur);
+    csrc.connect(cf); cf.connect(cg); cg.connect(a.destination);
+    csrc.start(); csrc.stop(a.currentTime + clickDur + 0.005);
+    const o = a.createOscillator(), og = a.createGain();
+    o.connect(og); og.connect(a.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(420, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(180, a.currentTime + 0.06);
+    og.gain.setValueAtTime(0.36, a.currentTime);
+    og.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.08);
+    o.start(a.currentTime); o.stop(a.currentTime + 0.09);
+  } catch (e) {}
+}
+
+// Wall bounce — plastic click + short plastic body thump.
+function sndThud() {
+  if (muted || !actx) return;
+  try {
+    const a = actx;
+    const dur = 0.038;
+    const buf = a.createBuffer(1, Math.ceil(a.sampleRate * dur), a.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.6;
+    const src = a.createBufferSource(); src.buffer = buf;
+    const f = a.createBiquadFilter(); f.type = 'bandpass';
+    f.frequency.value = 2200; f.Q.value = 0.9;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.29, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    src.connect(f); f.connect(g); g.connect(a.destination);
+    src.start(); src.stop(a.currentTime + dur + 0.005);
+    const o = a.createOscillator(), og = a.createGain();
+    o.connect(og); og.connect(a.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(160, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(80, a.currentTime + 0.035);
+    og.gain.setValueAtTime(0.21, a.currentTime);
+    og.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.04);
+    o.start(a.currentTime); o.stop(a.currentTime + 0.045);
+  } catch (e) {}
+}
+
+// Ball-to-ball collision. DORMANT in v3: physics.js's ballBall only ever
+// receives stepGame's single-element [gameBall] array (MAX_B is 1 here,
+// same as the live build), so its collide-event branch can never fire and
+// this function is never actually called. Ported and wired anyway per
+// root CLAUDE.md §4 — do not delete this as dead code.
+function sndCollide() {
+  if (muted || !actx) return;
+  nz({ gain: 0.33, dur: 0.035, freq: 1800, q: 5 });
+  tone({ freq: 300, freqEnd: 185, type: 'triangle', gain: 0.23, dur: 0.06 });
+}
+
+// Point scored.
+function sndPoint() {
+  if (muted || !actx) return;
+  try {
+    const a = actx;
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(320, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(318, a.currentTime + 1.2);
+    g.gain.setValueAtTime(0, a.currentTime);
+    g.gain.linearRampToValueAtTime(0.23, a.currentTime + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 1.4);
+    o.start(a.currentTime); o.stop(a.currentTime + 1.5);
+  } catch (e) {}
+}
+
+// Level up — every 2 total points (checkGameLevel).
+function sndLevelUp() {
+  if (muted || !actx) return;
+  try {
+    const a = actx;
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(440, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(438, a.currentTime + 1.0);
+    g.gain.setValueAtTime(0, a.currentTime);
+    g.gain.linearRampToValueAtTime(0.33, a.currentTime + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 1.2);
+    o.start(a.currentTime); o.stop(a.currentTime + 1.3);
+  } catch (e) {}
+}
+
+// Protected spec — root CLAUDE.md §4 / v3/CLAUDE.md: fires EXACTLY ONCE
+// per paddle hit, called from inside the paddleHit branch of stepGame's
+// events.forEach (see below) — never on a frame clock, never behind a
+// cooldown timer. advanceBall's typed event array is what makes "exactly
+// once" free: the event only exists on the frame a hit actually happened.
+function sndChalk() {
+  if (muted || !actx) return;
+  try {
+    const a = actx;
+    const dur = 0.055;
+    const buf = a.createBuffer(1, Math.ceil(a.sampleRate * dur), a.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.018;
+    const src = a.createBufferSource(); src.buffer = buf;
+    const f = a.createBiquadFilter(); f.type = 'bandpass';
+    f.frequency.value = 2800; f.Q.value = 2.5;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.028, a.currentTime);
+    g.gain.linearRampToValueAtTime(0.001, a.currentTime + 0.055);
+    src.connect(f); f.connect(g); g.connect(a.destination);
+    src.start(); src.stop(a.currentTime + 0.06);
+  } catch (e) {}
+}
+
+// Game over — 2.5s decaying tone, deliberately still sounding as the
+// brief-26 reveal's ground wipe (900ms) settles under the haiku (1300ms).
+// Task 6: do not shorten this to fit the reveal, do not add a second sound.
+function sndGameOver() {
+  if (muted || !actx) return;
+  try {
+    const a = actx;
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type = 'sine';
+    o.frequency.setValueAtTime(220, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(218, a.currentTime + 2.2);
+    g.gain.setValueAtTime(0, a.currentTime);
+    g.gain.linearRampToValueAtTime(0.23, a.currentTime + 0.010);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 2.5);
+    o.start(a.currentTime); o.stop(a.currentTime + 2.6);
+  } catch (e) {}
 }
 
 const idleSub = document.getElementById('idle-sub');

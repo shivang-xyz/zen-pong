@@ -61,6 +61,14 @@
     justify-content: center;
     padding: var(--space-l) 0;
   }
+  /* Brief 25 Task 5: the playing screen's own vertical rhythm is tightened
+     (761px total: 16 body pad + 19 logo + 16 header gap + 630 canvas + 16
+     gap + 48 ctrl-row + 16 body pad) so it fits a 13" MacBook without a
+     scrollbar. body padding is shared across every screen, so it's scoped
+     to data-screen (set by setScreen()) rather than changed globally —
+     idle/results explicitly keep their current --space-l padding until
+     THEY are reviewed (brief's own instruction). */
+  body[data-screen="playing"] { padding: var(--space-xm) 0; }
 
   .screen { display: flex; flex-direction: column; align-items: center; }
   .screen[hidden] { display: none; }
@@ -70,12 +78,24 @@
     font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
   }
 
-  /* ── Header logo · playing/results stub screens · DESIGN.md §8 ── */
+  /* ── Header logo · playing/results stub screens · DESIGN.md §8 ──
+     margin-bottom is the shared default (results, until reviewed); playing
+     overrides it tighter as part of brief 25 Task 5's rhythm. */
   .app-header { display: flex; justify-content: center; margin-bottom: var(--space-m); }
   .app-header svg { display: block; }
+  #screen-playing .app-header { margin-bottom: var(--space-xm); }
 
-  /* ── Canvas · DESIGN.md §7 ── */
-  .stage { position: relative; width: 1000px; height: 630px; max-width: 100%; }
+  /* ── Canvas · DESIGN.md §7 ──
+     Brief 25 Task 1: max-width:100% let this fixed-aspect 1000x630 surface
+     compress NON-UNIFORMLY (squashed on one axis only) whenever the page
+     was taller than the viewport — the canvas bitmap distorted and the 2px
+     guardrails landed on fractional device pixels, reading as a soft
+     gradient instead of a flat 2px bar. A fixed-aspect artwork surface must
+     never compress on one axis alone; removed. Task 5's tightened rhythm is
+     what makes the surface actually fit instead; the transform:scale()
+     fallback (fitScreenToViewport, below) is for anything still too short,
+     and scales the whole screen uniformly, never one child. */
+  .stage { position: relative; width: 1000px; height: 630px; }
   .canvas-wrap {
     position: absolute; inset: 0;
     border-radius: var(--radius);
@@ -148,6 +168,7 @@
   .tagline { font-size: 14px; color: var(--color-lightest-grey); margin: 0; }
   .spacer-s { height: var(--space-s); }
   .spacer-m { height: var(--space-m); }
+  .spacer-xm { height: var(--space-xm); } /* brief 25 Task 5 — playing screen's tightened rhythm */
 
   /* ── Intro card · DESIGN.md §10 #intro-card (v3 opaque treatment) ── */
   .intro-stack {
@@ -218,8 +239,7 @@
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    width: 1000px;
-    max-width: 100%;
+    width: 1000px; /* brief 25 Task 1 — max-width:100% removed, same non-uniform-compression reasoning as .stage */
   }
   #ctrl-row-playing > :first-child { justify-self: start; }
   #ctrl-row-playing > :last-child { justify-self: end; display: flex; gap: var(--space-xm); }
@@ -316,13 +336,11 @@
 
     <div class="spacer-m"></div>
 
+    <!-- Brief 25 Task 3: dots are no longer hardcoded — rendered by JS from
+         the same 3-colour-per-surface source as the playing screen's pill
+         (see updateIdlePalPill), so the two can never drift apart. -->
     <div class="ctrl-chip pal-pill" id="pal-pill">
-      <i class="dot" style="background:#FF68AE"></i>
-      <i class="dot" style="background:#689AFF"></i>
-      <i class="dot" style="background:#8CFFB4"></i>
-      <i class="dot" style="background:#FFAE68"></i>
-      <i class="dot" style="background:#68D7FF"></i>
-      <svg class="shuffle" width="20" height="20" viewBox="0 0 20 20" fill="none"
+      <svg class="shuffle" id="idle-shuffle" width="20" height="20" viewBox="0 0 20 20" fill="none"
            stroke="#C5C5C5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="13,3 17,6.5 13,10"/><path d="M2 6.5h15"/>
         <polyline points="7,10 3,13.5 7,17"/><path d="M18 13.5H3"/>
@@ -333,7 +351,9 @@
   <!-- ══════════════════════════ PLAYING SCREEN ══════════════════════════ -->
   <section id="screen-playing" class="screen" hidden>
     <div class="app-header">
-      <svg width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+      <!-- Brief 25 Task 4: 98x19 (was 140x27, 30% down) — playing screen
+           only; viewBox stays 0 0 140 27 so the artwork itself is unchanged. -->
+      <svg width="98" height="19" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
 <path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFFFFF"/>
 <path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFFFFF"/>
 <path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFFFFF"/>
@@ -346,7 +366,6 @@
 <circle cx="60" cy="14" r="3" fill="#FFFFFF"/>
 </svg>
     </div>
-    <div class="spacer-m"></div>
 
     <div class="stage">
       <div class="serve-dot" id="serve-dot" hidden></div>
@@ -370,7 +389,11 @@
       </div>
     </div>
 
-    <div class="spacer-m"></div>
+    <!-- brief 25 Task 5 — 16px (spacer-xm), not the shared 24px spacer-m;
+         the app-header→stage gap above is now carried by .app-header's own
+         (scoped-tighter) margin-bottom alone, so the redundant spacer-m
+         that used to double it up is removed, not just resized. -->
+    <div class="spacer-xm"></div>
 
     <div id="ctrl-row-playing">
       <div class="ctrl-chip pal-pill" id="pg-pal-pill">
@@ -389,8 +412,15 @@
             <path d="M15 9a6 6 0 1 1-2-4.5"/><polyline points="15,2 15,5 12,5"/>
           </svg>
         </button>
-        <button class="ctrl-chip icon-pill" id="pg-mute" aria-label="Mute">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5">
+        <!-- Brief 25 Task 2: two real states, not one icon that never
+             changes. Default (unmuted) shows the plain speaker; muted
+             swaps to the crossed one. Both inline, JS toggles which is
+             hidden — no icon fonts, no external assets. -->
+        <button class="ctrl-chip icon-pill" id="pg-mute" aria-label="Mute" aria-pressed="false">
+          <svg id="pg-mute-icon-unmuted" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5">
+            <polygon points="2,7 5,7 9,3 9,15 5,11 2,11"/>
+          </svg>
+          <svg id="pg-mute-icon-muted" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5" hidden>
             <polygon points="2,7 5,7 9,3 9,15 5,11 2,11"/><line x1="12" y1="6" x2="16" y2="12"/><line x1="16" y1="6" x2="12" y2="12"/>
           </svg>
         </button>
@@ -448,8 +478,46 @@ const screens = {
 let screenState = 'idle';
 function setScreen(next) {
   screenState = next;
+  document.body.dataset.screen = next; // brief 25 Task 5 — scopes body's padding to the active screen (see the body[data-screen="playing"] CSS rule)
   Object.entries(screens).forEach(([k, el]) => { el.hidden = (k !== next); });
+  fitScreenToViewport();
 }
+
+// Brief 25 Task 1 step 4 / Task 5's own fallback: for any viewport still too
+// short after Task 5's tightened rhythm, scale the WHOLE visible .screen
+// uniformly — never one axis, never one child, which is exactly the
+// non-uniform-compression bug this brief fixes elsewhere (.stage's removed
+// max-width:100%). Reset any existing transform before measuring, so a
+// shrink is never measured against an already-shrunk box. `available`
+// subtracts body's own top+bottom padding (outside the .screen element,
+// so getBoundingClientRect() on the screen doesn't include it) from the
+// viewport height, then scales the screen to fit what's left.
+function fitScreenToViewport() {
+  const visible = screens[screenState];
+  if (!visible) return;
+  visible.style.transform = '';
+  visible.style.transformOrigin = '';
+  visible.style.marginBottom = '';
+  const bodyStyle = getComputedStyle(document.body);
+  const vPad = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
+  const available = window.innerHeight - vPad;
+  const rect = visible.getBoundingClientRect();
+  if (available > 0 && rect.height > available) {
+    const scale = available / rect.height;
+    visible.style.transform = `scale(${scale})`;
+    visible.style.transformOrigin = 'top center';
+    // transform:scale() is paint-only — it does NOT shrink the element's
+    // own contribution to document flow/scrollHeight, so without this the
+    // page would still show a scrollbar for space that's visually empty.
+    // A negative bottom margin pulls the next box up by exactly the
+    // height the scale removed, so the flow height matches what's drawn.
+    visible.style.marginBottom = `${-(rect.height * (1 - scale))}px`;
+  }
+}
+window.addEventListener('resize', fitScreenToViewport);
+document.body.dataset.screen = 'idle'; // initial state — setScreen() isn't called for the starting idle screen
+fitScreenToViewport();
+
 // Results stub transition (brief 23 builds the real reveal).
 document.getElementById('btn-results-back').addEventListener('click', () => setScreen('idle'));
 
@@ -496,11 +564,25 @@ function weightedPaletteArray(palette, seed) {
   return arr;
 }
 
+// Brief 25 Task 3: every palette chip shows 3 dots. Chalk and paint already
+// resolve to 3; paper used the full DEFAULT_PALETTE (5) — pink, blue, green,
+// orange, cyan. A chip showing 3 dots while the canvas painted 5 would be a
+// lying control, so paper's actual stroke palette drops to 3, not just its
+// pill: the first three of DEFAULT_PALETTE's existing order. Pink and blue
+// are the paddle colours (kept, not droppable); green is simply next in
+// line — nothing invented, nothing reordered. Shared by the doodle
+// (PALETTE_ARRAYS.paper, below), the game (gamePaperOrder, further down),
+// and both pal-pills (idle's updateIdlePalPill, the game's
+// gamePalPillHexesFor) — one constant, so paper can't drift back to 5 in
+// one place and not another. Visibly changes the paper artwork (orange and
+// cyan stop appearing) — flagged for review per the brief.
+const PAPER_PALETTE = DEFAULT_PALETTE.slice(0, 3);
+
 // Per-surface colour cycle. Chalk is tri-colour (brief 19 Task 3) —
 // CHALK_PALETTE, matching how chalk was approved in the lab — not the
 // white-mode override brief 18 shipped.
 const PALETTE_ARRAYS = {
-  paper: DEFAULT_PALETTE,
+  paper: PAPER_PALETTE,
   chalk: CHALK_PALETTE,
   paint: weightedPaletteArray(paintPalette, (DOODLE_SEED ^ 0x5EED1DEA) >>> 0),
 };
@@ -632,10 +714,36 @@ const layerEls = { A: document.getElementById('doodle-a'), B: document.getElemen
 let activeKey = 'A', inactiveKey = 'B';
 layerEls[activeKey].style.opacity = '1';
 
+// Brief 25 Task 3 — the idle pal-pill's own colour source. Mirrors
+// gamePalPillHexesFor's shape (chalk/paper: distinct swatches; paint: the 3
+// accents, not PALETTE_ARRAYS.paint's weighted 20-slot CYCLE array) but
+// reads the doodle's own fixed data (PAPER_PALETTE/CHALK_PALETTE/
+// paintPalette), never the game's per-game shuffle-able state — the idle
+// screen has no shuffle interaction wired to this pill, it's a preview of
+// what the doodle itself is currently painting.
+function idlePalPillHexesFor(surfaceKey) {
+  if (surfaceKey === 'chalk') return CHALK_PALETTE;
+  if (surfaceKey === 'paint') return paintPalette.accents.map(a => a.hex);
+  return PAPER_PALETTE;
+}
+function updateIdlePalPill() {
+  const el = document.getElementById('pal-pill');
+  const shuffleEl = document.getElementById('idle-shuffle');
+  el.querySelectorAll('.dot').forEach(d => d.remove());
+  idlePalPillHexesFor(currentSurface).forEach(hex => {
+    const dot = document.createElement('i');
+    dot.className = 'dot';
+    dot.style.background = hex;
+    el.insertBefore(dot, shuffleEl);
+  });
+}
+updateIdlePalPill(); // initial paint, matches currentSurface's 'paper' default
+
 function switchSurface(newKey) {
   if (newKey === currentSurface) return;
   currentSurface = newKey;
   rebuildPersist(newKey); // re-render the SAME committed stroke data through the new renderer
+  updateIdlePalPill();
 
   const newEl = layerEls[inactiveKey];
   const newCtx = newEl.getContext('2d');
@@ -680,9 +788,9 @@ const paddleR = { y: 430 };
 // width numbers while sharing the exact same bake-on-append math and the
 // same drawPaintRibbon fill (further down, unchanged, already generic).
 // The real engine renderPaintStroke is untouched and still used for the
-// actual end-game artwork (brief 24's job — reveal/results); this stays
+// actual end-game artwork (brief 26's job — reveal/results); this stays
 // app-side, per PORT-PLAN.md/BACKLOG.md's explicit deferral of promoting it
-// into paint.js to the brief-26 integration pass.
+// into paint.js to the brief-29 integration pass.
 // Brief 23 Task 4: every stroke used to get the same treatment (one sine
 // undulation, seeded phase only) — variety was all in the offset, none in
 // the character. Three profiles now, seeded per stroke: flat (0.40, one
@@ -1073,7 +1181,7 @@ function getGameGround(surfaceKey) {
 
 // ── Task 5 — per-surface palette state (game-scoped, independently
 // shufflable — never touches the doodle's fixed PALETTE_ARRAYS) ────────
-let gamePaperOrder;   // shuffled index map into DEFAULT_PALETTE (5)
+let gamePaperOrder;   // shuffled index map into PAPER_PALETTE (3, brief 25 Task 3 — was DEFAULT_PALETTE's full 5)
 let gameChalkOrder;   // shuffled index map into CHALK_PALETTE (3)
 let gamePaintPalette; // buildPalette() result — ground fixed once per game, not touched by shuffle
 let gamePaintArray;   // weightedPaletteArray(gamePaintPalette, ...) — a flattened, weighted 20-slot
@@ -1083,27 +1191,28 @@ let gamePaintArray;   // weightedPaletteArray(gamePaintPalette, ...) — a flatt
 function gamePaletteArrayFor(surfaceKey) {
   if (surfaceKey === 'chalk') return gameChalkOrder.map(i => CHALK_PALETTE[i]);
   if (surfaceKey === 'paint') return gamePaintArray;
-  return gamePaperOrder.map(i => DEFAULT_PALETTE[i]);
+  return gamePaperOrder.map(i => PAPER_PALETTE[i]);
 }
 function gameColourFor(surfaceKey, index) {
   const arr = gamePaletteArrayFor(surfaceKey);
   return arr[index % arr.length];
 }
-// Brief 24 Task 5: the paint pill shows all FIVE of the artwork's colour
-// slots — ground, ink, then the three accents in A/B/C (dominant/secondary/
-// minor) order — matching the lab and PAINT-MODE.md §2.3, not just the 3
-// accents brief 22 shipped. Stroke colours are UNCHANGED by this: the rally
-// still only ever cycles the 3 accents (gamePaletteArrayFor/gameColourFor,
-// untouched) — ink only ever appears as splatter (Task 6) or, later, the
-// brief-25 reveal ground. This function is the pill's own display list, not
-// the stroke-colour source; paper/chalk are unaffected (they have no
-// ground/ink concept, still just their own N distinct swatches).
+// Brief 24 Task 5 shipped the paint pill showing all FIVE of the artwork's
+// colour slots (ground, ink, 3 accents) to match the lab's swatch row.
+// Brief 25 Task 3 REVERSES that: "every palette chip shows 3 dots" is built
+// on the principle that a pill lying about what actually gets painted is a
+// bug — brief 24's own reasoning, just pointed the other way. Paint's real
+// stroke cycle (gamePaletteArrayFor/gameColourFor) has only ever used the 3
+// accents; ground and ink never appear as a LINE colour (ink is splatter-
+// only, Task 6; ground is the reveal's job, brief 26). A 5-dot pill was
+// therefore itself a lying control by brief 25's standard, just overstating
+// instead of understating. Back to 3 accents only, matching chalk and the
+// now-3-colour paper (below) — pill and actual stroke palette agree on all
+// three surfaces, which is the whole point of Task 3.
 function gamePalPillHexesFor(surfaceKey) {
   if (surfaceKey === 'chalk') return gameChalkOrder.map(i => CHALK_PALETTE[i]);
-  if (surfaceKey === 'paint') {
-    return [gamePaintPalette.ground, gamePaintPalette.ink, ...gamePaintPalette.accents.map(a => a.hex)];
-  }
-  return gamePaperOrder.map(i => DEFAULT_PALETTE[i]);
+  if (surfaceKey === 'paint') return gamePaintPalette.accents.map(a => a.hex);
+  return gamePaperOrder.map(i => PAPER_PALETTE[i]);
 }
 function shuffleArrayInPlace(arr, rng) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -1124,7 +1233,7 @@ function shuffleArrayInPlace(arr, rng) {
 // A per-stroke alpha instead would double-darken wherever strokes overlap
 // (each layer's semi-transparent paint stacks); compositing the whole layer
 // once dims everything evenly regardless of how busy an area is. This same
-// split is what brief 25's reveal needs anyway — the paint ground has to
+// split is what brief 26's reveal needs anyway — the paint ground has to
 // composite in UNDERNEATH the marks — so it's built now, not unpicked from
 // a combined canvas next brief.
 const gameStrokesCv = document.createElement('canvas');
@@ -1180,7 +1289,7 @@ let gameBall, gamePaddleL, gamePaddleR;
 let gamePs = 0, gameAs = 0, gameLv = 1, gameAiSpd = 2.6;
 let gameMouseY = H / 2, gamePrevMouseY = H / 2;
 let gameServing = false; // true during the short beat between a miss and the next spawn
-let gameLastEndedStrokes = null; // handoff for brief 25 (results/reveal) — {strokes, seed, surface}
+let gameLastEndedStrokes = null; // handoff for brief 26 (results/reveal) — {strokes, seed, surface}
 
 // ── Task 6 (brief 24) — live splatter, paint only ──────────────────────
 // PAINT-MODE.md §5 D, specced since brief 11, never built until now: ink
@@ -1398,7 +1507,7 @@ function startGame() {
   // Palette: paper/chalk start in identity order (re-shuffled only via
   // Task 5's shuffle control — PAINT-MODE.md §2 is LOCKED, never generate
   // a colour); paint draws a real scheme via the curated hue library.
-  gamePaperOrder = DEFAULT_PALETTE.map((_, i) => i);
+  gamePaperOrder = PAPER_PALETTE.map((_, i) => i); // brief 25 Task 3 — 3, not DEFAULT_PALETTE's full 5
   gameChalkOrder = CHALK_PALETTE.map((_, i) => i);
   gamePaintPalette = buildPalette(makeRng((gameSeed ^ 0x6A2F1C9E) >>> 0));
   gamePaintArray = weightedPaletteArray(gamePaintPalette, (gameSeed ^ 0x6A2F1C9E) >>> 0);
@@ -1465,7 +1574,7 @@ function stepGame() {
     if (gamePs >= WIN || gameAs >= WIN) {
       gameStrokesAlpha = 1.0; // Task 4 — full strength at game end, one-line change, no re-render
       gameLastEndedStrokes = { strokes: gameCommittedStrokes.slice(), seed: gameSeed, surface: currentSurface };
-      setScreen('results'); // brief 25 builds the real reveal on top of this handoff
+      setScreen('results'); // brief 26 builds the real reveal on top of this handoff
       return;
     }
 
@@ -1571,9 +1680,21 @@ document.getElementById('pg-restart').addEventListener('click', () => {
   // not return to idle. startGame() already does exactly this.
   startGame();
 });
-document.getElementById('pg-mute').addEventListener('click', () => {
+// Brief 25 Task 2 — two real icon states, plus aria-pressed/aria-label kept
+// honest for a screen reader, not just the eye.
+const pgMuteBtn = document.getElementById('pg-mute');
+const pgMuteIconUnmuted = document.getElementById('pg-mute-icon-unmuted');
+const pgMuteIconMuted = document.getElementById('pg-mute-icon-muted');
+function updateMuteButton() {
+  pgMuteIconUnmuted.hidden = muted;
+  pgMuteIconMuted.hidden = !muted;
+  pgMuteBtn.setAttribute('aria-pressed', String(muted));
+  pgMuteBtn.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
+}
+pgMuteBtn.addEventListener('click', () => {
   muted = !muted;
   if (muted) stopBGM(); else startBGM();
+  updateMuteButton();
 });
 
 /* ════════════════════════════════════════════════════════════════════
@@ -1601,6 +1722,7 @@ document.querySelectorAll('#surface-chip .tile').forEach(tile => {
 // ── BGM — Oolong.mp3, root CLAUDE.md §4's protected pattern verbatim.
 // new Audio() + createMediaElementSource(), never fetch/decodeAudioData.
 let actx = null, muted = false;
+updateMuteButton(); // brief 25 Task 2 — sync icon/aria to the actual default state
 let ooAudio = null, ooGain = null, ooSrc = null;
 
 function initOolong() {

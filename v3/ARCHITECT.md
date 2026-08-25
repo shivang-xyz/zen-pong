@@ -42,7 +42,11 @@ anxiety the product exists to remove.
   seeded artworks at zero token cost, THEN promoted to the product.
 - One feature = one brief = one branch = one Claude Code session, on Sonnet.
   Plan mode for extraction/refactor. Review in the lab before merging to main.
-- Root `index.html` (the live game) is never touched until v3 ships.
+- Root `index.html` (the live game) shipped v3 in brief 30 and is now a
+  GENERATED file (`node v3/build.js` from `v3/app/index.html` +
+  `v3/engine/`) — never hand-edited, before or after ship, just for a
+  different reason now: before, because v2 was still live; now, because
+  the next rebuild silently overwrites any hand edit. See `v3/CLAUDE.md`.
 
 ## Operating rules
 - Single source of truth is the brief + PRD. Flag conflicts.

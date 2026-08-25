@@ -5,8 +5,11 @@ accumulate into a painting. The game is the brush; the artwork is the product.
 
 ## Session protocol
 - Read the assigned brief in `v3/briefs/` in full before touching any code.
-- `index.html` at repo root is the LIVE build and reference implementation.
-  NEVER modify it. NEVER modify anything outside `v3/` unless a brief says so.
+- `index.html` at repo root is a GENERATED FILE as of brief 30 (v3 shipped) —
+  produced by `node v3/build.js` from `v3/app/index.html` + `v3/engine/`.
+  NEVER hand-edit it; the next rebuild silently overwrites hand edits. All
+  changes go to `v3/app/index.html` or `v3/engine/`, then `node v3/build.js`.
+  NEVER modify anything outside `v3/` unless a brief says so.
 - One feature per session, one branch per feature. Verify end-to-end before done.
 - When the brief conflicts with this file, stop and flag it to Shivang.
 - Do not invent product decisions. If the brief is ambiguous, ask — don't assume.
@@ -46,7 +49,8 @@ accumulate into a painting. The game is the brush; the artwork is the product.
   approved in the lab, its tuned values get frozen into fixed constants when
   ported to the product. The sliders themselves never ship.
 
-## Reference map (current live build, repo-root index.html)
+## Reference map (v2's numbers — what the port was extracted from; historical
+## now that brief 30 has shipped v3, kept for the "faithful extraction" record)
 - Constants: W=1000 H=630 PW=8 PH=64 BR=6 CR=40, BASE_SPD=5.2, MAX_SPD=2.2x, WIN=3
 - Physics: mkBall (4-edge spawn), wallHit (rounded-corner reflect + jitter),
   enforceMinAngle (min PI/10 from horizontal), sweptHit (swept paddle collision,

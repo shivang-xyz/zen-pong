@@ -5,6 +5,68 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-25/26 — Brief 30 shipped. The port is done. v3 is live.
+
+`https://shivang-xyz.github.io/zen-pong/` serves v3. `v2-final` tags the
+pre-swap `main` tip, pushed to origin — v2 is recoverable by name forever.
+
+**What shipped, in one pass:**
+- `v3/build.js` — the single-file requirement and the never-copy-paste-the-
+  engine rule, resolved by a build step instead of hand-inlining. One IIFE
+  per engine file (real module scoping, not flattening) so
+  `v3/engine/chalkboard.js`'s and `v3/engine/density.js`'s two DIFFERENT
+  functions both named `computeLineDensity` can never collide in the bundle.
+  Caught and fixed before it shipped: a naive one-name-per-line export
+  extractor would have silently dropped `H`/`PW`/`PH`/`BR`/`PAD_MAX`/`WIN`
+  from `physics.js`'s real multi-declarator `export const` lines — not a
+  crash, `WIN` becomes `undefined` and the game would never register a win.
+  Fixed with a depth-aware scanner; verified against the actual generated
+  output and by driving a real headless game through it to a real result.
+  Two runs produce a byte-identical file.
+- Mobile. v3 shipped with zero mobile handling before this brief. Root's
+  `#mobile-overlay`/cover-vs-contain scaling ported, but the detection is
+  capability-based (`isTouchDevice()`: width ≤600 OR `matchMedia('(hover:
+  none) and (pointer: coarse)')`), not a width breakpoint — v3 has no touch
+  paddle control at all (unlike root), so a plain breakpoint would let an
+  iPad through with no overlay and a paddle that never moves. Two real bugs
+  caught in review before they shipped: `screenState` doesn't flip to
+  `'share'` until an async decode resolves, so a naive block-unless-share
+  check would flash the overlay on a real shared link opened on a phone; and
+  the mobile scale math initially read `window.innerWidth/innerHeight`,
+  which this session's own testing tool reports inflated by a fixed factor
+  in its mobile-emulation mode — switched to
+  `document.documentElement.clientWidth/clientHeight`, the standard source
+  for actual layout viewport size, after share's artwork visibly bled off a
+  screenshot's edge with the wrong values.
+- Metadata: title, description, OG/Twitter cards, `theme-color`, a favicon
+  derived from the logo's own dot mark. `og-image.png` is a real finished
+  painting (not `exportArtworkPNG`'s 2128×1588 reused as-is — that ratio
+  would crop badly at the required 1200×630) — a dedicated composition,
+  picked as the most open of five candidate games so it reads clearly at
+  thumbnail size instead of as dense noise.
+- The swap: tag, build, merge `--no-ff`, push, verified on the live URL —
+  full idle→playing→results→share loop, audio unlock/BGM load, a real
+  shared link opened cold on the live domain, `file://` (static-render
+  verified — this session's browser tooling couldn't drive JS on a file://
+  path outside its own sandboxed project root, so full interactivity there
+  is asserted from the script no longer containing any ES module syntax,
+  not independently re-observed), the art lab still running unchanged.
+  `feature/chalkboard-surface`/`feature/paint-surface` deleted (confirmed
+  merged); `feature/fill-regions` left, still blocked on its own fix.
+
+**What didn't ship, stated rather than left quiet:** `Oolong.mp3` and the
+Google Fonts link stay outside the single HTML file (both logged in
+`BACKLOG.md`, neither blocks anything). Touch paddle control — v3 blocks
+every touch device behind the overlay rather than half-supporting it;
+playable touch is real, separate work, backlogged for brief 31. Basier
+Circle self-hosting is explicitly *not* queued as a mechanical swap even
+though the font files already sit in the repo — it's a typeface decision
+against what every v3 screen was actually designed with, needs Shivang's
+call.
+
+**Next:** brief 31 — the QA sweep + full `BACKLOG.md` triage, the checkpoint
+the backlog has named for itself since it was created.
+
 ## 2026-08-25 — Brief 29 verified in-browser. Brief 30 (ship) written.
 
 Share page built. Rather than hand Shivang another QA list, the architect chat

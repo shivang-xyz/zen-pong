@@ -125,6 +125,35 @@ triaging this whole list, not before.
   plays over the ground wipe and into the haiku. Dipping the BGM under it would
   give the reveal more air. Real idea, deliberately out of brief 27's scope.
   *Surfaced: brief 27 spec, 2026-08-24.*
+- **Port root's `touchmove` paddle control.** v3 shipped (brief 30) with no
+  touch paddle control at all — root has `cv.addEventListener('touchmove',
+  ...)`; v3 only wires `touchstart` as a generic start-gesture. This is why
+  brief 30's mobile detection couldn't be a width breakpoint: a touch device
+  above 600px (an iPad) would otherwise get no overlay and a paddle that
+  never moves. `isTouchDevice()` (width OR `matchMedia('(hover: none) and
+  (pointer: coarse)')`) correctly blocks every touch device behind
+  `#mobile-overlay` for now, so nothing is silently broken — but "blocked"
+  is the whole mobile experience today. Real touch play is a real feature,
+  not a bug fix. *Surfaced: brief 30 review, 2026-08-25.*
+- **Self-hosting Basier Circle is a type-design decision, not a mechanical
+  swap.** The real `.woff2` files already exist in the repo (`fonts/
+  BasierCircle-{Regular,RegularItalic,Medium}.woff2`, used by root v2) — brief
+  30's Task 2 confirmed this while noting `Oolong.mp3`/the Google Fonts link
+  as the two things staying outside the self-contained build. Do **not** treat
+  "the files exist" as "wire up `@font-face` and drop the Google Fonts link."
+  Basier Circle is a different typeface from DM Serif Display + Space Mono —
+  the pair every v3 screen was actually designed and approved against
+  (`DESIGN.md` §3's interim substitute). Self-hosting it changes the
+  product's typography everywhere it appears, not just removes a network
+  request. Needs Shivang's actual call on the typeface before anyone touches
+  this, not a cleanup pass. *Surfaced: brief 30 spec, 2026-08-25.*
+- **`Oolong.mp3` stays a sibling file, not embedded.** Root `CLAUDE.md` §4
+  forbids base64-embedded audio, and ~2.5MB of base64 sitting inline in the
+  HTML would be absurd regardless of that rule. The shipped build is one
+  HTML file plus two sibling assets (`Oolong.mp3`, and the Google Fonts
+  link above) — "self-contained" means "opens and runs from one file
+  reference," not "literally zero other bytes on disk." Neither blocks
+  ship; both are pre-existing. *Surfaced: brief 30 Task 2, 2026-08-25.*
 
 ## Engine-wide / Product
 

@@ -3,7 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Zen Pong v3</title>
+<title>Zen Pong</title>
+<!-- Brief 30 Task 4 — none of this existed before this brief. title drops
+     the dev-only "v3" suffix on purpose: this is the product's title now,
+     not a variant label. og:image is a real finished painting, not a
+     mockup or a live render — there is no server to render one per link
+     (v3/briefs/30-integration-and-ship.md Task 4), so it is one committed
+     asset (og-image.png, repo root, 1200x630, generated from an actual
+     game — see PROJECT-LOG.md for how) standing in for every share. -->
+<meta name="description" content="A pong game where the rally paints the picture. The ball's trail lines accumulate into a painting as you play — the game is the brush, the artwork is what you keep.">
+<meta property="og:title" content="Zen Pong">
+<meta property="og:description" content="A pong game where the rally paints the picture. The ball's trail lines accumulate into a painting as you play.">
+<meta property="og:image" content="https://shivang-xyz.github.io/zen-pong/og-image.png">
+<meta property="og:url" content="https://shivang-xyz.github.io/zen-pong/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Zen Pong">
+<meta name="twitter:description" content="A pong game where the rally paints the picture. The ball's trail lines accumulate into a painting as you play.">
+<meta name="twitter:image" content="https://shivang-xyz.github.io/zen-pong/og-image.png">
+<meta name="theme-color" content="#383838">
+<!-- Favicon derived from the existing logo SVG's own dot mark (the
+     "•" in |ZEN•PONG|, e.g. line ~503's <circle cx="60" cy="14" r="3"
+     fill="#FFF5E5"/>) on a --color-bg rounded square — reuses a real shape
+     from the committed logo rather than inventing a new symbol; legible at
+     16px where the full wordmark would not be. -->
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   /* ── Tokens · DESIGN.md §2/§4/§5/§6 ── */
@@ -474,9 +498,99 @@
   }
   .track:active .thumb, .track .thumb:active { cursor: grabbing; }
   .track:focus-visible { outline: 2px solid var(--color-lightest-grey); outline-offset: 4px; } /* browser-default-adjacent, DESIGN.md defines no custom ring (Task 6) */
+
+  /* ── Mobile overlay · brief 30 Task 3 ──
+     Reference: root index.html's #mobile-overlay/#mobile-card (~line
+     306-388) — same mechanism (fixed, full-viewport, translucent card,
+     pointer-events:all so no click/tap ever reaches the game underneath
+     even though it visually shows through), v3's own tokens and type
+     system instead of root's Basier Circle references (v3 doesn't use
+     that font at all). MUST be a direct child of <body>, never nested
+     inside a .screen — a transformed ancestor becomes a new containing
+     block for position:fixed descendants, which would break inset:0
+     full-viewport coverage the moment the mobile fill-scale below applies
+     a transform to whichever .screen is visible. */
+  #mobile-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 99999; /* v3's highest existing z-index anywhere is .frame's 4 — no conflict */
+    background: transparent;
+    align-items: center;
+    justify-content: center;
+    pointer-events: all;
+  }
+  #mobile-card {
+    position: relative;
+    width: 300px;
+    background: rgba(70, 70, 70, 0.60); /* --color-cta (#464646) translucent, root's own treatment */
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    border-radius: var(--radius);
+    padding: var(--space-xl) var(--space-l);
+    box-shadow: var(--shadow-chip);
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center;
+    pointer-events: all;
+  }
+  #mobile-headline {
+    font-size: 18px; /* body's own DM Serif Display italic applies by inheritance — no font-family override, matches .tagline/#idle-sub's treatment rather than porting root's Basier Circle */
+    color: var(--color-canvas);
+    margin: 0 0 var(--space-m);
+  }
+  #mobile-divider {
+    width: 100%; height: 1px;
+    background: var(--color-lightest-grey);
+    margin-bottom: var(--space-m);
+  }
+  #mobile-body {
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 13px; line-height: 1.6;
+    color: var(--color-canvas);
+    margin: 0 0 var(--space-l);
+  }
+  #mobile-card .logo-mark { opacity: 0.55; } /* matches the save-artwork export's translucent logo treatment (exportArtworkPNG, ~line 3360) */
+
+  /* Hides the game's own chrome behind the overlay, not just the game
+     itself — root does the same (its #intro-card gets display:none on
+     is-mobile) so a phone visitor never reads two contradictory pieces of
+     copy at once ("space to begin" behind "this needs a mouse"). Toggled
+     by updateMobileOverlay() via isMobileBlocked(), never by isTouchDevice()
+     alone — #share-row must stay visible and usable on a mobile share
+     screen, which is exactly the case isMobileBlocked() excludes. */
+  html.mobile-blocked #intro-card,
+  html.mobile-blocked #surface-chip,
+  html.mobile-blocked #screen-idle .pal-pill,
+  html.mobile-blocked #ctrl-row-playing { display: none; }
 </style>
 </head>
 <body>
+
+  <!-- ══════════════════════════ MOBILE OVERLAY · brief 30 Task 3 ══════════════════════════
+       Direct child of <body>, before every .screen section — see the CSS
+       comment above for why placement matters. Hidden by default
+       (display:none in CSS); updateMobileOverlay() toggles it based on
+       isTouchDevice() + current screen (never shown while screenState is
+       'share' — a shared link must render, not be blocked). -->
+  <div id="mobile-overlay">
+    <div id="mobile-card">
+      <p id="mobile-headline">this one needs a mouse</p>
+      <div id="mobile-divider"></div>
+      <p id="mobile-body">the paddle follows your hand — best on a desktop or laptop. come back and play.</p>
+      <svg class="logo-mark" width="112" height="22" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFF5E5"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFF5E5"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFF5E5"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFF5E5"/>
+<rect width="2" height="27" rx="1" fill="#FFF5E5"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
+<circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
+</svg>
+    </div>
+  </div>
 
   <!-- ══════════════════════════ IDLE SCREEN ══════════════════════════ -->
   <section id="screen-idle" class="screen" data-idle-step="attract" data-surface="paper">
@@ -796,6 +910,56 @@ function setScreen(next) {
   fitScreenToViewport();
 }
 
+// ── Brief 30 Task 3 — mobile ────────────────────────────────────────────
+// v3 has no touch paddle control at all (root has cv.addEventListener
+// ('touchmove', ...); v3 only wires touchstart as a generic start-gesture
+// — porting touchmove is real, separate work, backlogged for brief 31).
+// That makes the detection question bigger than "narrow viewport": a
+// tablet (iPad, 768-1024px) sits well above any reasonable pixel
+// breakpoint, so a width-only check would let it through with no overlay
+// and a paddle that never moves — silently unplayable, not just cramped.
+// Raising the pixel breakpoint doesn't fix this without also blocking
+// narrow DESKTOP windows, which must stay playable. Detect the actual
+// capability instead of guessing from width:
+function isTouchDevice() {
+  // document.documentElement.clientWidth, not window.innerWidth — the
+  // layout viewport width is what CSS media queries and actual rendering
+  // are based on; innerWidth can disagree with it (scrollbar accounting,
+  // and some emulated/embedded viewport contexts report it inflated by a
+  // fixed zoom-like factor even though clientWidth stays correct).
+  return document.documentElement.clientWidth <= 600 || matchMedia('(hover: none) and (pointer: coarse)').matches;
+}
+
+const mobileOverlayEl = document.getElementById('mobile-overlay');
+
+// The one flag every mobile decision (overlay, scroll-lock, chrome-hide,
+// fill-vs-fit scale, the spacebar gate below) reads. share is deliberately
+// exempt — Task 3: "a shared link opened on a phone must still show the
+// artwork... the overlay only blocking the game." The idle+
+// landingWithSharePayload clause exists because screenState is still the
+// literal 'idle' default in the gap between page load and the async
+// decodeFromFragment/decodeArtworkPayload promise settling (brief 29's own
+// flash-guard has already hidden #screen-idle by then, synchronously, but
+// screenState itself doesn't flip to 'share' until decode succeeds) —
+// without this clause a phone visitor on a real share link sees the
+// overlay flash on before their artwork appears.
+function isMobileBlocked() {
+  if (!isTouchDevice()) return false;
+  if (screenState === 'share') return false;
+  if (screenState === 'idle' && landingWithSharePayload) return false;
+  return true;
+}
+
+function updateMobileOverlay() {
+  const blocked = isMobileBlocked();
+  mobileOverlayEl.style.display = blocked ? 'flex' : 'none';
+  document.documentElement.classList.toggle('mobile-blocked', blocked);
+  // Both html and body — iOS Safari's rubber-band scroll can leak past
+  // overflow:hidden set on <html> alone.
+  document.documentElement.style.overflow = blocked ? 'hidden' : '';
+  document.body.style.overflow = blocked ? 'hidden' : '';
+}
+
 // Brief 25 Task 1 step 4 / Task 5's own fallback: for any viewport still too
 // short after Task 5's tightened rhythm, scale the WHOLE visible .screen
 // uniformly — never one axis, never one child, which is exactly the
@@ -811,6 +975,45 @@ function fitScreenToViewport() {
   visible.style.transform = '';
   visible.style.transformOrigin = '';
   visible.style.marginBottom = '';
+
+  updateMobileOverlay();
+  // Mobile branches BEFORE the results early-return below — placing it
+  // after would leave results unscaled/unblocked if a desktop window gets
+  // narrowed mid-game (results reachability aside, isMobileBlocked() must
+  // stay correct for every screenState, not just idle/playing).
+  if (isTouchDevice()) {
+    // rect is 0x0 if `visible` currently carries the `hidden` attribute —
+    // true for #screen-idle during brief 29's synchronous flash-guard
+    // window while a share-link decode is still in flight. Skip the
+    // transform rather than scale a zero-size box; harmless since nothing
+    // hidden is visible anyway, and this re-runs once decode settles.
+    const rect = visible.getBoundingClientRect();
+    // clientWidth/clientHeight, not window.innerWidth/innerHeight — see
+    // isTouchDevice()'s own comment above; same viewport-reporting mismatch
+    // applies here and was caught visually (share's artwork bled off the
+    // right edge on a real mobile-viewport check before this fix).
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    if (rect.width > 0 && rect.height > 0) {
+      const scale = isMobileBlocked()
+        // Cover — root's own resize() Math.max behavior. Deliberately
+        // crops; this is decorative motion behind the overlay, not the
+        // deliverable, so filling the viewport reads as "alive" rather
+        // than a small island of content on a dark field.
+        ? Math.max(vw / rect.width, vh / rect.height)
+        // Contain — share is the actual deliverable a phone visitor
+        // arrived for; it must never be cropped, only shrunk to fit,
+        // capped at 1 so it's never scaled UP past its natural size.
+        : Math.min(vw / rect.width, vh / rect.height, 1);
+      visible.style.transform = `scale(${scale})`;
+      // body already centers each .screen via flex (align-items/justify-
+      // content: center) — scaling from center keeps that centering under
+      // either the crop or the fit, instead of drifting toward one corner.
+      visible.style.transformOrigin = 'center';
+    }
+    return; // never falls through to the desktop-only logic below
+  }
+
   // Brief 28 Task 4 — results deliberately does NOT get the fit clamp: it's
   // a resting screen, allowed to be taller than the viewport and scroll.
   // The three style resets above still run (clears any transform left over
@@ -3398,6 +3601,13 @@ function onGesture(e) {
 }
 
 window.addEventListener('keydown', (e) => {
+  // Brief 30 Task 3 — #mobile-overlay's pointer-events:all already stops
+  // every click/tap from reaching the game underneath it, but CSS
+  // pointer-events has no effect on keyboard events at all (they ignore
+  // stacking order entirely) — a real gap on the desktop-narrow-resize
+  // edge case (no physical spacebar exists on an actual phone, so this
+  // never matters there) without this explicit gate.
+  if (isMobileBlocked()) return;
   if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); onGesture(e); }
 });
 document.getElementById('screen-idle').addEventListener('click', onGesture);

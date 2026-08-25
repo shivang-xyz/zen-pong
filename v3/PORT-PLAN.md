@@ -144,6 +144,15 @@ clip and wreck the mix), BGM ducked to 0.58 in play and results, point and
 game-over rebuilt as inharmonic struck bells, frame glow stronger and longer.
 
 ### Brief 29 — Share page
+The artwork travels in the URL fragment — no server, so the marks themselves are
+encoded (decimated + delta-encoded + `CompressionStream`), not a replay seed:
+re-simulation would depend on `Math.sin`/`atan2` matching across browser engines,
+and a divergence there is a different painting, not a glitch. Splatter is sent
+explicitly (per-frame emission isn't seed-reproducible); blotches are re-derived
+from the seed. Bar is visually indistinguishable, not pixel-identical — that is
+what keeps it inside ~2-5KB. Screen 4 at 800x504 resolves `DESIGN.md` §7's open
+share-canvas size. Replay stays cheap later: the timeline scrubber already
+renders `strokes[0..n]`, so animating n off the same payload is the replay.
 The greenfield screen — how a finished piece is shown/shared outside the game.
 
 ### Brief 30 — Integration polish + ship

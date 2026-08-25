@@ -5,6 +5,64 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-24 — Brief 28 approved. Brief 29 (share page) written.
+
+Navigation, audio mix and results spacing all landed and approved. Small
+outstanding polish deliberately deferred — Shivang's call is speed to a
+shippable build, then a QA sweep.
+
+### The share architecture — the one real decision left
+Put to Shivang explicitly, because it changes what gets built and could not be
+resolved from the repo: there is no server, so a shared artwork has to travel
+inside the URL or not travel at all. His answer: the recipient must see the
+exact painting; static is fine, replay can wait; the primary CTA follows the
+design.
+
+**Chosen: transmit the artwork, not a replay.** A seed-plus-input replay is
+smaller, but it depends on `Math.sin`/`cos`/`atan2` returning bit-identical
+results across browser engines, which no spec guarantees. A divergence there
+does not read as a glitch — it produces a *different painting*, silently.
+Sending the marks has no such failure mode.
+
+**The bar is visually indistinguishable, not pixel-identical.** The recipient
+never saw the original, so a mark three pixels over is not an error. Setting
+that bar deliberately is what makes the payload small enough to fit in a link:
+decimate to every 3rd point (Catmull-Rom makes most 60fps samples redundant),
+delta-encode, and run it through the browser's native `CompressionStream` —
+a platform API, so the no-external-libraries rule holds. Expected 2-5KB, hard
+ceiling 8KB.
+
+Two asymmetries worth recording:
+- **Splatter must be transmitted explicitly.** Brief 24's live splatter is
+  emitted from a per-frame probability check, so it is not reproducible from the
+  seed. Only a handful of marks; ~12-16 bytes each.
+- **Blotches must not be.** `buildIntersectionBlotches` is deterministic over a
+  finished stroke set, so it re-derives from the decoded strokes and seed.
+  Decimation may shift a cluster slightly — invisible, and it saves serialising
+  every satellite and droplet silhouette.
+
+The fragment (`#a=…`) is never sent to the server, so GitHub Pages has no
+length opinion.
+
+**Replay is not foreclosed.** The timeline scrubber already renders
+`strokes[0..n]`; animating n from 0 off the same payload *is* the replay. Not
+built now, deliberately available later at near-zero cost.
+
+### Resolved and flagged
+- **`DESIGN.md` §7's UNRESOLVED share-canvas size resolved: 800x504** — exactly
+  0.8x the game canvas, so the artwork scales cleanly. Border and radius stay
+  fixed rather than scaling with it, per the mockup.
+- **`.rbtn-primary`'s PAINT/PLAY label alternation is built as designed but has
+  never been ratified** (`DESIGN.md` §10 says so itself). Shivang asked for the
+  CTA per the design, so it ships; flagged at review as one CSS rule to drop if
+  it reads as a fidget.
+
+### Next
+29 → 30 (integration + ship): fold into one self-contained `index.html`, replace
+the live root file. After that the QA sweep and `BACKLOG.md` triage — which is
+the checkpoint `BACKLOG.md` itself names ("once every surface is built and the
+game is fitted together").
+
 ## 2026-08-24 — Brief 27 reviewed. Brief 28 written.
 
 Sound and interactions landed. Feedback split into a navigation gap, a real

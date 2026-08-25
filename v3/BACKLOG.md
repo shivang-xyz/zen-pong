@@ -93,6 +93,23 @@ triaging this whole list, not before.
   (every value a proposal, including the reveal wipe). Sweep them in one pass
   before brief 23. *Surfaced: brief 22 spec, 2026-08-24.*
 
+- **Paint ground-colour picker never got a screen.** `PAINT-MODE.md` §3 says
+  plain-mode ground colour is user-chosen and exempt from the lab-controls rule,
+  but no approved design places a control anywhere. Brief 26 ships the approved
+  Cream default and no picker. Decide whether it ships, and where.
+  *Surfaced: brief 26 spec, 2026-08-24.*
+- **Patches ground mode unused in the product.** `buildPatchGround` is built,
+  approved (brief 13/15) and reachable, but brief 26 ships plain only —
+  `PAINT_DEFAULT_GROUND_MODE` is `'plain'` and a second ground path doubles the
+  review surface. Available whenever it's wanted.
+  *Surfaced: brief 26 spec, 2026-08-24.*
+- **Doc drift — `DESIGN.md` §11 draws the logo as text.** The save-artwork PNG
+  spec (and root `index.html`'s implementation) render the string
+  `| ZEN • PONG |` in Space Mono. The standing project rule is that the logo is
+  never text, always the inline SVG. Brief 26 renders the SVG and deviates from
+  §11; §11 should be corrected.
+  *Surfaced: brief 26 spec, 2026-08-24.*
+
 ## Engine-wide / Product
 
 Carried forward from `PROJECT-LOG.md`'s 2026-07-10/11 entries — status not

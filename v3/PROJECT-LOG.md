@@ -5,6 +5,63 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-24 — Brief 25 reviewed. Brief 26 (results / reveal) written.
+
+Layout, fit and the 3-dot chips landed. Two defects left, both small, both
+folded into brief 26 as Task 0 rather than becoming a brief of their own —
+Shivang asked whether to keep writing briefs for QA-sized items, and the answer
+is no: a fix that is two numbers and a `display:none` does not need its own
+review cycle, it needs to ride along with the next real brief. Backlogging them
+would be worse, since they are visible defects on a screen we are calling done.
+Protocol holds for features; QA rides.
+
+### The guardrails, finally diagnosed properly
+Measured off the build screenshot: colour, height, length and x-position are all
+now exactly right (`#C5C5C5`, flat, 2px x 8px, spanning the frame band). The
+remaining problem is y, and it is not a nudge — it is structural.
+
+`PAD_MIN` is `CR` = **40**. The canvas `border-radius` is **48**. So the
+paddle's travel limit sits 8px *inside the corner arc*, and a horizontal 8px bar
+placed there is trying to sit flush against a curve, which it cannot do — it
+overhangs into the dark on its outer rows. That overhang is what has read as
+"not tucked in" across three rounds of nudging the colour and length.
+
+Fix: move both pairs onto the straight section — top y 38 → 48, bottom y 590 →
+580, derived from the border-radius. The mark is then ~8px off the true paddle
+limit. Under 1.5% of canvas height, invisible as an affordance, and the
+alternative is a bar that can never sit flush. Deliberate trade, recorded here
+rather than discovered again later.
+
+### Brief 26 — the decisions made, so review knows what to look at
+- **Paint reveal ground resolved.** `DESIGN.md` §2's UNRESOLVED item and the
+  design file's amber stand-in are both superseded: the ground is the engine's
+  real `buildPaintSurface` with `palette.ground` (Cream), built from the game
+  seed per `PAINT-MODE.md` §3.1. No ground-colour picker ships — §3 says the
+  colour is user-chosen but no approved screen has the control, so it is
+  backlogged rather than invented. Patches mode stays out.
+- **Blotches yes, second splatter pass no.** The lab runs both over the finished
+  stroke set. Live splatter (brief 24) already put marks down, so a full
+  density-placed pass on top would double the count. `buildIntersectionBlotches`
+  is different in kind — compound wet-colour clusters at crossings, only
+  meaningful over a finished composition, and a large part of the lab look. This
+  is the one aesthetic call in the brief that has not been seen; flagged for
+  review both ways.
+- **Only paint has a reveal.** Paper and chalk were on their real ground during
+  play, so for those the reveal is chrome leaving and strokes coming to full.
+  No fake wipe.
+- **Timeline scrubber clips strokes, not blotches.** Blotches are placed from
+  the full stroke set and stay put; recomputing them per scrubber position would
+  make the control feel unstable and cost a rebuild per frame. Compromise
+  commented at the code site.
+- **Save PNG deviates from `DESIGN.md` §11**, which draws the logo as the text
+  string `| ZEN • PONG |`. The standing rule is the logo is never text. SVG
+  rendered into the export instead; §11 logged as drift.
+- **Haiku seeded, not random** — ported from root's `QUOTES`, picked off the
+  game seed, so a finished artwork reproduces identically for the share page.
+
+### Next
+Brief 26 written and committed. Then 27 (feel/audio), 28 (share), 29 (ship).
+
 ## 2026-08-24 — Brief 24 reviewed. Brief 25 written; sequence set through ship.
 
 Paint, splatter and the guardrails all landed. Five items back, one of which

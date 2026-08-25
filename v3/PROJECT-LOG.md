@@ -5,6 +5,63 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-24 — Brief 24 reviewed. Brief 25 written; sequence set through ship.
+
+Paint, splatter and the guardrails all landed. Five items back, one of which
+turned out to be the cause of another.
+
+### The slits weren't a geometry bug — the layout is squashing
+The guardrail code is already correct: 8px long, canvas x 0-8, `#C5C5C5`, 2px,
+z-index 3, positions derived from `physics.js`. It still looked wrong. Cause,
+found by measuring the screenshots rather than re-reading the code:
+
+`.stage` is `width:1000px; max-width:100%`. On a 13" MacBook the page is taller
+than the viewport, and that `max-width` lets the stage compress **horizontally**
+below 1000px — measured at roughly 900 CSS px, about 0.9x. Everything inside is
+`inset:0` so it compresses too. The canvas bitmap is squashed on one axis, and
+the 2px guardrail lands on a fractional device pixel: measured off the current
+build it renders ~1.3px tall with a soft `#828282`→`#C5C5C5` gradient across its
+length instead of a flat 2px bar. That blur is the "not tucked in neatly."
+
+So the slit complaint and the scroll complaint are the same defect. `max-width`
+on a fixed-aspect artwork surface is wrong in principle — non-uniform
+compression of a canvas is never what you want. Removed, and the vertical rhythm
+tightened so 1000x630 plus chrome fits inside 760px at 1:1. A uniform
+whole-`.screen` `scale()` is the fallback for anything shorter — both axes,
+never one child.
+
+### Other brief-25 items
+- **Mute has no second state** — the icon is permanently the crossed speaker, so
+  it reads "muted" while the music plays. Two inline SVGs, plus `aria-pressed`
+  and a swapping label.
+- **3-dot palette chip everywhere, both screens.** Worth recording honestly:
+  Shivang's premise was that all modes already have three colours. Chalk and
+  paint do; **paper has five** (`DEFAULT_PALETTE`). So this is not a UI-only
+  change — paper drops to three stroke colours (pink, blue, green: the two
+  paddle colours plus the next in existing order, nothing invented). A chip
+  showing three while the canvas paints five would be a lying control, so the
+  chip and the palette move together. Flagged for his eye at review, since it
+  visibly changes the paper artwork.
+- **Playing logo 140x27 → 98x19** and the idle/results logos left alone until
+  those screens are reviewed.
+
+### Sequence set through ship
+Answering the two forward questions:
+
+- **Brief 26 — results / reveal.** Next. It is the payoff the whole premise
+  rests on ("the artwork is the product") and the game loop cannot close
+  without it.
+- **Brief 27 — in-game feel: audio + hit/score interactions.** Placed *after*
+  the reveal on purpose. The reveal has its own audio and motion beat (the
+  ground wipe, the haiku landing), and doing all the feel work in one pass
+  produces one motion and sound language rather than two designed apart. The
+  cost of the other order is wiring audio twice. Flipping them is cheap if
+  Shivang would rather have the juice sooner — his call, offered explicitly.
+- **Brief 28 — share page. Brief 29 — integration + ship.**
+
+### Next
+Brief 25 written and committed. `PORT-PLAN.md` renumbered and now runs to 29.
+
 ## 2026-08-24 — Brief 23 reviewed: three of four kept, the taper reversed
 
 Guardrails, the 60% width cut, per-stroke profiles and the emergence taper all

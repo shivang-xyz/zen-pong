@@ -98,7 +98,17 @@ Committed strokes composited at 70% during play, 100% at game end, via a
 ground/strokes layer split (the same split brief 25's reveal needs). Paint
 palette pill shows all 5 slots — ground, ink, 3 accents — matching the lab.
 
-### Brief 25 — Results / reveal screen
+### Brief 25 — In-game screen: final polish
+Last pass on playing. The stage was compressing below 1000px on short viewports
+(`max-width:100%` on a fixed-aspect surface), which squashed the canvas on one
+axis and put the 2px guardrails on fractional pixels — that blur, not the
+geometry, was why the slits read wrong. Removed, plus a vertical rhythm that
+fits 1000x630 inside 760px so a 13" MacBook doesn't scroll. Mute button gets a
+real two-state icon. All palette chips show 3 dots on every surface and both
+screens — which means paper drops from 5 stroke colours to 3. Playing logo down
+30% (140x27 -> 98x19).
+
+### Brief 26 — Results / reveal screen
 The reveal moment: finished artwork resolves (paint ground composites in at game
 end — plain chosen colour or seeded patches). `#timeline-chip` (`DESIGN.md` §10)
 — picks which frame of the accumulated painting to keep; this is a property of
@@ -110,10 +120,23 @@ Blocked on three `DESIGN.md` UNRESOLVED items: the paint reveal ground tokens
 (§2), the slider primitives for `#timeline-chip` (§10), and ratification of the
 §13 motion spec. Resolve them before writing the brief.
 
-### Brief 26 — Share page
+### Brief 27 — In-game feel: audio + hit/score interactions
+The juice. Paddle-hit flash/glow, a real ball impact sound, and a distinct
+moment when a point is won or lost — all present in the v2 build and absent
+from v3. Root `CLAUDE.md` §4 is binding: all 7 SFX functions, chalk SFX fires
+exactly once per paddle hit **inside the paddle-hit branch, never on a frame
+clock**. BGM/mute plumbing already exists from brief 18.
+
+Deliberately placed after the reveal, not before it: the reveal (brief 26) has
+its own audio and motion beat — the ground wipe, the haiku landing — and doing
+all the feel work in one pass gives the game a single motion and sound
+language instead of two that were designed apart. The cost of the other order
+is doing audio twice.
+
+### Brief 28 — Share page
 The greenfield screen — how a finished piece is shown/shared outside the game.
 
-### Brief 27 — Integration polish + audio + ship
+### Brief 29 — Integration polish + ship
 Fold the screens into the final self-contained `index.html`, wire BGM/SFX (the
 protected audio systems from root CLAUDE.md §4), full pass, then replace the live
 root file. Ship.

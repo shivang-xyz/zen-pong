@@ -383,6 +383,73 @@
   }
   .rbtn:hover { opacity: 0.85; }
 
+  /* ── Share screen · brief 29 Task 2, DESIGN.md §8 Screen 4 ──
+     800x504 resolves §7's previously-UNRESOLVED share-canvas size —
+     exactly 0.8x the game canvas. Border/radius are NOT scaled down with
+     it (deliberate, per the mockup): .canvas-wrap/.frame already use the
+     same fixed --radius/8px border regardless of .stage's own size, so
+     this falls out for free, nothing extra to write here. */
+  #share-stage { width: 800px; height: 504px; }
+  /* Same stacking idiom as #results-ground-canvas/#results-strokes-canvas
+     (~line 342) — ground below, strokes above, both filling .canvas-wrap.
+     Without this, the two <canvas> elements lay out as normal in-flow
+     blocks (ground's own 504px height already fills .canvas-wrap, which
+     is overflow:hidden), pushing strokes-canvas below the visible box
+     entirely — real pixels drawn, zero of them ever shown. Caught by
+     screenshot, not by the encode/decode logic, which was never the bug. */
+  #share-ground-canvas, #share-strokes-canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+  }
+  #share-row {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 800px;
+  }
+  #share-row .secondary { display: flex; gap: var(--space-xm); }
+
+  /* ── .rbtn-primary — DESIGN.md §10 / v3/design/4-share.html, built
+     exactly as designed. Hierarchy comes from a 1px hairline of the trail
+     colours travelling on a 12s loop; the button itself stays dark and
+     understated — no fill change, no size change, nothing bright. The
+     PAINT/PLAY first-word swap (every 3s, hard cut, fixed 44px slot so
+     nothing reflows) is DESIGN.md §10's own "needs ratifying" item — built
+     because Shivang asked for the CTA per the design, not because it has
+     been signed off; see BACKLOG.md. */
+  @keyframes zp-flow    { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+  @keyframes zp-word-a  { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  @keyframes zp-word-b  { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
+  .rbtn-primary {
+    padding: 1px;
+    border: 0;
+    border-radius: var(--radius-small);
+    background: linear-gradient(90deg,
+      var(--color-pink), var(--color-blue), var(--color-green),
+      var(--color-orange), var(--color-cyan), var(--color-pink));
+    background-size: 200% 100%;
+    animation: zp-flow 12s linear infinite;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.16);
+    cursor: pointer;
+  }
+  .rbtn-primary .inner {
+    display: block;
+    background: var(--color-cta);
+    border-radius: var(--radius-small);
+    padding: var(--space-xxm) var(--space-m);
+    font-family: 'Space Mono', monospace;
+    font-style: normal;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #FFFFFF;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.32);
+  }
+  .swap { position: relative; display: inline-block; width: 44px; text-align: left; }
+  .swap b { font-weight: 400; animation: zp-word-a 6s steps(1, end) infinite; }
+  .swap i {
+    position: absolute; left: 0; top: 0; font-style: normal;
+    animation: zp-word-b 6s steps(1, end) infinite;
+  }
+  .static-word { margin-left: var(--space-s); }
+
   /* ── #timeline-chip — DESIGN.md §10, primitives resolved by the design
      file per the brief (DESIGN.md itself flags them UNRESOLVED) (Task 6) ── */
   #timeline-chip { padding: 0 var(--space-xm); gap: var(--space-xm); }
@@ -606,11 +673,59 @@
       </div>
       <div class="actions">
         <button class="rbtn" id="btn-save">save artwork</button>
-        <!-- Brief 28 builds the share screen; this button is wired to
-             nothing yet (Task 8) — left visible, not hidden or disabled,
-             the row is being reviewed as a whole. -->
         <button class="rbtn" id="btn-share">share</button>
         <button class="rbtn" id="btn-play-again">play again</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ SHARE SCREEN ══════════════════════════
+       Brief 29 — the last new screen. DESIGN.md §8 Screen 4 /
+       v3/design/4-share.html. No score, no controls, no author, no date,
+       no seed — one row of actions so the page holds in a single fold. -->
+  <section id="screen-share" class="screen" hidden>
+    <svg width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFF5E5"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFF5E5"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFF5E5"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFF5E5"/>
+<rect width="2" height="27" rx="1" fill="#FFF5E5"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
+<circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
+</svg>
+    <div class="spacer-l"></div>
+
+    <div class="stage" id="share-stage">
+      <div class="canvas-wrap">
+        <!-- 800x504 — 0.8x the game canvas (DESIGN.md §7's previously
+             UNRESOLVED share-canvas size). Border/radius stay the fixed
+             8px/48px, not scaled down — deliberate, see the CSS. These are
+             the DISPLAY bitmaps only; DOWNLOAD PNG exports from a separate
+             full-resolution 1000x630 pair built alongside them (Task 3). -->
+        <canvas id="share-ground-canvas" width="800" height="504"></canvas>
+        <canvas id="share-strokes-canvas" width="800" height="504"></canvas>
+      </div>
+      <div class="frame"></div>
+    </div>
+
+    <div class="spacer-l"></div>
+    <p class="haiku" id="share-haiku"></p>
+    <div class="spacer-l"></div>
+
+    <div id="share-row">
+      <!-- .rbtn-primary — DESIGN.md §10, built as designed per the brief.
+           The PAINT/PLAY word-swap has never been ratified (DESIGN.md §10
+           says so itself) — flagged at review, one CSS rule to drop if it
+           reads as a fidget. -->
+      <button class="rbtn-primary" id="btn-share-cta">
+        <span class="inner"><span class="swap"><b>paint</b><i>play</i></span><span class="static-word">your own</span></span>
+      </button>
+      <div class="secondary">
+        <button class="rbtn" id="btn-share-download">download png</button>
+        <button class="rbtn" id="btn-share-copy">copy link</button>
       </div>
     </div>
   </section>
@@ -628,15 +743,27 @@ import {
   CHALK_DEFAULT_WIDTH_MULT,
 } from '../engine/chalkboard.js';
 import { buildPaintSurface, PAINT_DEFAULT_WIDTH_VARIATION, PAINT_DEFAULT_BLOTCH_SIZE_MULT } from '../engine/paint.js';
-import { buildPalette, GROUND_LIBRARY, INK_HEX } from '../engine/palette.js';
+import { buildPalette, GROUND_LIBRARY, INK_HEX, HUE_LIBRARY } from '../engine/palette.js';
 import { DEFAULT_PALETTE } from '../engine/simulate.js';
 import { renderSplatterMark, buildIntersectionBlotches, renderBlotchCluster } from '../engine/splatter.js';
+
+// Brief 29 Task 3 — "landing with a fragment: decode and go straight to
+// Screen 4. Do not flash the idle screen first." Checked and acted on as
+// the very first thing this script does, before any idle-screen doodle
+// setup below has a chance to paint a frame — the actual decode is async
+// (CompressionStream/DecompressionStream both return promises) and is
+// kicked off much further down, once setScreen/renderSharePage/etc. are
+// defined; this synchronous hide is what closes the gap between "script
+// starts running" and "that promise resolves".
+const SHARE_HASH_PREFIX = '#a=';
+const landingWithSharePayload = location.hash.startsWith(SHARE_HASH_PREFIX);
+if (landingWithSharePayload) document.getElementById('screen-idle').hidden = true;
 
 // Brief 26 Task 5 — ported verbatim from root index.html (~line 566), text
 // and attributions unchanged. Picked by the per-game seed (see
 // gameLastEndedStrokes' construction in stepGame's win branch), never
 // Math.random() — a finished artwork must reproduce identically, quote
-// included, so the share screen (brief 28) can show the same piece twice.
+// included, so the share screen (brief 29) can show the same piece twice.
 const QUOTES = [
   'Muddy water is best cleared by leaving it alone. — Alan Watts',
   'Coming, going, the waterbirds don\'t leave a trace, don\'t follow a path. — Dōgen',
@@ -659,6 +786,7 @@ const screens = {
   idle: document.getElementById('screen-idle'),
   playing: document.getElementById('screen-playing'),
   results: document.getElementById('screen-results'),
+  share: document.getElementById('screen-share'), // brief 29 — the screens/setScreen machinery was already generic, no special-casing needed for a 4th
 };
 let screenState = 'idle';
 function setScreen(next) {
@@ -1853,6 +1981,7 @@ function stepGame() {
         seed: gameSeed,
         surface: currentSurface,
         paintGroundHex: gamePaintPalette.ground, // Cream by default (Task 3) — captured here since gamePaintPalette itself gets replaced by the next startGame()
+        resolvedPalette: gamePalPillHexesFor(currentSurface), // brief 29 Task 1 — the 3 actual stroke hexes (post any shuffle), captured now for the same reason as paintGroundHex above
         quote: QUOTES[Math.floor(quoteRng() * QUOTES.length)],
       };
       setScreen('results');
@@ -2226,8 +2355,12 @@ function roundedRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-document.getElementById('btn-save').addEventListener('click', async () => {
-  if (!resultsData) return;
+// Brief 26 Task 7, refactored brief 29 to be reusable — share's DOWNLOAD PNG
+// (Task 3: "reuses the brief-26 exporter at full resolution") needs the
+// exact same output, from whatever ground/strokes canvases it has (its own
+// full-res offscreen pair, not results' — see the share section below),
+// not necessarily the live game's own artwork.
+async function exportArtworkPNG(groundCanvas, strokesCanvas, haikuText, seed) {
   const S = 2, PAD = 32, quoteH = 100;
   const outW = (W + PAD * 2) * S, outH = (H + PAD * 2 + quoteH) * S;
   const out = document.createElement('canvas');
@@ -2242,15 +2375,15 @@ document.getElementById('btn-save').addEventListener('click', async () => {
   roundedRectPath(oc, sx, sy, sw, sh, r);
   oc.fillStyle = '#FFF5E5'; oc.fill(); // cream fallback beneath the ground/artwork, matches canvas-area base
   oc.clip();
-  oc.drawImage(resultsGroundCanvas, sx, sy, sw, sh); // whatever the scrubber currently shows (Task 6)
-  oc.drawImage(resultsStrokesCanvas, sx, sy, sw, sh);
+  oc.drawImage(groundCanvas, sx, sy, sw, sh);
+  oc.drawImage(strokesCanvas, sx, sy, sw, sh);
   oc.restore();
 
   oc.font = `italic ${14 * S}px "DM Serif Display", serif`;
   oc.fillStyle = '#C5C5C5';
   oc.textAlign = 'center';
   oc.textBaseline = 'middle';
-  oc.fillText(resultsHaikuEl.textContent, outW / 2, (PAD + H + 22) * S);
+  oc.fillText(haikuText, outW / 2, (PAD + H + 22) * S);
 
   const logoImg = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SAVE_LOGO_SVG));
   const logoW = 98 * S, logoH = 19 * S; // same reduced size as playing/results headers
@@ -2260,9 +2393,14 @@ document.getElementById('btn-save').addEventListener('click', async () => {
   oc.restore();
 
   const a = document.createElement('a');
-  a.download = `zen-pong-${gameLastEndedStrokes.seed}.png`; // seed, not a timestamp (Task 7)
+  a.download = `zen-pong-${seed}.png`; // seed, not a timestamp (Task 7)
   a.href = out.toDataURL('image/png');
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  if (!resultsData) return;
+  exportArtworkPNG(resultsGroundCanvas, resultsStrokesCanvas, resultsHaikuEl.textContent, gameLastEndedStrokes.seed);
 });
 
 // ── Task 8 — play again, share ─────────────────────────────────────────
@@ -2274,9 +2412,611 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 document.getElementById('btn-play-again').addEventListener('click', () => {
   goToIdleArmed();
 });
-document.getElementById('btn-share').addEventListener('click', () => {
-  // Wired to nothing yet — brief 28 builds the share screen. Left visible
-  // and enabled per the brief; the row is reviewed as a whole.
+/* ════════════════════════════════════════════════════════════════════════
+   BRIEF 29 — SHARE. There is no server (v3 is a static file on GitHub
+   Pages), so a shared artwork has to travel inside the URL fragment
+   (#a=…) or not travel at all — a fragment is never sent to the server,
+   so GitHub Pages has no length opinion on it.
+
+   Decision (put to Shivang explicitly, see PROJECT-LOG.md): transmit the
+   ARTWORK, not a replay. A seed-plus-input replay would be smaller, but
+   depends on Math.sin/cos/atan2 returning bit-identical results across
+   browser engines, which no spec guarantees — a divergence there produces
+   a DIFFERENT painting, silently, not a glitch. Sending the marks
+   themselves has no such failure mode.
+
+   The bar is VISUALLY INDISTINGUISHABLE, not pixel-identical — the
+   recipient never saw the original, so a mark three pixels over is not an
+   error. Setting that bar deliberately is what keeps the payload small
+   enough to fit in a link: decimate, delta-encode, compress.
+   ════════════════════════════════════════════════════════════════════════ */
+
+// ── Quantisation ranges — the same fixed ranges every stroke/mark on this
+// surface is already drawn from (mkBall's wt/op, the width-profile system's
+// GAME_PAINT_WIDTH_VAR_MIN/MAX, splatter's own size constants). Reusing
+// them for quantisation, rather than inventing new ones, is what keeps a
+// decoded stroke visually identical to the one that was actually drawn.
+const SHARE_WT_MIN = 1.0, SHARE_WT_MAX = 2.4;   // mkBall's own wt range, every mkBall call site
+const SHARE_OP_MIN = 0.50, SHARE_OP_MAX = 0.68; // mkBall's own op range
+const SHARE_IRREG_MIN = 0.12, SHARE_IRREG_MAX = 0.25; // buildLiveSplatterMark's irregularity range
+const SHARE_SAT_OFFSET_RANGE = 120; // px — generous bound on a flung mark's satellite offset (worst case ~98px, see buildLiveSplatterMark)
+const SHARE_SAT_R_MAX = 6; // px — generous bound on satellite radius (worst case ~4.3px)
+const SHARE_DECIMATE_N = 5; // keep every 5th raw point — was 3, raised after measurement showed paint routinely over the 8KB ceiling; see PROJECT-LOG.md
+
+function quantByte(v, min, max) {
+  const t = Math.max(0, Math.min(1, (v - min) / (max - min)));
+  return Math.round(t * 255);
+}
+function dequantByte(b, min, max) {
+  return min + (b / 255) * (max - min);
+}
+// Signed variant for values centred on 0 (satellite offsets) — maps
+// [-range,range] onto a plain signed byte via the writer's own i8(), no
+// separate zero-point bookkeeping at each call site.
+function quantSignedByte(v, range) {
+  const t = Math.max(-1, Math.min(1, v / range));
+  return Math.round(t * 127);
+}
+function dequantSignedByte(b, range) {
+  return (b / 127) * range;
+}
+
+// ── Growable byte writer / cursor reader — no library, this is just array
+// bookkeeping. Multi-byte ints are little-endian throughout.
+function makeByteWriter() {
+  const bytes = [];
+  return {
+    u8(v) { bytes.push(v & 0xFF); },
+    i8(v) { bytes.push(v < 0 ? v + 256 : v); }, // -128..127 -> 128..255 stored, read back signed
+    u16(v) { bytes.push(v & 0xFF, (v >> 8) & 0xFF); },
+    bytes() { return Uint8Array.from(bytes); },
+  };
+}
+function makeByteReader(view) {
+  let pos = 0;
+  return {
+    get remaining() { return view.length - pos; },
+    u8() { return view[pos++]; },
+    i8() { const v = view[pos++]; return v > 127 ? v - 256 : v; },
+    u16() { const v = view[pos] | (view[pos + 1] << 8); pos += 2; return v; },
+  };
+}
+
+// ── Task 1 — encode. Builds the RAW (uncompressed) byte payload from a
+// gameLastEndedStrokes-shaped handoff. Format:
+//   [flags:1][surface:1][seed:4][palette: 1 or 4][strokeCount:2]
+//   per stroke: [colourIdx:1][wt:1][op:1][pointCount:1][points...]
+//   [splatterCount:1] per mark: [type:1][x:2][y:2][colourIdx:1][...]
+// See the surrounding functions for exactly what each block contains —
+// kept close to the reader that has to agree with it byte for byte.
+const SHARE_FORMAT_VERSION = 1;
+function encodeArtworkPayload(h) {
+  const w = makeByteWriter();
+
+  w.u8(SHARE_FORMAT_VERSION & 0x0F); // bit 4 (compressed flag) is set by compressToFragment, after this
+  const surfaceIdx = { paper: 0, chalk: 1, paint: 2 }[h.surface];
+  w.u8(surfaceIdx);
+  w.u16(h.seed & 0xFFFF); w.u16((h.seed >>> 16) & 0xFFFF); // uint32 as two u16s — u16() is already LE
+
+  // Palette — brief 29 Task 1 names "scheme index, base index, ground
+  // index" (3 bytes) for paint. Deliberately NOT what's encoded here: the
+  // resolved ACCENT hexes are re-run through buildPalette's own seeded
+  // retry loop (the accent-quality guard, MIN_ACCENT_DE) on a fresh rng,
+  // and if the original run needed even one retry to pass that guard
+  // (~8% of base indices do, per palette.js's own comment), replaying
+  // scheme+baseIndex+seed alone reproduces a DIFFERENT accent permutation
+  // than the one actually shown — the rng draws consumed by the failed
+  // attempt(s) never happened in the replay. That is not "not pixel-
+  // identical", it is a different dominant colour. Transmitting the 3
+  // resolved accents directly (as HUE_LIBRARY indices, always valid since
+  // every accent hex is drawn from that fixed 12-colour library) costs one
+  // extra byte and is immune to it by construction — no rng replay at all.
+  // Ground is included for robustness even though it is currently always
+  // Cream (brief 26 Task 3 pins it, and shuffle never changes it) — cheap
+  // insurance against that ever becoming a real control (BACKLOG.md).
+  if (h.surface === 'paint') {
+    const accentHexes = h.resolvedPalette; // 3 hexes, A/B/C order — see gamePalPillHexesFor
+    accentHexes.forEach(hex => {
+      const idx = HUE_LIBRARY.findIndex(hue => hue.hex === hex);
+      w.u8(idx >= 0 ? idx : 0);
+    });
+    const groundIdx = GROUND_LIBRARY.findIndex(g => g.hex === h.paintGroundHex);
+    w.u8(groundIdx >= 0 ? groundIdx : 0);
+  } else {
+    // paper/chalk: pack the 3-element resolved palette as indices into the
+    // FIXED 3-hex source palette (PAPER_PALETTE / CHALK_PALETTE) — this is
+    // exactly gamePaperOrder/gameChalkOrder (the shuffle state), captured
+    // via resolvedPalette rather than re-deriving anything.
+    const sourcePalette = h.surface === 'chalk' ? CHALK_PALETTE : PAPER_PALETTE;
+    let packed = 0;
+    h.resolvedPalette.forEach((hex, slot) => {
+      const idx = Math.max(0, sourcePalette.indexOf(hex));
+      packed |= (idx & 0x3) << (slot * 2);
+    });
+    w.u8(packed);
+  }
+
+  w.u16(h.strokes.length);
+  h.strokes.forEach(st => {
+    const colourIdx = Math.max(0, h.resolvedPalette.indexOf(gameColourFor(h.surface, st.index)));
+    w.u8(colourIdx);
+    w.u8(quantByte(st.wt, SHARE_WT_MIN, SHARE_WT_MAX));
+    w.u8(quantByte(st.op, SHARE_OP_MIN, SHARE_OP_MAX));
+
+    // Decimate: keep every Nth raw point, plus ALWAYS the first and last
+    // (so a stroke never visibly falls short of where it actually ended).
+    const raw = st.pts;
+    const kept = [];
+    for (let i = 0; i < raw.length; i += SHARE_DECIMATE_N) kept.push(i);
+    if (kept[kept.length - 1] !== raw.length - 1) kept.push(raw.length - 1);
+    w.u8(kept.length);
+
+    let prev = null;
+    kept.forEach(i => {
+      const p = raw[i];
+      const x = Math.round(p.x), y = Math.round(p.y);
+      if (prev === null) {
+        w.u16(Math.max(0, Math.min(65535, x)));
+        w.u16(Math.max(0, Math.min(65535, y)));
+      } else {
+        const dx = x - prev.x, dy = y - prev.y;
+        if (dx < -127 || dx > 127 || dy < -127 || dy > 127) {
+          w.i8(-128); // escape — next 4 bytes are an absolute position, not a delta
+          w.u16(Math.max(0, Math.min(65535, x)));
+          w.u16(Math.max(0, Math.min(65535, y)));
+        } else {
+          w.i8(dx); w.i8(dy);
+        }
+      }
+      prev = { x, y };
+      // Paint widths: the baked per-point .w, quantised to one byte.
+      // Re-deriving it from the profile on decode would need the STROKE'S
+      // ORIGINAL arc length, which decimation itself changes — a byte a
+      // point is cheaper than reproducing that inaccuracy. Not sent for
+      // paper/chalk at all (renderStroke/renderChalkStroke never read .w).
+      if (h.surface === 'paint') {
+        w.u8(quantByte(p.w != null ? p.w : 1, GAME_PAINT_WIDTH_VAR_MIN, GAME_PAINT_WIDTH_VAR_MAX));
+      }
+    });
+  });
+
+  // Splatter — brief 24's live splatter is emitted per-frame from a
+  // probability check, so unlike the ground/blotches it is NOT
+  // reproducible from the seed alone (Task 1's own "come free" list
+  // explicitly does not include it). Sent explicitly; there are only ever
+  // up to GAME_SPLATTER_CAP (10) of them.
+  w.u8(h.splatterMarks.length);
+  h.splatterMarks.forEach(({ mark }) => {
+    w.u8(mark.type === 'flung' ? 1 : 0);
+    w.u16(Math.max(0, Math.min(65535, Math.round(mark.x))));
+    w.u16(Math.max(0, Math.min(65535, Math.round(mark.y))));
+    // colour: 0=ink, 1/2/3=accent A/B/C — splatter's own colour weighting
+    // (gameSplatterColorWeights) only ever picks from those 4, matching
+    // resolvedPalette (accents) + INK_HEX.
+    const paletteWithInk = [INK_HEX, ...h.resolvedPalette];
+    w.u8(Math.max(0, paletteWithInk.indexOf(mark.colorHex)));
+    if (mark.type === 'flung') {
+      w.u8(quantByte(mark.dx, -1, 1));
+      w.u8(quantByte(mark.dy, -1, 1));
+      w.u8(quantByte(mark.headR, GAME_SPLATTER_HEAD_R_MIN, GAME_SPLATTER_HEAD_R_MAX));
+      w.u8(quantByte(mark.length, GAME_SPLATTER_FLUNG_LEN_MIN, GAME_SPLATTER_FLUNG_LEN_MAX));
+      w.u8(mark.satellites.length);
+      mark.satellites.forEach(s => {
+        w.i8(quantSignedByte(s.x - mark.x, SHARE_SAT_OFFSET_RANGE));
+        w.i8(quantSignedByte(s.y - mark.y, SHARE_SAT_OFFSET_RANGE));
+        w.u8(quantByte(s.r, 0, SHARE_SAT_R_MAX));
+      });
+    } else {
+      w.u8(quantByte(mark.r, GAME_SPLATTER_DROP_R_MIN, GAME_SPLATTER_DROP_R_MAX));
+      w.u8(quantByte(mark.irregularity, SHARE_IRREG_MIN, SHARE_IRREG_MAX));
+      w.u8(quantByte(mark.seedAngle, 0, Math.PI * 2));
+    }
+  });
+
+  return w.bytes();
+}
+
+// ── Task 1 — decode. The exact byte-for-byte inverse of
+// encodeArtworkPayload, above — kept immediately below it so the two never
+// drift apart. Receives the RAW payload: a flags byte with only the
+// version nibble set. decodeFromFragment (below) has already resolved the
+// compressed-flag bit and decompressed if needed, so this function never
+// has to know compression exists at all — it always sees exactly the bytes
+// encodeArtworkPayload produced.
+//
+// Task 4's "quiet fall-through" requirement is met by ONE big try/catch
+// plus an explicit r.remaining bounds check before every multi-byte read:
+// any malformed or truncated input returns null (never throws), and the
+// caller (shareCurrentGame's counterpart at the bottom of this file) is
+// the one place that logs a single console.warn. Never renders a partial
+// artwork — a half-decoded painting shown as someone's finished piece
+// would be worse than showing nothing.
+function decodeArtworkPayload(bytes) {
+  try {
+    const r = makeByteReader(bytes);
+    if (r.remaining < 2) return null;
+    const flags = r.u8();
+    if ((flags & 0x0F) !== SHARE_FORMAT_VERSION) return null; // unknown version — fall through to idle
+    const surface = ['paper', 'chalk', 'paint'][r.u8()];
+    if (!surface) return null;
+
+    if (r.remaining < 4) return null;
+    const seedLo = r.u16(), seedHi = r.u16();
+    const seed = (seedLo | (seedHi << 16)) >>> 0;
+
+    let resolvedPalette, paintGroundHex = null;
+    if (surface === 'paint') {
+      if (r.remaining < 4) return null;
+      const accentIdx = [r.u8(), r.u8(), r.u8()];
+      if (accentIdx.some(i => i >= HUE_LIBRARY.length)) return null;
+      resolvedPalette = accentIdx.map(i => HUE_LIBRARY[i].hex);
+      const groundIdx = r.u8();
+      if (groundIdx >= GROUND_LIBRARY.length) return null;
+      paintGroundHex = GROUND_LIBRARY[groundIdx].hex;
+    } else {
+      if (r.remaining < 1) return null;
+      const packed = r.u8();
+      const sourcePalette = surface === 'chalk' ? CHALK_PALETTE : PAPER_PALETTE;
+      resolvedPalette = [0, 1, 2].map(slot => sourcePalette[(packed >> (slot * 2)) & 0x3] || sourcePalette[0]);
+    }
+
+    if (r.remaining < 2) return null;
+    const strokeCount = r.u16();
+    if (strokeCount > 20000) return null; // sanity ceiling — no real game gets close; catches a garbled length header
+
+    const strokes = [];
+    for (let si = 0; si < strokeCount; si++) {
+      if (r.remaining < 4) return null;
+      const colourIdx = r.u8();
+      const colorHex = resolvedPalette[colourIdx] || resolvedPalette[0];
+      const wt = dequantByte(r.u8(), SHARE_WT_MIN, SHARE_WT_MAX);
+      const op = dequantByte(r.u8(), SHARE_OP_MIN, SHARE_OP_MAX);
+      const pointCount = r.u8();
+      if (pointCount < 1) return null;
+
+      const pts = [];
+      let prev = null;
+      for (let pi = 0; pi < pointCount; pi++) {
+        let x, y;
+        if (prev === null) {
+          if (r.remaining < 4) return null;
+          x = r.u16(); y = r.u16();
+        } else {
+          if (r.remaining < 1) return null;
+          const dx = r.i8();
+          if (dx === -128) {
+            if (r.remaining < 4) return null;
+            x = r.u16(); y = r.u16();
+          } else {
+            if (r.remaining < 1) return null;
+            const dy = r.i8();
+            x = prev.x + dx; y = prev.y + dy;
+          }
+        }
+        prev = { x, y };
+        const pt = { x, y };
+        if (surface === 'paint') {
+          if (r.remaining < 1) return null;
+          pt.w = dequantByte(r.u8(), GAME_PAINT_WIDTH_VAR_MIN, GAME_PAINT_WIDTH_VAR_MAX);
+        }
+        pts.push(pt);
+      }
+      strokes.push({ pts, wt, op, index: si, colorHex });
+    }
+
+    if (r.remaining < 1) return null;
+    const splatterCount = r.u8();
+    const paletteWithInk = [INK_HEX, ...resolvedPalette];
+    const splatterMarks = [];
+    for (let mi = 0; mi < splatterCount; mi++) {
+      if (r.remaining < 6) return null;
+      const type = r.u8() ? 'flung' : 'drop';
+      const x = r.u16(), y = r.u16();
+      const colourIdx = r.u8();
+      const colorHex = paletteWithInk[colourIdx] || paletteWithInk[0];
+      const mark = { type, x, y, colorHex };
+      if (type === 'flung') {
+        if (r.remaining < 5) return null;
+        mark.dx = dequantByte(r.u8(), -1, 1);
+        mark.dy = dequantByte(r.u8(), -1, 1);
+        mark.headR = dequantByte(r.u8(), GAME_SPLATTER_HEAD_R_MIN, GAME_SPLATTER_HEAD_R_MAX);
+        mark.length = dequantByte(r.u8(), GAME_SPLATTER_FLUNG_LEN_MIN, GAME_SPLATTER_FLUNG_LEN_MAX);
+        const satCount = r.u8();
+        mark.satellites = [];
+        for (let ki = 0; ki < satCount; ki++) {
+          if (r.remaining < 3) return null;
+          const relX = dequantSignedByte(r.i8(), SHARE_SAT_OFFSET_RANGE);
+          const relY = dequantSignedByte(r.i8(), SHARE_SAT_OFFSET_RANGE);
+          mark.satellites.push({ x: x + relX, y: y + relY, r: dequantByte(r.u8(), 0, SHARE_SAT_R_MAX) });
+        }
+      } else {
+        if (r.remaining < 3) return null;
+        mark.r = dequantByte(r.u8(), GAME_SPLATTER_DROP_R_MIN, GAME_SPLATTER_DROP_R_MAX);
+        mark.irregularity = dequantByte(r.u8(), SHARE_IRREG_MIN, SHARE_IRREG_MAX);
+        mark.seedAngle = dequantByte(r.u8(), 0, Math.PI * 2);
+      }
+      splatterMarks.push(mark);
+    }
+
+    return { surface, seed, resolvedPalette, paintGroundHex, strokes, splatterMarks };
+  } catch (e) {
+    return null; // never throw to the caller — Task 4
+  }
+}
+
+// ── Compression + URL-fragment framing. CompressionStream/
+// DecompressionStream('deflate-raw') are a platform Streams API, not a
+// library — holds the no-external-libraries rule. Falls back to plain
+// (uncompressed) base64url if the API is missing, recorded in the
+// compressed-flag bit so a decoder never has to guess which path was used.
+//
+// The flags byte MUST stay outside the compressed region. An earlier draft
+// of this function compressed the whole raw payload — including its own
+// leading flags/version byte — and then tried to OR the compressed-flag
+// bit into compressedBytes[0] afterward. That's wrong: after compression,
+// byte 0 of a deflate stream is whatever deflate's own internal
+// representation happens to produce, not the original flags byte, so
+// mutating it corrupts the stream without communicating anything, and a
+// decoder would have no safe byte to read before deciding whether to
+// decompress. Fix: split the flags byte off BEFORE compressing, compress
+// only the remainder, and re-attach a (possibly flag-updated) COPY of the
+// flags byte in front of whichever remainder — compressed or raw — actually
+// got used.
+const SHARE_COMPRESSED_FLAG = 0x10; // bit 4
+
+function bytesToBase64Url(bytes) {
+  let bin = '';
+  bytes.forEach(b => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function base64UrlToBytes(str) {
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  const bin = atob(b64 + pad);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// Drains a TransformStream (Compression/DecompressionStream) fed with one
+// chunk into a single concatenated Uint8Array. Both directions use the
+// same shape, so one helper serves encode and decode alike.
+async function streamThrough(stream, bytes) {
+  const writer = stream.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const chunks = [];
+  let total = 0;
+  const reader = stream.readable.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.length;
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  chunks.forEach(c => { out.set(c, offset); offset += c.length; });
+  return out;
+}
+
+// rawBytes: encodeArtworkPayload's output. Returns the base64url string to
+// go after '#a='. Async because CompressionStream is stream-based; never
+// blocks the visible screen transition (see shareCurrentGame, below).
+async function encodeToFragment(rawBytes) {
+  const flagsByte = rawBytes[0];
+  const rest = rawBytes.subarray(1);
+  let finalFlags = flagsByte, finalRest = rest;
+  if (typeof CompressionStream === 'function') {
+    try {
+      const compressed = await streamThrough(new CompressionStream('deflate-raw'), rest);
+      if (compressed.length < rest.length) { // only worth it if it actually shrank
+        finalFlags = flagsByte | SHARE_COMPRESSED_FLAG;
+        finalRest = compressed;
+      }
+    } catch (e) { /* fall through to uncompressed — Task 1's documented fallback */ }
+  }
+  const out = new Uint8Array(1 + finalRest.length);
+  out[0] = finalFlags;
+  out.set(finalRest, 1);
+  return bytesToBase64Url(out);
+}
+
+// fragmentValue: the string after '#a=' (already stripped of the prefix).
+// Returns the RAW bytes decodeArtworkPayload expects, or null on any
+// failure — base64 garbage, a missing DecompressionStream for a payload
+// that needs it, or a corrupt deflate stream all fall through the same way.
+async function decodeFromFragment(fragmentValue) {
+  try {
+    const bytes = base64UrlToBytes(fragmentValue);
+    if (bytes.length < 1) return null;
+    const flagsByte = bytes[0];
+    const rest = bytes.subarray(1);
+    if (!(flagsByte & SHARE_COMPRESSED_FLAG)) {
+      const out = new Uint8Array(1 + rest.length);
+      out[0] = flagsByte; out.set(rest, 1);
+      return out;
+    }
+    if (typeof DecompressionStream !== 'function') return null; // compressed payload, no way to read it
+    const decompressed = await streamThrough(new DecompressionStream('deflate-raw'), rest);
+    const out = new Uint8Array(1 + decompressed.length);
+    out[0] = flagsByte & ~SHARE_COMPRESSED_FLAG; // clear the flag — decodeArtworkPayload never sees it
+    out.set(decompressed, 1);
+    return out;
+  } catch (e) {
+    return null;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   Task 2 — Screen 4 render machinery. Renders a DECODED payload — never
+   gameLastEndedStrokes directly, not even for the player's own game (see
+   shareCurrentGame, below) — so live and shared artworks share one path.
+   ──────────────────────────────────────────────────────────────────────── */
+
+const shareGroundCanvas = document.getElementById('share-ground-canvas'); // visible, 800x504 (Task 2)
+const shareStrokesCanvas = document.getElementById('share-strokes-canvas');
+const shareGroundCx = shareGroundCanvas.getContext('2d');
+const shareStrokesCx = shareStrokesCanvas.getContext('2d');
+const shareHaikuEl = document.getElementById('share-haiku');
+
+// Full-resolution (1000x630, same as every other canvas pair in this file)
+// offscreen source — the visible pair above is the fixed 0.8x preview
+// (800/1000 = 504/630 = 0.8, Task 2), but DOWNLOAD PNG (Task 3) needs the
+// untouched full-res artwork, exactly what exportArtworkPNG already
+// expects from results' own pair.
+const shareGroundCvFull = document.createElement('canvas');
+shareGroundCvFull.width = W; shareGroundCvFull.height = H;
+const shareGroundCxFull = shareGroundCvFull.getContext('2d');
+const shareStrokesCvFull = document.createElement('canvas');
+shareStrokesCvFull.width = W; shareStrokesCvFull.height = H;
+const shareStrokesCxFull = shareStrokesCvFull.getContext('2d');
+
+let shareDecoded = null; // last successfully rendered payload — read by DOWNLOAD PNG
+
+// Colour-explicit sibling of renderGameStrokeAs (~line 1566). That function
+// derives its colour from a surface's live shuffle-cycle array
+// (gamePaletteArrayFor) and a stroke's index — neither exists once a
+// stroke has come back off the wire as {colorHex}, and re-deriving one
+// from the decoded resolvedPalette + index would silently reintroduce the
+// exact rng-replay fragility Task 1 rejected for the palette itself. Same
+// three branches, same underlying draw primitives (renderChalkStroke /
+// drawPaintRibbon / renderStroke) as every other stroke renderer in this
+// file — a stroke is never drawn a fourth, share-only way.
+function renderStrokeWithColor(ctx, surfaceKey, pts, wt, op, colorHex) {
+  if (surfaceKey === 'chalk') {
+    renderChalkStroke(ctx, pts, colorHex, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
+  } else if (surfaceKey === 'paint') {
+    drawPaintRibbon(ctx, pts, wt * GAME_PAINT_WIDTH_BASE, colorHex);
+  } else {
+    renderStroke(ctx, pts, colorHex, wt, op, DEFAULT_STROKE_PARAMS);
+  }
+}
+
+// Mirrors getGameGround's paper/chalk salts and buildResultsGroundCv's
+// paint salt (~line 2156), independently of any live game state — a
+// shared link has no gameGroundCache/gamePaintPalette to read, only what
+// decodeArtworkPayload handed back. Same salts off the same seed, so a
+// link reproduces the identical ground the player actually saw.
+function buildShareGround(surface, seed, paintGroundHex) {
+  if (surface === 'chalk') return buildChalkboardSurface(W, H, makeRng((seed ^ 0x2B3C4D5E) >>> 0));
+  if (surface === 'paint') return buildPaintSurface(W, H, makeRng((seed ^ 0x52474E44) >>> 0), paintGroundHex); // 'RGND'
+  return buildSurface(W, H, makeRng((seed ^ 0x1A2B3C4D) >>> 0));
+}
+
+// Task 2/3 entry point. Builds the full-res artwork from a decoded
+// payload, blits it down to the 0.8x visible preview, and sets the haiku —
+// called both by shareCurrentGame (this player's own finished game) and by
+// the landing-with-a-fragment path at the bottom of this file (someone
+// else's link). Neither caller passes gameLastEndedStrokes-shaped data
+// directly; both go through decodeArtworkPayload first, so this function
+// never has to know which case it's in.
+function renderSharePage(decoded) {
+  shareDecoded = decoded;
+
+  shareGroundCxFull.clearRect(0, 0, W, H);
+  shareGroundCxFull.drawImage(buildShareGround(decoded.surface, decoded.seed, decoded.paintGroundHex), 0, 0);
+
+  shareStrokesCxFull.clearRect(0, 0, W, H);
+  decoded.strokes.forEach(st => renderStrokeWithColor(shareStrokesCxFull, decoded.surface, st.pts, st.wt, st.op, st.colorHex));
+
+  // Blotches — paint only, off the SAME 'BLOT' salt startReveal uses
+  // (~line 2235), so a shared link reproduces the identical clusters the
+  // player saw on their own results screen. buildIntersectionBlotches'
+  // `palette` parameter (2nd arg) is read nowhere in its body — confirmed
+  // at brief 26 — so there is no live gamePaintPalette to substitute here;
+  // null is exactly as valid as what results already passes it.
+  if (decoded.surface === 'paint') {
+    const strokesWithColor = decoded.strokes.map(st => ({ ...st, col: st.colorHex }));
+    const blotchRng = makeRng((decoded.seed ^ 0x424C4F54) >>> 0); // 'BLOT'
+    const blotches = buildIntersectionBlotches(strokesWithColor, null, blotchRng, W, H, {
+      sizeMult: PAINT_DEFAULT_BLOTCH_SIZE_MULT,
+    });
+    blotches.forEach(cluster => renderBlotchCluster(shareStrokesCxFull, cluster));
+  }
+
+  // Splatter — sent explicitly (Task 1: brief-24 splatter is a per-frame
+  // probability event, not reproducible from the seed alone). Drawn as ONE
+  // BATCH after strokes+blotches here, NOT interleaved at each mark's
+  // original `afterStrokes` position the way results' renderResultsStrokes
+  // does — a deliberate simplification specific to the share payload only.
+  // The bar Task 1 sets is "visually indistinguishable", not
+  // pixel-identical (the recipient never saw the original to compare
+  // against), and not transmitting `afterStrokes` saves a byte per mark.
+  // Matches art-lab.html's own proven strokes -> blotches -> splatter
+  // order, same as the lab's static finished-set render.
+  decoded.splatterMarks.forEach(mark => renderSplatterMark(shareStrokesCxFull, mark));
+
+  // Blit down to the fixed 0.8x preview (Task 2). Border/radius are CSS on
+  // #share-stage/.frame and are NOT scaled down with it — untouched here.
+  shareGroundCx.clearRect(0, 0, shareGroundCanvas.width, shareGroundCanvas.height);
+  shareGroundCx.drawImage(shareGroundCvFull, 0, 0, shareGroundCanvas.width, shareGroundCanvas.height);
+  shareStrokesCx.clearRect(0, 0, shareStrokesCanvas.width, shareStrokesCanvas.height);
+  shareStrokesCx.drawImage(shareStrokesCvFull, 0, 0, shareStrokesCanvas.width, shareStrokesCanvas.height);
+
+  // Haiku "comes free" off the seed (Task 1) — never transmitted at all.
+  // Same formula/salt as gameLastEndedStrokes' own quote pick (~line
+  // 1967): identical seed -> identical haiku, live or via a link.
+  const quoteRng = makeRng((decoded.seed ^ 0x48414B55) >>> 0); // 'HAKU'
+  shareHaikuEl.textContent = QUOTES[Math.floor(quoteRng() * QUOTES.length)];
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   Task 3 — flows.
+   ──────────────────────────────────────────────────────────────────────── */
+
+// Results -> SHARE. Encodes THIS game's own gameLastEndedStrokes, decodes
+// it right back SYNCHRONOUSLY, and renders that decoded copy rather than
+// gameLastEndedStrokes itself — so what the player sees on Screen 4 is
+// byte-for-byte the same reconstruction a recipient's browser will
+// produce (Task 3: "a true preview of what a recipient will see"), not
+// merely "the same source data, presumably rendered the same way". The
+// (async) compress-and-update-the-URL step runs afterward in the
+// background and must never block the screen transition itself.
+async function shareCurrentGame() {
+  if (!gameLastEndedStrokes) return;
+  const raw = encodeArtworkPayload(gameLastEndedStrokes);
+  const decoded = decodeArtworkPayload(raw);
+  if (!decoded) { console.warn('[share] own payload failed to decode — this should never happen'); return; }
+
+  setScreen('share');
+  renderSharePage(decoded);
+
+  const fragment = await encodeToFragment(raw);
+  history.replaceState(null, '', '#a=' + fragment);
+
+  // Task 1 Verification: "Report the measured payload size per surface."
+  console.log(`[share] ${gameLastEndedStrokes.surface}: ${raw.length}B raw -> ${fragment.length} base64url chars (${gameLastEndedStrokes.strokes.length} strokes, decimation N=${SHARE_DECIMATE_N})`);
+}
+document.getElementById('btn-share').addEventListener('click', shareCurrentGame);
+
+// PAINT/PLAY YOUR OWN — same idle-armed destination as the playing
+// screen's home button and results' PLAY AGAIN (brief 28): a recipient
+// landing cold is one click from playing.
+document.getElementById('btn-share-cta').addEventListener('click', () => {
+  goToIdleArmed();
+});
+
+// DOWNLOAD PNG — the brief-26 exporter, reused at FULL resolution. The
+// share screen's own visible canvases are the 0.8x preview; the export
+// must read the untouched 1000x630 pair, exactly as results does with its
+// own pair.
+document.getElementById('btn-share-download').addEventListener('click', () => {
+  if (!shareDecoded) return;
+  exportArtworkPNG(shareGroundCvFull, shareStrokesCvFull, shareHaikuEl.textContent, shareDecoded.seed);
+});
+
+// COPY LINK — the full URL including the fragment (written by
+// shareCurrentGame's history.replaceState, or already present if this tab
+// landed on someone else's link). Label swap only, ~1.5s, no toast, no new
+// component — per the brief.
+document.getElementById('btn-share-copy').addEventListener('click', (e) => {
+  const btn = e.currentTarget;
+  navigator.clipboard.writeText(location.href).then(() => {
+    const original = btn.textContent;
+    btn.textContent = 'copied';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  }).catch(() => {});
 });
 
 /* ════════════════════════════════════════════════════════════════════
@@ -2671,6 +3411,30 @@ document.getElementById('screen-idle').addEventListener('touchstart', onGesture,
 // idle-armed (goToIdleArmed) rather than restarting in place, same as the
 // playing screen's new home button (Task 2). That is also where BGM
 // returns to its resting 0.72 level; see setBGMLevel/BGM_LEVEL_IDLE.
+
+// Brief 29 Task 3 — landing with a fragment. The synchronous flash-guard
+// at the very top of this script (landingWithSharePayload,
+// SHARE_HASH_PREFIX) already hid the idle screen the instant this script
+// started running, well before this promise chain has any chance to
+// settle — this is that decode's async completion. Success shows Screen 4
+// directly, matching a real recipient's first paint. Failure is Task 4's
+// "quiet fall-through": exactly one console.warn, then a normal setScreen
+// to idle un-hides it. Landing WITHOUT a fragment is untouched — line 830
+// already sets the idle state directly, with no setScreen() call at all,
+// exactly as before this brief.
+if (landingWithSharePayload) {
+  decodeFromFragment(location.hash.slice(SHARE_HASH_PREFIX.length))
+    .then(rawBytes => rawBytes ? decodeArtworkPayload(rawBytes) : null)
+    .then(decoded => {
+      if (decoded) {
+        setScreen('share');
+        renderSharePage(decoded);
+      } else {
+        console.warn('[share] link payload could not be decoded — falling through to idle');
+        setScreen('idle');
+      }
+    });
+}
 </script>
 </body>
 </html>

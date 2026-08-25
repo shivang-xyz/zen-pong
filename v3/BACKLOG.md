@@ -110,6 +110,22 @@ triaging this whole list, not before.
   §11; §11 should be corrected.
   *Surfaced: brief 26 spec, 2026-08-24.*
 
+- **Doc drift — `DESIGN.md` bans the glow the game actually uses.** §1 says
+  never add "neon glows or coloured drop shadows to game elements"; §6 says no
+  element but `.ctrl-chip` gets a shadow. The live v2 build has used
+  `#frame.canvas-glow` (amber, 700ms, on a point and at game over) since it
+  shipped, and brief 27 ports it back on Shivang's explicit request. Live code
+  wins; `DESIGN.md` needs to absorb the exception rather than the effect being
+  softened to fit the doc. *Surfaced: brief 27 spec, 2026-08-24.*
+- **`swoosh.mp3` is referenced by nothing.** Sits in the repo root, unused by
+  root `index.html` and by the v3 app. Either it has a use nobody has specced,
+  or it is dead weight brief 29's self-contained build must not bundle.
+  *Surfaced: brief 27 spec, 2026-08-24.*
+- **BGM ducking under the reveal.** `sndGameOver` is a 2.5s decaying tone that
+  plays over the ground wipe and into the haiku. Dipping the BGM under it would
+  give the reveal more air. Real idea, deliberately out of brief 27's scope.
+  *Surfaced: brief 27 spec, 2026-08-24.*
+
 ## Engine-wide / Product
 
 Carried forward from `PROJECT-LOG.md`'s 2026-07-10/11 entries — status not

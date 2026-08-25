@@ -5,6 +5,54 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-24 — Brief 26 done (results/reveal approved). Brief 27 written.
+
+Results/reveal built and approved — commit `7f1536c`. The reveal lands, so the
+game loop now closes end to end: idle → pick a surface → play → your painting
+resolves → save it or play again. Three of the four screens are real.
+
+The one call flagged for review in brief 26 — `buildIntersectionBlotches` at
+the reveal, and no second density-placed splatter pass — came through with the
+screen. Treating that as settled unless it comes back.
+
+### Brief 27 — in-game feel, and why it's a port not a design task
+Everything Shivang asked for already exists and is tuned in root `index.html`.
+The brief is explicit that this is a port: same oscillators, same gains, same
+trigger points. Re-deriving tuned-by-ear sounds produces a different game.
+
+Mapped from root:
+- paddle hit → `sndScratch()` + `sndChalk()` + `.paddle-hit` flash
+  (brightness 3.5, 150ms)
+- wall → `sndThud()`
+- point → `sndPoint()` + `#frame.canvas-glow` 700ms + `.score-pop` on the
+  number that changed only
+- level up → `sndLevelUp()`, game over → `sndGameOver()` + glow
+- `sndCollide()` is dormant in v3 (`MAX_B` is 1) and ported anyway — root
+  `CLAUDE.md` §4 keeps all seven present, so it is commented as unreachable
+  rather than left to look like dead code.
+
+Two things called out hard in the brief because they are the known failure
+modes: the retrigger idiom (`remove` / force reflow / `add`, or a fast rally
+only flashes once), and root `CLAUDE.md` §4's rule that chalk SFX fires exactly
+once per paddle hit inside the paddle-hit branch, never on a frame clock — v3's
+`advanceBall` already returns a typed event array, so any cooldown timer is a
+sign the trigger went in the wrong place.
+
+`sndGameOver` is a 2.5s decaying tone that plays across the 900ms ground wipe
+and under the haiku at 1300ms. That overlap is the payoff for sequencing feel
+*after* the reveal rather than before it — one moment, not two.
+
+### Doc drift found
+`DESIGN.md` §1 forbids "neon glows or coloured drop shadows to game elements"
+and §6 allows shadows only on `.ctrl-chip`. The live build has used the amber
+`canvas-glow` on the frame ring since it shipped, and Shivang asked for it
+back. Live code plus an explicit request both win; logged for `DESIGN.md` to
+absorb rather than softening the effect to satisfy the doc.
+
+### Next
+27 (feel) → 28 (share page) → 29 (integration + ship). After 27 the game is
+feature-complete for a player who never shares; 28 and 29 are the tail.
+
 ## 2026-08-24 — Brief 25 reviewed. Brief 26 (results / reveal) written.
 
 Layout, fit and the 3-dot chips landed. Two defects left, both small, both

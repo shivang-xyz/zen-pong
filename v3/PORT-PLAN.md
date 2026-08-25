@@ -155,7 +155,21 @@ share-canvas size. Replay stays cheap later: the timeline scrubber already
 renders `strokes[0..n]`, so animating n off the same payload is the replay.
 The greenfield screen — how a finished piece is shown/shared outside the game.
 
-### Brief 30 — Integration polish + ship
+### Brief 30 — Integration and ship
+The single-file requirement and the never-copy-paste-the-engine rule are
+resolved by a build step (`v3/build.js`, plain Node, no deps), not by
+hand-inlining: hand-inlining forks the engine and the lab drifts from the
+product silently. Root `index.html` becomes a generated artifact nobody edits.
+Two things stay outside the file and are stated rather than papered over —
+`Oolong.mp3` (root `CLAUDE.md` §4 forbids base64 audio) and the Google Fonts
+link. Mobile is the real ship blocker: v3 has none, and a shared link opened on
+a phone must still show the artwork. `v2-final` tag before the swap, `--no-ff`
+merge, verified on the live URL and from `file://`.
+
+### Brief 31 — QA sweep + backlog triage
+The checkpoint `BACKLOG.md` names for itself: "once every current surface is
+built and the game is fitted together." Everything deferred during the port,
+plus the small polish Shivang has been holding back, triaged in one pass.
 Fold the screens into the final self-contained `index.html`, wire BGM/SFX (the
 protected audio systems from root CLAUDE.md §4), full pass, then replace the live
 root file. Ship.

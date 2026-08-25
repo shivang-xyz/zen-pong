@@ -5,6 +5,69 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-25 — Brief 29 verified in-browser. Brief 30 (ship) written.
+
+Share page built. Rather than hand Shivang another QA list, the architect chat
+pulled `feature/v3-app` into a sandbox, served it, and drove three full games
+through Playwright — paper, chalk and paint — hitting SHARE on each and opening
+the resulting links cold in a fresh browser context.
+
+**Results — the payload architecture holds:**
+- Round trip works on all three surfaces. A shared link lands directly on
+  `#screen-share` with the artwork rendered.
+- Original vs. shared render: **pixel-identical** apart from ~450 pixels, all
+  inside the `.rbtn-primary` bounding box — i.e. the animated gradient hairline
+  and the PAINT/PLAY word swap, both of which are supposed to differ frame to
+  frame. The artwork itself matched exactly.
+- Payload sizes: **paper 998, chalk 425, paint 1005 characters.** The brief's
+  hard ceiling was 8192. Decimation could arguably be *reduced* if fidelity ever
+  needs it — there is an order of magnitude of headroom.
+- Haiku matched across the boundary on all three (the seed travels).
+- Zero console errors, zero page errors on both send and receive sides.
+
+The pixel-identical result is worth noting against the brief's own stated bar,
+which was only "visually indistinguishable". The decimate-and-delta approach did
+better than it needed to.
+
+Observed and passed to Shivang rather than acted on: live splatter reads sparse
+in a short 3-0 game — one visible drop. May be the game length, may be the rate.
+His eye, on a longer rally.
+
+### Brief 30 — the contradiction it has to resolve
+`PORT-PLAN.md` requires one self-contained file. `v3/CLAUDE.md` forbids a
+consumer ever copy-pasting engine code. Hand-inlining the engine to satisfy the
+first would violate the second permanently — the lab and the product would drift
+apart silently, and it would surface months later as "I tuned it in the lab and
+the game ignored me."
+
+Resolved with a build step: `v3/build.js`, plain Node, no dependencies, inlines
+the engine modules in dependency order and emits root `index.html` as a
+**generated artifact nobody edits**. The engine stays the single source of
+truth; the shipped file is output. That rule goes into `v3/CLAUDE.md` as settled,
+not just a code comment.
+
+Why single-file is worth the trouble at all, recorded so it isn't cargo-culted
+later: ES modules do not load over `file://`. Single-file means the game opens
+from disk, can be emailed, and hosts anywhere.
+
+### Stated rather than papered over
+Two things stay outside the "self-contained" file, and the brief says so out
+loud instead of letting the claim quietly become false: `Oolong.mp3` (root
+`CLAUDE.md` §4 forbids base64 audio, and 2.5MB of it would be absurd anyway)
+and the Google Fonts link (`DESIGN.md` §3's interim substitute, pending Basier
+Circle). Both pre-existing, neither blocks ship, both backlogged.
+
+### The one real ship blocker
+**Mobile.** v3 has none — the game is mouse-driven and on a phone it will load
+and be unplayable. Root already solves this (`checkMobile`, `#mobile-overlay`).
+The part a naive port would miss: **a shared link opened on a phone must still
+render the artwork.** That is the single likeliest way a phone visitor arrives —
+someone sent them a painting. Overlay the game, never the share screen.
+
+### Next
+30 ships it. 31 is the QA sweep plus the full `BACKLOG.md` triage — the
+checkpoint the backlog names for itself.
+
 ## 2026-08-24 — Brief 28 approved. Brief 29 (share page) written.
 
 Navigation, audio mix and results spacing all landed and approved. Small

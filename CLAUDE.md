@@ -1,5 +1,16 @@
 # Zen Pong — Project Instructions
 
+> **`index.html` at repo root is a GENERATED file as of brief 30 (v3 ship).**
+> It is produced by `node v3/build.js` from `v3/app/index.html` +
+> `v3/engine/` and carries its own `GENERATED FILE — do not edit` header
+> comment at the top confirming this. **Never hand-edit it.** Every rule
+> below that talks about reading, changing, or writing `index.html`
+> (Sections 1, 3, 14 especially) now means: make the change in
+> `v3/app/index.html` or `v3/engine/`, then run `node v3/build.js` to
+> regenerate root `index.html` — never edit the generated output directly,
+> the next rebuild silently overwrites it. See `v3/CLAUDE.md` for the full
+> engine/app source-of-truth contract this file now defers to.
+
 ## 1. Before You Do Anything
 
 1. Read this file completely.

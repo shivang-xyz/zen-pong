@@ -30,6 +30,7 @@
 
     --space-xs: 4px;  --space-s: 8px;   --space-xxm: 12px; --space-xm: 16px;
     --space-m: 24px;  --space-l: 32px;  --space-xl: 40px;  --space-xxl: 48px;
+    --space-3xl: 64px; --space-4xl: 96px; /* brief 28 Task 4 — results' air, above/below */
 
     --radius:        48px;
     --radius-small:  12px;
@@ -66,10 +67,24 @@
      gap + 48 ctrl-row + 16 body pad) so it fits a 13" MacBook without a
      scrollbar. body padding is shared across every screen, so it's scoped
      to data-screen (set by setScreen()) rather than changed globally.
-     Brief 26 Task 1 extends the SAME mechanism to results — brief 25 left
-     it at --space-l on purpose ("keep current spacing until reviewed"),
-     and results is what's being reviewed now. Idle still untouched. */
-  body[data-screen="playing"], body[data-screen="results"] { padding: var(--space-xm) 0; }
+     Idle stays untouched (--space-l, the bare :root default above). */
+  body[data-screen="playing"] { padding: var(--space-xm) 0; }
+  /* Brief 28 Task 4 reverses brief 26 Task 1's choice to give results the
+     SAME tight rhythm as playing — reviewed and found crammed. Results is
+     a resting screen, not a live one: air instead (64px above the logo,
+     96px below the control row), and it's now explicitly ALLOWED to be
+     taller than the viewport and scroll — playing and idle keep their
+     no-scroll guarantee unchanged, this is a results-only reversal.
+     justify-content:flex-start (not the bare :root's center) is required
+     here, not cosmetic: centering a flex child TALLER than its container
+     pushes the overflow equally off both edges, and the leading (top)
+     overflow becomes unreachable by scrolling in most browsers — the
+     classic flex-centering-clips-content trap. Starting from the top and
+     using padding for the "air" avoids it by construction. */
+  body[data-screen="results"] {
+    justify-content: flex-start;
+    padding: var(--space-3xl) 0 var(--space-4xl);
+  }
 
   .screen { display: flex; flex-direction: column; align-items: center; }
   .screen[hidden] { display: none; }
@@ -116,17 +131,25 @@
     pointer-events: none;
     z-index: 2;
   }
-  /* Brief 27 Task 4 — ported verbatim from root index.html (~line 74).
-     Scoped to #game-frame (playing only), not the shared .frame class, so
-     idle/results never pick it up by accident.
+  /* Brief 27 Task 4 (ported verbatim from root index.html ~line 74), sizes
+     upgraded brief 28 Task 5e. Scoped to #game-frame (playing only), not
+     the shared .frame class, so idle/results never pick it up by accident.
+     Two strengths now, not one: a point gets the smaller pulse, game over
+     gets a bigger one held long enough to decay alongside sndGameOver's
+     bell rather than cutting out from under it. Amber stays
+     rgba(255,215,140,·) at both strengths — the one warm accent the frame
+     gets, never a different colour.
      KNOWN DOC CONFLICT, resolved in favour of the live build + an explicit
      request (brief's own instruction): DESIGN.md §1 bans "neon glows or
      coloured drop shadows to game elements" and §6 allows a shadow only on
      .ctrl-chip. The live v2 build has shipped this exact glow since launch
      and Shivang asked for it back — logged as doc drift in BACKLOG.md
      rather than softened to split the difference. */
-  #game-frame.canvas-glow {
-    box-shadow: 0 0 0 4px rgba(255,215,140,0.22), 0 0 28px rgba(255,215,140,0.22) !important;
+  #game-frame.canvas-glow-point {
+    box-shadow: 0 0 0 6px rgba(255,215,140,0.38), 0 0 48px rgba(255,215,140,0.34) !important;
+  }
+  #game-frame.canvas-glow-gameover {
+    box-shadow: 0 0 0 8px rgba(255,215,140,0.45), 0 0 64px rgba(255,215,140,0.45) !important;
   }
 
   /* ── Paddles · DESIGN.md §7/§8 — DOM divs, never canvas ── */
@@ -511,6 +534,13 @@
       <div class="ctrl-chip" id="pg-score-pill"><span id="pg-score-p">0</span><span id="pg-score-a">0</span></div>
 
       <div id="pg-icons">
+        <!-- Brief 28 Task 2 — back to idle, armed (surface selector already
+             showing), not attract. Left of restart. -->
+        <button class="ctrl-chip icon-pill" id="pg-home" aria-label="Home">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5">
+            <path d="M2 9L9 3L16 9"/><path d="M4 8v7h10V8"/>
+          </svg>
+        </button>
         <button class="ctrl-chip icon-pill" id="pg-restart" aria-label="Restart">
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5">
             <path d="M15 9a6 6 0 1 1-2-4.5"/><polyline points="15,2 15,5 12,5"/>
@@ -653,6 +683,15 @@ function fitScreenToViewport() {
   visible.style.transform = '';
   visible.style.transformOrigin = '';
   visible.style.marginBottom = '';
+  // Brief 28 Task 4 — results deliberately does NOT get the fit clamp: it's
+  // a resting screen, allowed to be taller than the viewport and scroll.
+  // The three style resets above still run (clears any transform left over
+  // from a PREVIOUS screen, since scale()/margin are set directly on
+  // whichever `.screen` was visible then, not on results specifically —
+  // but results itself never had them applied, so this is a harmless no-op
+  // for it) before returning, so nothing lingers from a stale playing/idle
+  // state should DOM order or timing ever change.
+  if (screenState === 'results') return;
   const bodyStyle = getComputedStyle(document.body);
   const vPad = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
   const available = window.innerHeight - vPad;
@@ -1590,11 +1629,15 @@ function flashPaddle(el) {
   void el.offsetWidth;
   el.classList.add('paddle-hit');
 }
-function flashGameFrame() {
-  gameFrameEl.classList.remove('canvas-glow');
+// Brief 28 Task 5e — two strengths, not one: className/durationMs let the
+// two call sites (point vs. game over) pick theirs. Clears BOTH classes
+// before adding one, so a game-over glow can't land while a point's is
+// still fading — only one strength shows at a time.
+function flashGameFrame(className, durationMs) {
+  gameFrameEl.classList.remove('canvas-glow-point', 'canvas-glow-gameover');
   void gameFrameEl.offsetWidth;
-  gameFrameEl.classList.add('canvas-glow');
-  setTimeout(() => gameFrameEl.classList.remove('canvas-glow'), 700);
+  gameFrameEl.classList.add(className);
+  setTimeout(() => gameFrameEl.classList.remove(className), durationMs);
 }
 
 // ── Task 1 (brief 23, geometry fixed brief 24, y fixed brief 26 Task 0.2) —
@@ -1795,11 +1838,11 @@ function stepGame() {
     updateGameScoreUI();
     sndPoint(); // brief 27 Task 2 — every point, win or not, matching root's own unconditional call site
     checkGameLevel();
-    flashGameFrame(); // brief 27 Task 4 — a point scored, either side
+    flashGameFrame('canvas-glow-point', 900); // brief 27 Task 4 / brief 28 Task 5e — a point scored, either side
 
     if (gamePs >= WIN || gameAs >= WIN) {
       gameStrokesAlpha = 1.0; // Task 4 — full strength at game end, one-line change, no re-render
-      sndGameOver(); flashGameFrame(); // brief 27 Task 6 — fires on the final frame, same moment the chrome leaves
+      sndGameOver(); flashGameFrame('canvas-glow-gameover', 1400); // brief 27 Task 6 / brief 28 Task 5e — fires on the final frame, held long enough to decay with the bell
       // One rng draw, seeded off this game — same reproducibility contract
       // as everything else (brief 26 Task 5): identical seed -> identical
       // haiku, so the share screen (brief 28) can show the same piece twice.
@@ -1914,6 +1957,12 @@ pgShuffleEl.addEventListener('click', (e) => {
 });
 
 // ── Task 7 — restart and mute ──────────────────────────────────────────
+// Brief 28 Task 2 — home: idle, armed, surface selector already showing.
+// The only playing-screen control that leaves the game; restart (below)
+// stays an immediate same-surface replay.
+document.getElementById('pg-home').addEventListener('click', () => {
+  goToIdleArmed();
+});
 document.getElementById('pg-restart').addEventListener('click', () => {
   // Fresh seed, cleared canvas, score 0-0, level 1, SAME surface — does
   // not return to idle. startGame() already does exactly this.
@@ -1924,9 +1973,17 @@ document.getElementById('pg-restart').addEventListener('click', () => {
 const pgMuteBtn = document.getElementById('pg-mute');
 const pgMuteIconUnmuted = document.getElementById('pg-mute-icon-unmuted');
 const pgMuteIconMuted = document.getElementById('pg-mute-icon-muted');
+// Brief 28 Task 1 — the real bug behind three reports and two "fixes":
+// `hidden` is an IDL property defined on HTMLElement. <svg> is an
+// SVGElement, which inherits from Element, not HTMLElement — it has no
+// `.hidden` property. `svgEl.hidden = x` was silently creating a plain JS
+// expando and never touching the `hidden` ATTRIBUTE, which is what the CSS
+// rule (`.icon-pill svg[hidden]`) actually matches on. The icon looked
+// right on load only because `hidden` was hand-written into the markup.
+// toggleAttribute works on any element, HTML or SVG.
 function updateMuteButton() {
-  pgMuteIconUnmuted.hidden = muted;
-  pgMuteIconMuted.hidden = !muted;
+  pgMuteIconUnmuted.toggleAttribute('hidden', muted);
+  pgMuteIconMuted.toggleAttribute('hidden', !muted);
   pgMuteBtn.setAttribute('aria-pressed', String(muted));
   pgMuteBtn.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
 }
@@ -2086,13 +2143,9 @@ function startReveal() {
   restartAnimation(resultsHaikuEl, 'reveal-haiku');
   restartAnimation(document.getElementById('post-row'), 'reveal-postrow');
 
-  // setScreen('results') (called by the caller, just before this function)
-  // already ran fitScreenToViewport() once — but at that point the haiku
-  // paragraph was still empty (its text is set a few lines up), so a long
-  // QUOTES entry that wraps to 2-3 lines wouldn't have been measured yet,
-  // under-sizing the fit. Re-run now that the real content (and thus the
-  // real height) is in place.
-  fitScreenToViewport();
+  // No fitScreenToViewport() call here (brief 26 had one, since removed):
+  // brief 28 Task 4 exempts results from the fit clamp entirely — it's now
+  // always allowed to be its natural height and scroll, so nothing to fit.
 }
 
 // ── Task 6 — scrubber interaction ──────────────────────────────────────
@@ -2213,11 +2266,13 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 });
 
 // ── Task 8 — play again, share ─────────────────────────────────────────
+// Brief 28 Task 3 — PLAY AGAIN no longer restarts directly on the same
+// surface (brief 22's original behaviour); it goes to idle-armed, same as
+// the playing screen's new home button, so a finished game always has a
+// route back to the surface selector. Restart (playing screen, brief 22
+// Task 7) is now the only control that replays immediately in place.
 document.getElementById('btn-play-again').addEventListener('click', () => {
-  // Same path as brief 22's in-game restart: fresh seed, cleared canvas,
-  // score 0-0, level 1, SAME surface. Not back to idle.
-  setScreen('playing');
-  startGame();
+  goToIdleArmed();
 });
 document.getElementById('btn-share').addEventListener('click', () => {
   // Wired to nothing yet — brief 28 builds the share screen. Left visible
@@ -2264,16 +2319,31 @@ function initOolong() {
   ooGain.connect(actx.destination);
 }
 
+// Brief 28 Task 5b — 0.72 at rest (idle); ducked 20% while the player is in
+// the game AND held through results (sndGameOver needs the room) so it
+// never swells back up while the bell is still ringing. Restored only on
+// an explicit return to idle (goToIdleArmed, Task 2/3).
+const BGM_LEVEL_IDLE = 0.72;
+const BGM_LEVEL_DUCKED = 0.58;
+function setBGMLevel(level, rampMs = 600) {
+  if (!ooGain || !actx) return;
+  const t = actx.currentTime;
+  ooGain.gain.cancelScheduledValues(t);
+  ooGain.gain.setValueAtTime(ooGain.gain.value, t);
+  ooGain.gain.linearRampToValueAtTime(level, t + rampMs / 1000); // ~600ms — a step reads as a glitch
+}
+
 async function startBGM() {
   if (muted) return;
   if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  initSfxBus(); // brief 28 Task 5a — created alongside actx, the only place actx itself is created
   await actx.resume();
   initOolong();
   ooAudio.currentTime = 0;
   ooAudio.play().catch(() => {});
   ooGain.gain.cancelScheduledValues(actx.currentTime);
   ooGain.gain.setValueAtTime(0, actx.currentTime);
-  ooGain.gain.linearRampToValueAtTime(0.72, actx.currentTime + 2.5);
+  ooGain.gain.linearRampToValueAtTime(BGM_LEVEL_IDLE, actx.currentTime + 2.5); // root CLAUDE.md §4's own fade-in timing — unrelated to the 600ms duck ramps above, untouched
 }
 
 function stopBGM() {
@@ -2299,13 +2369,39 @@ function stopBGM() {
    screen's first real gesture (brief 18 Task 3, root CLAUDE.md §4: a
    gesture is what's allowed to unlock Web Audio, and a stray SFX call
    during idle is not one). Never creating a second context, never a
-   console error from calling into a null one. */
+   console error from calling into a null one.
+
+   Brief 28 Task 5a — every SFX now routes through ONE shared bus instead
+   of straight to actx.destination. Root's individual gains (sndScratch's
+   click at 0.49, and so on) are tuned relative to EACH OTHER, not to an
+   absolute loudness target — multiplying every literal by ~2.5 to make
+   the whole layer louder would push several past 1.0, clip on the
+   destination's summing, and destroy exactly the relative mix that makes
+   scratch/thud/chalk read as distinct objects. One gain node instead:
+   every literal stays at root's tuned value, SFX_BUS_GAIN is the only
+   knob, and a limiter catches whatever peaks the boost creates. */
+const SFX_BUS_GAIN = 2.5; // the target from the brief — see PROJECT-LOG for whether the limiter had to work for it
+let sfxBus = null, sfxLimiter = null;
+function initSfxBus() {
+  if (sfxBus) return;
+  sfxBus = actx.createGain();
+  sfxBus.gain.value = SFX_BUS_GAIN;
+  sfxLimiter = actx.createDynamicsCompressor();
+  sfxLimiter.threshold.value = -6;
+  sfxLimiter.knee.value = 6;
+  sfxLimiter.ratio.value = 12;
+  sfxLimiter.attack.value = 0.003;
+  sfxLimiter.release.value = 0.15;
+  sfxBus.connect(sfxLimiter);
+  sfxLimiter.connect(actx.destination);
+}
+
 function tone(p = {}) {
-  if (muted || !actx) return;
+  if (muted || !actx || !sfxBus) return;
   const { freq = 440, type = 'sine', gain = 0.1, dur = 0.1, freqEnd = null, attack = 0.003, detune = 0 } = p;
   try {
     const a = actx, o = a.createOscillator(), g = a.createGain();
-    o.connect(g); g.connect(a.destination); o.type = type;
+    o.connect(g); g.connect(sfxBus); o.type = type;
     o.frequency.setValueAtTime(freq, a.currentTime); o.detune.setValueAtTime(detune, a.currentTime);
     if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, a.currentTime + dur);
     g.gain.setValueAtTime(0, a.currentTime); g.gain.linearRampToValueAtTime(gain, a.currentTime + attack);
@@ -2315,23 +2411,59 @@ function tone(p = {}) {
 }
 
 function nz(p = {}) {
-  if (muted || !actx) return;
+  if (muted || !actx || !sfxBus) return;
   const { gain = 0.06, dur = 0.04, freq = 800, q = 10 } = p;
   try {
     const a = actx, buf = a.createBuffer(1, a.sampleRate * dur, a.sampleRate), d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     const src = a.createBufferSource(); src.buffer = buf;
     const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
-    const g = a.createGain(); src.connect(f); f.connect(g); g.connect(a.destination);
+    const g = a.createGain(); src.connect(f); f.connect(g); g.connect(sfxBus);
     g.gain.setValueAtTime(gain, a.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
     src.start(); src.stop(a.currentTime + dur + 0.02);
   } catch (e) {}
 }
 
+// Shared bell-partial helpers — brief 28 Tasks 5c/5d. A struck bell/bowl is
+// an INHARMONIC partial stack: a short noise strike transient plus several
+// sine partials at non-integer frequency ratios, each with its own
+// exponential decay, plus one partial detuned ~0.3-0.4% from its own
+// fundamental (the "beat partner") — two very-close-but-not-identical
+// sines produce the slow amplitude beating real struck metal has, which a
+// single clean sine can never sound like. Integer ratios would make an
+// organ, not a bell; skipping the beat partner would make a synth pad, not
+// a bowl. One shared pair of helpers so sndPoint and sndGameOver are
+// verifiably the same RECIPE at different numbers, not two hand-written
+// near-duplicates that quietly drift apart later.
+function bellPartial(a, freq, gain, decay, attack, startAt) {
+  const o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(sfxBus);
+  o.type = 'sine';
+  const t = a.currentTime + startAt;
+  o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.001, t + decay);
+  o.start(t); o.stop(t + decay + 0.02);
+}
+function bellStrike(a, freq, q, gain, dur, startAt) {
+  const t = a.currentTime + startAt;
+  const buf = a.createBuffer(1, Math.ceil(a.sampleRate * dur), a.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = a.createBufferSource(); src.buffer = buf;
+  const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+  const g = a.createGain();
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(f); f.connect(g); g.connect(sfxBus);
+  src.start(t); src.stop(t + dur + 0.005);
+}
+
 // Paddle hit — sharp click transient + wooden body resonance.
 function sndScratch() {
-  if (muted || !actx) return;
+  if (muted || !actx || !sfxBus) return;
   try {
     const a = actx;
     const clickDur = 0.018;
@@ -2344,10 +2476,10 @@ function sndScratch() {
     const cg = a.createGain();
     cg.gain.setValueAtTime(0.49, a.currentTime);
     cg.gain.exponentialRampToValueAtTime(0.001, a.currentTime + clickDur);
-    csrc.connect(cf); cf.connect(cg); cg.connect(a.destination);
+    csrc.connect(cf); cf.connect(cg); cg.connect(sfxBus);
     csrc.start(); csrc.stop(a.currentTime + clickDur + 0.005);
     const o = a.createOscillator(), og = a.createGain();
-    o.connect(og); og.connect(a.destination);
+    o.connect(og); og.connect(sfxBus);
     o.type = 'sine';
     o.frequency.setValueAtTime(420, a.currentTime);
     o.frequency.exponentialRampToValueAtTime(180, a.currentTime + 0.06);
@@ -2359,7 +2491,7 @@ function sndScratch() {
 
 // Wall bounce — plastic click + short plastic body thump.
 function sndThud() {
-  if (muted || !actx) return;
+  if (muted || !actx || !sfxBus) return;
   try {
     const a = actx;
     const dur = 0.038;
@@ -2372,10 +2504,10 @@ function sndThud() {
     const g = a.createGain();
     g.gain.setValueAtTime(0.29, a.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
-    src.connect(f); f.connect(g); g.connect(a.destination);
+    src.connect(f); f.connect(g); g.connect(sfxBus);
     src.start(); src.stop(a.currentTime + dur + 0.005);
     const o = a.createOscillator(), og = a.createGain();
-    o.connect(og); og.connect(a.destination);
+    o.connect(og); og.connect(sfxBus);
     o.type = 'sine';
     o.frequency.setValueAtTime(160, a.currentTime);
     o.frequency.exponentialRampToValueAtTime(80, a.currentTime + 0.035);
@@ -2391,35 +2523,38 @@ function sndThud() {
 // this function is never actually called. Ported and wired anyway per
 // root CLAUDE.md §4 — do not delete this as dead code.
 function sndCollide() {
-  if (muted || !actx) return;
+  if (muted || !actx || !sfxBus) return;
   nz({ gain: 0.33, dur: 0.035, freq: 1800, q: 5 });
   tone({ freq: 300, freqEnd: 185, type: 'triangle', gain: 0.23, dur: 0.06 });
 }
 
-// Point scored.
+// Point scored — brief 28 Task 5c rebuilds this from a bare 320Hz sine
+// (no attack, disappeared under BGM) into a struck bell/rin. Numbers are
+// the brief's starting recipe, shipped unchanged — see bellPartial's
+// comment for why the stack is shaped this way.
 function sndPoint() {
-  if (muted || !actx) return;
+  if (muted || !actx || !sfxBus) return;
   try {
     const a = actx;
-    const o = a.createOscillator(), g = a.createGain();
-    o.connect(g); g.connect(a.destination);
-    o.type = 'sine';
-    o.frequency.setValueAtTime(320, a.currentTime);
-    o.frequency.exponentialRampToValueAtTime(318, a.currentTime + 1.2);
-    g.gain.setValueAtTime(0, a.currentTime);
-    g.gain.linearRampToValueAtTime(0.23, a.currentTime + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 1.4);
-    o.start(a.currentTime); o.stop(a.currentTime + 1.5);
+    const fundamental = 660;
+    bellStrike(a, 3000, 1.5, 0.10, 0.012, 0);
+    bellPartial(a, fundamental, 0.30, 3.0, 0.004, 0);
+    bellPartial(a, fundamental * 2.72, 0.16, 2.0, 0.004, 0);
+    bellPartial(a, fundamental * 5.06, 0.08, 1.2, 0.004, 0);
+    bellPartial(a, fundamental * 8.7, 0.04, 0.6, 0.004, 0);
+    bellPartial(a, fundamental * 1.003, 0.12, 3.0, 0.004, 0); // beat partner — don't skip, see bellPartial's comment
   } catch (e) {}
 }
 
-// Level up — every 2 total points (checkGameLevel).
+// Level up — every 2 total points (checkGameLevel). Not rebuilt as a bell
+// (brief 28 Task 5 only respecs sndPoint/sndGameOver) — same simple sine
+// as root, just rerouted onto sfxBus like everything else.
 function sndLevelUp() {
-  if (muted || !actx) return;
+  if (muted || !actx || !sfxBus) return;
   try {
     const a = actx;
     const o = a.createOscillator(), g = a.createGain();
-    o.connect(g); g.connect(a.destination);
+    o.connect(g); g.connect(sfxBus);
     o.type = 'sine';
     o.frequency.setValueAtTime(440, a.currentTime);
     o.frequency.exponentialRampToValueAtTime(438, a.currentTime + 1.0);
@@ -2436,7 +2571,7 @@ function sndLevelUp() {
 // cooldown timer. advanceBall's typed event array is what makes "exactly
 // once" free: the event only exists on the frame a hit actually happened.
 function sndChalk() {
-  if (muted || !actx) return;
+  if (muted || !actx || !sfxBus) return;
   try {
     const a = actx;
     const dur = 0.055;
@@ -2449,27 +2584,34 @@ function sndChalk() {
     const g = a.createGain();
     g.gain.setValueAtTime(0.028, a.currentTime);
     g.gain.linearRampToValueAtTime(0.001, a.currentTime + 0.055);
-    src.connect(f); f.connect(g); g.connect(a.destination);
+    src.connect(f); f.connect(g); g.connect(sfxBus);
     src.start(); src.stop(a.currentTime + 0.06);
   } catch (e) {}
 }
 
-// Game over — 2.5s decaying tone, deliberately still sounding as the
-// brief-26 reveal's ground wipe (900ms) settles under the haiku (1300ms).
-// Task 6: do not shorten this to fit the reveal, do not add a second sound.
+// Game over — brief 28 Task 5d rebuilds this the same way as sndPoint: a
+// deeper, slower struck bowl, still one strike/no melody. 4.5s means it is
+// deliberately still ringing as the brief-26 reveal's ground wipe (900ms)
+// settles under the haiku (1300ms) — do not shorten it to fit.
+// Optional second strike (brief's own suggestion) shipped: the SAME stack
+// again at 45% gain, 1.6s later — the identical partials read as one bell
+// answering itself (temple-like); two different pitches would be a
+// melody, which the brief explicitly does not want.
 function sndGameOver() {
-  if (muted || !actx) return;
+  if (muted || !actx || !sfxBus) return;
   try {
     const a = actx;
-    const o = a.createOscillator(), g = a.createGain();
-    o.connect(g); g.connect(a.destination);
-    o.type = 'sine';
-    o.frequency.setValueAtTime(220, a.currentTime);
-    o.frequency.exponentialRampToValueAtTime(218, a.currentTime + 2.2);
-    g.gain.setValueAtTime(0, a.currentTime);
-    g.gain.linearRampToValueAtTime(0.23, a.currentTime + 0.010);
-    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 2.5);
-    o.start(a.currentTime); o.stop(a.currentTime + 2.6);
+    const fundamental = 220;
+    const strike = (mult, startAt) => {
+      bellStrike(a, 1400, 2, 0.12 * mult, 0.020, startAt);
+      bellPartial(a, fundamental, 0.34 * mult, 4.5, 0.015, startAt);
+      bellPartial(a, fundamental * 2.74, 0.18 * mult, 3.0, 0.015, startAt);
+      bellPartial(a, fundamental * 5.4, 0.08 * mult, 1.6, 0.015, startAt);
+      bellPartial(a, fundamental * 1.004, 0.14 * mult, 4.5, 0.015, startAt); // beat partner
+      bellPartial(a, 110, 0.12 * mult, 3.0, 0.015, startAt); // sub
+    };
+    strike(1, 0);
+    strike(0.45, 1.6); // second strike — shipped, see this function's own comment
   } catch (e) {}
 }
 
@@ -2486,6 +2628,27 @@ function beginGame() {
   if (idleEl.dataset.idleStep !== 'armed') return;
   setScreen('playing');
   startGame(); // brief 22 Task 3 — real game, replacing the brief-18/19/20/21 stub
+  setBGMLevel(BGM_LEVEL_DUCKED); // brief 28 Task 5b
+}
+
+// Brief 28 Tasks 2/3 — shared destination for the playing screen's new
+// home button and results' PLAY AGAIN: idle, ALREADY armed (surface
+// selector showing, CSS's zp-slide-up plays automatically the instant
+// data-idle-step starts matching "armed" — same mechanism armIdle() uses,
+// just entered directly instead of via a gesture). Deliberately does NOT
+// call armIdle() itself — armIdle() early-returns once already armed, but
+// more importantly its startBGM() call restarts Oolong.mp3 from t=0 with
+// a fresh 2.5s fade-in, which is wrong here: BGM is already playing
+// (ducked, brief 22 Task 7's "continues uninterrupted" still holds), it
+// only needs to come back up to its resting level.
+// No confirmation prompt; the abandoned game's strokes are simply never
+// shown again — gameCommittedStrokes/gameStrokesCv get overwritten by the
+// next startGame() call regardless of how idle was reached.
+function goToIdleArmed() {
+  setScreen('idle');
+  idleEl.dataset.idleStep = 'armed';
+  idleSub.textContent = 'choose a surface, then space to serve';
+  setBGMLevel(BGM_LEVEL_IDLE); // brief 28 Task 5b — back to rest
 }
 
 function onGesture(e) {
@@ -2502,11 +2665,12 @@ document.getElementById('screen-idle').addEventListener('touchstart', onGesture,
 
 // Brief 22 Task 7: BGM continues across idle -> playing uninterrupted —
 // armIdle() (above) already started it on the idle screen's first gesture.
-// Brief 18's stub had a fade-down-on-leaving-idle hook tied to the old
-// results stub's "play again" button; that button is gone (brief 26 —
-// results has no path back to idle, only PLAY AGAIN into a fresh game on
-// the same surface, see Task 8). BGM at results/reveal is otherwise
-// untouched — brief 27 is the audio pass.
+// Brief 18's stub had a fade-down-on-leaving-idle hook tied to a results
+// stub button that no longer exists in that form. Results DOES have a
+// route back to idle again as of brief 28 Task 3 — PLAY AGAIN now goes to
+// idle-armed (goToIdleArmed) rather than restarting in place, same as the
+// playing screen's new home button (Task 2). That is also where BGM
+// returns to its resting 0.72 level; see setBGMLevel/BGM_LEVEL_IDLE.
 </script>
 </body>
 </html>

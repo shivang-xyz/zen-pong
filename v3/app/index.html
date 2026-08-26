@@ -330,10 +330,14 @@
      per-surface VARIABLE count — never assume five (5 paper / 3 chalk /
      3 paint, see #pg-pal-pill wiring). */
   .pal-pill { padding: 0 var(--space-xm); gap: var(--space-s); }
-  .pal-pill .dot { width: 10px; height: 10px; border-radius: 50%; transition: transform 150ms; }
-  .pal-pill .dot:hover { transform: scale(1.2); }
+  .pal-pill .dot { width: 10px; height: 10px; border-radius: 50%; }
   .pal-pill .shuffle { margin-left: var(--space-s); cursor: pointer; }
-  .pal-pill .shuffle:hover { stroke: #FFFFFF; }
+  /* Brief 33 Task 1 — dot hover-scale and the un-scoped shuffle hover
+     colour removed: cta.css's "Palette chip" section is explicit that
+     dots get no hover state, and the shuffle's own hover colour now
+     comes from cta.css's @media (hover: hover)-scoped rule below — this
+     old rule had no such scoping, so it would have kept the shuffle
+     turning white on a touch device's "stuck" post-tap hover. */
 
   /* ── Playing screen control row · DESIGN.md §8 Screen 2 / §10 ──
      3-column grid, 1000px wide: pal-pill left, score-pill centred,
@@ -368,7 +372,11 @@
   .score-pop { animation: score-pulse 0.4s ease-out forwards; }
   .icon-pill { padding: 0 14px; border: 0; cursor: pointer; }
   .icon-pill svg { opacity: 0.8; display: block; }
-  .icon-pill:hover svg { opacity: 1; }
+  /* Brief 33 Task 1 — the hover-brightens-to-1 override is gone: cta.css's
+     glow (colour + box-shadow) is the hover feedback now, and this stray
+     opacity change was an old effect stacking on top of it. The resting
+     0.8 stays — it is not state-conditional, so it doesn't fight the glow
+     model, it just sets how the icon looks at rest. */
   /* Brief 26 Task 0.1: the mute button's two SVGs both rendered because this
      class selector (0,1,1 specificity) beat the [hidden] attribute's UA
      default (0,1,0), so `display:block` above won and the "hidden" icon
@@ -434,7 +442,8 @@
     box-shadow: var(--shadow-btn);
     cursor: pointer;
   }
-  .rbtn:hover { opacity: 0.85; }
+  /* Brief 33 Task 1 — the old opacity: .85 hover dim is gone; cta.css's
+     glow (below) replaces it. */
 
   /* ── Share screen · brief 29 Task 2, DESIGN.md §8 Screen 4 ──
      800x504 resolves §7's previously-UNRESOLVED share-canvas size —
@@ -545,9 +554,33 @@
 
   #screen-mobile-gate, #screen-mobile-share {
     display: none;
-    min-height: 100vh;
+    /* Brief 33 Task 5b — 100dvh, not 100vh: iOS Safari's 100vh is the
+       LARGE viewport (ignores the URL bar), so a centred cluster sized
+       against it was taller than the actually-visible area and got pushed
+       partly above the fold. 100dvh tracks the real visible height as the
+       URL bar shows/hides. */
+    min-height: 100dvh;
     flex-direction: column;
+    /* `safe center`: on real content overflow (a short landscape viewport,
+       an unusually tall accumulated font-size, etc.) plain `center` can
+       push the START of the content past the reachable scroll region in
+       some engines — "unsafe" centering, the CSS box-alignment spec's own
+       term for it. `safe center` keeps every child reachable by scroll
+       instead. Declared as a fallback pair, not a replacement: browsers
+       that don't understand the second value ignore that whole
+       declaration and keep the first (plain `center`, today's behaviour);
+       browsers that do understand it upgrade to the safer one. Applied
+       up front here rather than only if clipping were observed, since a
+       real iOS viewport is exactly the case this sandbox cannot
+       reproduce to confirm either way. */
     justify-content: center;
+    justify-content: safe center;
+    /* Brief 33 Task 5b — single-fold stays the TARGET, but must degrade to
+       a scroll, never to unreachable content. The hard overflow:hidden
+       lock that used to sit on html/body for this case is gone (see
+       updateMobileScreens(), below) — this is what content that doesn't
+       fit now falls back to. */
+    overflow-y: auto;
     background: var(--color-bg);
     color: var(--color-lightest-grey);
     padding: calc(var(--space-m) + env(safe-area-inset-top)) 0 calc(var(--space-m) + env(safe-area-inset-bottom));
@@ -593,9 +626,15 @@
   }
   /* logo -> 16 -> label -> 24 -> artwork -> 24 -> haiku -> 32 -> actions,
      MOBILE-NOTES.md §3 — main's own gap (--space-l/32) covers haiku-to-
-     actions; art-block's own gap (--space-m/24) covers label-to-artwork,
-     header's own gap (--space-xm/16) covers logo-to-label. */
-  #screen-mobile-share main { gap: var(--space-m); }
+     actions; art-block's own gap (--space-m/24) covers label-to-artwork.
+     Brief 33 Task 5d fix: logo-to-label is NOT covered by header's own
+     gap — .zoom-hint ("tap to view") is main's first child, not header's,
+     so the real gap was main's shared 32px top padding (above), reading
+     as double the intended 16. padding-top overridden to --space-xm here
+     closes that without touching the shared header/art-block gap
+     structure (moving zoom-hint into header would have meant rebuilding
+     art-block's own label-to-artwork gap too, for no benefit). */
+  #screen-mobile-share main { gap: var(--space-m); padding-top: var(--space-xm); }
   #screen-mobile-share .art-block { display: flex; flex-direction: column; gap: var(--space-m); }
   #screen-mobile-share .zoom-hint {
     margin: 0; text-align: center;
@@ -628,9 +667,12 @@
     border: 1px solid rgba(197,197,197,0.22);
     box-shadow: none;
   }
-  #screen-mobile-share .rbtn:hover { opacity: 1; } /* no hover state on touch; :active below carries the feedback */
-  #screen-mobile-gate .rbtn-primary:active, #screen-mobile-share .rbtn-primary:active,
-  #screen-mobile-share .rbtn:active { opacity: 0.8; }
+  /* Brief 33 Task 1 — the opacity-based hover/active pair that used to
+     live here is gone. cta.css's own @media (hover: none) block gives
+     .rbtn a border-colour + glow press state on touch; .rbtn-primary's
+     :active rule (also cta.css) covers the primary buttons on this
+     screen the same way — both apply automatically, no mobile-scoped
+     override needed. */
 
   /* ── Gate — demo canvas + real doodle-driven paddles ──
      Same sizing idiom as the live game's own DOM paddles (.paddle,
@@ -701,7 +743,7 @@
     position: absolute; top: 50%; left: 50%;
     transform: translate(-50%, -50%) rotate(90deg);
     flex-shrink: 0;
-    width: var(--fw, 100vh);
+    width: var(--fw, 100dvh); /* brief 33 Task 5b — dynamic viewport, matches the two mobile screens */
     aspect-ratio: 1000 / 630;
   }
   #full .stage { width: 100%; height: auto; aspect-ratio: 1000/630; cursor: zoom-out; }
@@ -719,6 +761,176 @@
     color: var(--color-canvas);
     font-family: 'Space Mono', monospace; font-size: 16px;
     cursor: pointer;
+  }
+
+  /* ════════════════════════════════════════════════════════════════════
+     Brief 33 Task 1 — CTA state system, copied verbatim from
+     v3/design/cta.css (the spec) after every resting style above, per
+     that file's own header: "Load AFTER the page's own <style> so state
+     rules win on equal specificity." Do not reorder above the resting
+     styles and do not hand-edit the values here — change cta.css and
+     re-copy. Stray hover/active rules that predate this system and fight
+     it (opacity dims, un-scoped pal-pill hover) were deleted at their
+     original locations above, not left to lose a specificity fight.
+     ════════════════════════════════════════════════════════════════════ */
+  :root {
+    /* Warm accent — the existing §2 orange, reused as the interaction colour. */
+    --color-glow: #FFAE68;
+
+    /* Resting (DESIGN.md §6, restated so this file is self-contained) */
+    --shadow-btn:  0 4px 24px rgba(0,0,0,0.16), inset 0 0 5px rgba(0,0,0,0.32);
+    --shadow-chip: 0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px rgba(0,0,0,0.52);
+
+    /* Hover — same geometry, warm hue, softer and wider than the resting
+       shadow but deliberately restrained: the control should look warmed, not
+       lit up. The dark inset is preserved so the surface stays recessed. */
+    --shadow-glow:       0 6px 22px rgba(255,174,104,0.20), 0 2px 8px rgba(255,174,104,0.10), inset 0 0 5px rgba(0,0,0,0.32);
+    --shadow-glow-chip:  0 6px 22px rgba(255,174,104,0.20), 0 2px 8px rgba(255,174,104,0.10), inset 0 0 5px rgba(0,0,0,0.52);
+    --shadow-glow-flat:  0 6px 22px rgba(255,174,104,0.20), 0 2px 8px rgba(255,174,104,0.10);
+
+    /* Pressed — bloom contracts, inset deepens. Reads as pushed in. */
+    --shadow-press:      0 3px 12px rgba(255,174,104,0.14), inset 0 2px 8px rgba(0,0,0,0.50);
+    --shadow-press-chip: 0 3px 12px rgba(255,174,104,0.14), inset 0 2px 10px rgba(0,0,0,0.62);
+
+    --dur-cta:  240ms;
+    --dur-out:  320ms;   /* leaving is slower than arriving — the glow fades out */
+    --ease-cta: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* ── Shared transition ─────────────────────────────────────────────────── */
+  .rbtn,
+  .rbtn-primary,
+  .rbtn-primary .inner,
+  button.ctrl-chip,
+  .icon-pill,
+  .pal-pill,
+  .pal-pill .shuffle,
+  #surface-chip .tile,
+  #timeline-chip,
+  .track .fill,
+  .track .thumb {
+    transition: color var(--dur-out) var(--ease-cta),
+                stroke var(--dur-out) var(--ease-cta),
+                background var(--dur-out) var(--ease-cta),
+                box-shadow var(--dur-out) var(--ease-cta);
+  }
+
+  /* Resting colour must be explicit: once the icon stroke follows currentColor,
+     an unset button colour falls back to the UA white. */
+  button.ctrl-chip,
+  .icon-pill { color: var(--color-lightest-grey); }
+
+  /* Icons inherit the control's colour. A CSS property beats the SVG's
+     stroke presentation attribute, so inline icons need no markup change. */
+  .rbtn svg,
+  button.ctrl-chip svg,
+  .icon-pill svg { stroke: currentColor; }
+
+  /* ── Text buttons · .rbtn (save artwork / share / play again / download / copy link) ── */
+  @media (hover: hover) {
+    .rbtn:hover {
+      opacity: 1;                       /* replaces the old opacity dim */
+      color: var(--color-glow);
+      box-shadow: var(--shadow-glow);
+      transition-duration: var(--dur-cta);
+    }
+  }
+  .rbtn:focus-visible {
+    outline: none;
+    color: var(--color-glow);
+    box-shadow: var(--shadow-glow);
+  }
+  .rbtn:active {
+    color: var(--color-glow);
+    box-shadow: var(--shadow-press);
+    transition-duration: 90ms;
+  }
+
+  /* ── Primary · .rbtn-primary (play zen pong / paint your own) ──
+     The travelling hairline stays as-is; the glow lands on the wrapper and
+     the label warms. Hairline animation is untouched by hover. */
+  @media (hover: hover) {
+    .rbtn-primary:hover { box-shadow: var(--shadow-glow-flat); transition-duration: var(--dur-cta); }
+    .rbtn-primary:hover .inner { color: var(--color-glow); transition-duration: var(--dur-cta); }
+  }
+  .rbtn-primary:focus-visible { outline: none; box-shadow: var(--shadow-glow-flat); }
+  .rbtn-primary:focus-visible .inner { color: var(--color-glow); }
+  .rbtn-primary:active { opacity: 1; box-shadow: 0 3px 12px rgba(255,174,104,0.14); transition-duration: 90ms; }
+  .rbtn-primary:active .inner { color: var(--color-glow); box-shadow: inset 0 2px 8px rgba(0,0,0,0.50); }
+
+  /* ── Icon chips · .icon-pill (home / replay / mute) ── */
+  @media (hover: hover) {
+    button.ctrl-chip:hover,
+    .icon-pill:hover {
+      color: var(--color-glow);
+      box-shadow: var(--shadow-glow-chip);
+      transition-duration: var(--dur-cta);
+    }
+  }
+  button.ctrl-chip:focus-visible,
+  .icon-pill:focus-visible {
+    outline: none;
+    color: var(--color-glow);
+    box-shadow: var(--shadow-glow-chip);
+  }
+  button.ctrl-chip:active,
+  .icon-pill:active { color: var(--color-glow); box-shadow: var(--shadow-press-chip); transition-duration: 90ms; }
+
+  /* Muted is a persistent state, not a hover — it stays warm while active. */
+  .icon-pill[aria-pressed="true"] { color: var(--color-glow); box-shadow: var(--shadow-glow-chip); }
+
+  /* ── Palette chip · .pal-pill ──
+     The chip is one target: hovering anywhere on it warms the chip and the
+     shuffle icon. The colour dots have no hover state of their own. */
+  .pal-pill .shuffle { stroke: var(--color-lightest-grey); }
+  @media (hover: hover) {
+    .pal-pill:hover { box-shadow: var(--shadow-glow-chip); transition-duration: var(--dur-cta); }
+    .pal-pill:hover .shuffle { stroke: var(--color-glow); transition-duration: var(--dur-cta); }
+  }
+  .pal-pill .shuffle:active { stroke: var(--color-glow); }
+  .pal-pill:has(.shuffle:active) { box-shadow: var(--shadow-press-chip); }
+
+  /* ── Surface selector ──
+     No hover state by design: the tiles carry a persistent selection, and a
+     hover treatment there reads as selecting. Keyboard focus only. */
+  #surface-chip .tile:focus-visible { outline: none; }
+  #surface-chip .tile:focus-visible span { color: var(--color-glow); }
+
+  /* ── Timeline scrubber ──
+     The glow is a scrub state, NOT a hover state: it appears only while the
+     value is being changed (pointer down or keyboard focus) and leaves when
+     the player lets go. Add/remove `.scrubbing` on the track on
+     pointerdown/pointerup; `:active` and `:focus-within` are the no-JS
+     fallbacks. */
+  @media (hover: hover) {
+    #timeline-chip:hover .thumb { box-shadow: 0 0 0 3px rgba(255,174,104,0.14), 0 4px 24px rgba(0,0,0,0.29); }
+  }
+  #timeline-chip:has(.track.scrubbing),
+  #timeline-chip:has(.track:active),
+  #timeline-chip:focus-within { box-shadow: var(--shadow-glow-chip); }
+
+  .track.scrubbing .fill,
+  .track:active .fill,
+  #timeline-chip:focus-within .fill { background: var(--color-glow); }
+
+  .track.scrubbing .thumb,
+  .track:active .thumb,
+  #timeline-chip:focus-within .thumb {
+    background: var(--color-glow);
+    box-shadow: 0 0 18px rgba(255,174,104,0.38), 0 4px 24px rgba(0,0,0,0.29);
+  }
+
+  /* ── Mobile ──
+     No hover on touch. The outlined mobile .rbtn glows on press, and the
+     border warms so the feedback is visible without a fill change. */
+  @media (hover: none) {
+    .rbtn:active { border-color: rgba(255,174,104,0.55); box-shadow: var(--shadow-glow-flat); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rbtn, .rbtn-primary, .rbtn-primary .inner, button.ctrl-chip, .icon-pill,
+    .pal-pill, .pal-pill .shuffle, #surface-chip .tile, #timeline-chip,
+    .track .fill, .track .thumb { transition-duration: 0ms; }
   }
 </style>
 </head>
@@ -961,26 +1173,37 @@
       <div id="pg-icons">
         <!-- Brief 28 Task 2 — back to idle, armed (surface selector already
              showing), not attract. Left of restart. -->
+        <!-- Brief 33 Task 2 — inlined verbatim from v3/app/icons/home.svg.
+             currentColor + cta.css's `.icon-pill svg { stroke: currentColor }`
+             is what lets the button's own colour drive the glow; no
+             per-state icon markup needed. -->
         <button class="ctrl-chip icon-pill" id="pg-home" aria-label="Home">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5">
-            <path d="M2 9L9 3L16 9"/><path d="M4 8v7h10V8"/>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2.5 7.5 9 2l6.5 5.5V15a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"></path><path d="M7 16v-5h4v5"></path>
           </svg>
         </button>
+        <!-- Brief 33 Task 2 — inlined verbatim from v3/app/icons/replay.svg
+             (path data unchanged from the pre-existing icon; only the
+             stroke/linecap/linejoin attributes are now the canonical set). -->
         <button class="ctrl-chip icon-pill" id="pg-restart" aria-label="Restart">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5">
-            <path d="M15 9a6 6 0 1 1-2-4.5"/><polyline points="15,2 15,5 12,5"/>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 9a6 6 0 1 1-2-4.5"></path><polyline points="15,2 15,5 12,5"></polyline>
           </svg>
         </button>
         <!-- Brief 25 Task 2: two real states, not one icon that never
              changes. Default (unmuted) shows the plain speaker; muted
              swaps to the crossed one. Both inline, JS toggles which is
-             hidden — no icon fonts, no external assets. -->
+             hidden — no icon fonts, no external assets.
+             Brief 33 Task 2 — bodies now inlined verbatim from
+             v3/app/icons/sound.svg (unmuted, gains the two sound-wave arcs
+             the old icon never had) and mute.svg (muted, path data
+             unchanged from before). -->
         <button class="ctrl-chip icon-pill" id="pg-mute" aria-label="Mute" aria-pressed="false">
-          <svg id="pg-mute-icon-unmuted" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5">
-            <polygon points="2,7 5,7 9,3 9,15 5,11 2,11"/>
+          <svg id="pg-mute-icon-unmuted" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="2,7 5,7 9,3 9,15 5,11 2,11"></polygon><path d="M12 6.2a4 4 0 0 1 0 5.6"></path><path d="M14.4 4a7 7 0 0 1 0 10"></path>
           </svg>
-          <svg id="pg-mute-icon-muted" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5" hidden>
-            <polygon points="2,7 5,7 9,3 9,15 5,11 2,11"/><line x1="12" y1="6" x2="16" y2="12"/><line x1="16" y1="6" x2="12" y2="12"/>
+          <svg id="pg-mute-icon-muted" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" hidden>
+            <polygon points="2,7 5,7 9,3 9,15 5,11 2,11"></polygon><line x1="12" y1="6" x2="16" y2="12"></line><line x1="16" y1="6" x2="12" y2="12"></line>
           </svg>
         </button>
       </div>
@@ -1114,7 +1337,12 @@ import { renderSplatterMark } from '../engine/splatter.js'; // brief 31 Task 2a 
 // defined; this synchronous hide is what closes the gap between "script
 // starts running" and "that promise resolves".
 const SHARE_HASH_PREFIX = '#a=';
-const landingWithSharePayload = location.hash.startsWith(SHARE_HASH_PREFIX);
+// Brief 33 Task 5a — `let`, not `const`. This is meant to be true only for
+// the split-second window between page load and the share decode settling
+// (see isMobileBlocked() below); it must clear once that window closes or
+// its own guard clause there fires forever, permanently suppressing the
+// mobile gate for the rest of the tab's life. Cleared in goToIdleArmed().
+let landingWithSharePayload = location.hash.startsWith(SHARE_HASH_PREFIX);
 if (landingWithSharePayload) document.getElementById('screen-idle').hidden = true;
 
 // Brief 26 Task 5 — ported verbatim from root index.html (~line 566), text
@@ -1185,6 +1413,14 @@ function isTouchDevice() {
 // screenState itself doesn't flip to 'share' until decode succeeds) —
 // without this clause a phone visitor on a real share link sees the gate
 // flash on before their artwork appears.
+//
+// Brief 33 Task 5a fix: landingWithSharePayload is now `let` and gets
+// cleared in goToIdleArmed(). Before this fix it never cleared, so once a
+// recipient tapped "play your own" (screenState back to 'idle'), this
+// clause fired again and suppressed the gate permanently — the worst of
+// the five brief-33 mobile bugs, since it showed the unplayable desktop
+// screen to a phone visitor with no way off it short of a resize event
+// crossing isTouchDevice()'s own width/pointer checks by accident.
 function isMobileBlocked() {
   if (!isTouchDevice()) return false;
   if (screenState === 'share') return false;
@@ -1207,21 +1443,20 @@ function updateMobileScreens() {
   const mobileShare = isTouchDevice() && screenState === 'share';
   document.documentElement.classList.toggle('mobile-gate-active', gate);
   document.documentElement.classList.toggle('mobile-share-active', mobileShare);
-  // Neither screen is designed for landscape (both mockups are portrait-
-  // only), and a rotated phone or a landscape-default iPad is a real,
-  // easy-to-hit case, not an edge case. Locking scroll there — correct
-  // for the designed portrait fold — turned out to make the primary
-  // action (copy link) and, on share, the haiku/download/copy row
-  // genuinely unreachable: content overflows the short viewport and
-  // there is no way to scroll to it. Exempting landscape from the lock
-  // trades "ugly, content pushed below an accessible scroll" for "content
-  // literally cannot be reached" — verified both ways in a real
-  // landscape viewport before choosing this.
-  const locked = (gate || mobileShare) && !isLandscapeViewport();
-  // Both html and body — iOS Safari's rubber-band scroll can leak past
-  // overflow:hidden set on <html> alone.
-  document.documentElement.style.overflow = locked ? 'hidden' : '';
-  document.body.style.overflow = locked ? 'hidden' : '';
+  // Brief 33 Task 5b — the hard overflow:hidden lock that used to live
+  // here (on html/body, whenever gate or mobileShare was true) is gone.
+  // Both screens use min-height:100dvh + justify-content:safe center now
+  // (CSS, above), and a real iOS Safari 100vh-vs-100dvh mismatch was
+  // proven to push the centred cluster's TOP above the fold while that
+  // lock was active — with scroll locked, that content was not merely
+  // ugly, it was unreachable. Single-fold stays the target (each screen
+  // container itself gets overflow-y:auto in CSS as the fallback,
+  // engaging only if content genuinely doesn't fit); this function no
+  // longer manages document-level scroll at all for the gate/share case.
+  // The rotated #full overlay still needs an iOS-rubber-band lock while
+  // it's open — that's now scoped to openFullscreenShare()/
+  // closeFullscreenShare() directly instead of piggy-backing here, since
+  // it can no longer assume this function is holding the lock for it.
 }
 
 // Brief 25 Task 1 step 4 / Task 5's own fallback: for any viewport still too
@@ -2983,11 +3218,16 @@ timelineTrackEl.addEventListener('pointerdown', (e) => {
   timelineTrackEl.setPointerCapture(e.pointerId);
   timelineTrackEl.focus();
   scrubToFraction(fractionFromPointerX(e.clientX));
+  // Brief 33 Task 1 — cta.css's glow is a scrub state, not a hover state:
+  // it targets .track.scrubbing, added here and removed on window
+  // pointerup below (matching cta-states.html's own reference script).
+  timelineTrackEl.classList.add('scrubbing');
 });
 timelineTrackEl.addEventListener('pointermove', (e) => {
   if (scrubbing) scrubToFraction(fractionFromPointerX(e.clientX));
 });
 timelineTrackEl.addEventListener('pointerup', () => { scrubbing = false; });
+window.addEventListener('pointerup', () => { timelineTrackEl.classList.remove('scrubbing'); });
 timelineTrackEl.addEventListener('keydown', (e) => {
   if (!resultsData) return;
   const total = resultsData.strokes.length;
@@ -3386,7 +3626,7 @@ function encodeArtworkPayload(h) {
 // Task 4's "quiet fall-through" requirement is met by ONE big try/catch
 // plus an explicit r.remaining bounds check before every multi-byte read:
 // any malformed or truncated input returns null (never throws), and the
-// caller (shareCurrentGame's counterpart at the bottom of this file) is
+// caller (the landing-with-a-fragment block at the bottom of this file) is
 // the one place that logs a single console.warn. Never renders a partial
 // artwork — a half-decoded painting shown as someone's finished piece
 // would be worse than showing nothing.
@@ -3560,8 +3800,9 @@ async function streamThrough(stream, bytes) {
 }
 
 // rawBytes: encodeArtworkPayload's output. Returns the base64url string to
-// go after '#a='. Async because CompressionStream is stream-based; never
-// blocks the visible screen transition (see shareCurrentGame, below).
+// go after '#a='. Async because CompressionStream is stream-based; awaited
+// before copying (see copyResultsShareLink, below) so the copied link
+// carries the real fragment, not the bare URL.
 async function encodeToFragment(rawBytes) {
   const flagsByte = rawBytes[0];
   const rest = rawBytes.subarray(1);
@@ -3608,9 +3849,12 @@ async function decodeFromFragment(fragmentValue) {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
-   Task 2 — Screen 4 render machinery. Renders a DECODED payload — never
-   gameLastEndedStrokes directly, not even for the player's own game (see
-   shareCurrentGame, below) — so live and shared artworks share one path.
+   Task 2 — Screen 4 render machinery. Renders a DECODED payload, never
+   gameLastEndedStrokes directly. Brief 33 Task 3: the results screen no
+   longer routes here at all (its own "share" button copies the link in
+   place instead — see copyResultsShareLink, further down) — this is now
+   reached only by a RECIPIENT landing on a #a=... link, at the bottom of
+   this file.
    ──────────────────────────────────────────────────────────────────────── */
 
 const shareGroundCanvas = document.getElementById('share-ground-canvas'); // visible, 800x504 (Task 2)
@@ -3675,12 +3919,12 @@ function buildShareGround(surface, seed, paintGroundHex) {
 }
 
 // Task 2/3 entry point. Builds the full-res artwork from a decoded
-// payload, blits it down to the 0.8x visible preview, and sets the haiku —
-// called both by shareCurrentGame (this player's own finished game) and by
-// the landing-with-a-fragment path at the bottom of this file (someone
-// else's link). Neither caller passes gameLastEndedStrokes-shaped data
-// directly; both go through decodeArtworkPayload first, so this function
-// never has to know which case it's in.
+// payload, blits it down to the 0.8x visible preview, and sets the haiku.
+// Brief 33 Task 3: the results screen's own share button no longer calls
+// this (it copies the link in place instead) — the only remaining caller
+// is the landing-with-a-fragment path at the bottom of this file, when a
+// recipient opens someone else's #a=... link. Still goes through
+// decodeArtworkPayload first, same as before.
 function renderSharePage(decoded) {
   shareDecoded = decoded;
 
@@ -3736,30 +3980,48 @@ function renderSharePage(decoded) {
    Task 3 — flows.
    ──────────────────────────────────────────────────────────────────────── */
 
-// Results -> SHARE. Encodes THIS game's own gameLastEndedStrokes, decodes
-// it right back SYNCHRONOUSLY, and renders that decoded copy rather than
-// gameLastEndedStrokes itself — so what the player sees on Screen 4 is
-// byte-for-byte the same reconstruction a recipient's browser will
-// produce (Task 3: "a true preview of what a recipient will see"), not
-// merely "the same source data, presumably rendered the same way". The
-// (async) compress-and-update-the-URL step runs afterward in the
-// background and must never block the screen transition itself.
-async function shareCurrentGame() {
+// Results "share" — brief 33 Task 3: copies the link in place, no screen
+// change. The results screen already IS the artwork reveal, so navigating
+// to a separate "preview your share" screen was showing the player what
+// they were already looking at; save-PNG and play-again already live on
+// results, so nothing is lost by dropping this route to the share screen.
+// (The share screen itself is untouched and still the landing view for a
+// RECIPIENT opening a #a=... link — see decodeFromFragment/landingWithSharePayload
+// at the bottom of this file, which this function never calls or touches.)
+//
+// Still encodes THIS game's own gameLastEndedStrokes and decodes it right
+// back SYNCHRONOUSLY as a correctness check before offering anything to
+// copy — never hand out a link that wouldn't actually decode for a
+// recipient. The (async) compress-and-update-the-URL step still has to
+// run first: the copied link needs the real #a=... fragment in
+// location.href, not the bare URL.
+async function copyResultsShareLink(e) {
   if (!gameLastEndedStrokes) return;
+  // Captured NOW, synchronously, not read off e.currentTarget later —
+  // e.currentTarget is only valid while the event is actively dispatching,
+  // and this function awaits below, well past that point. See
+  // shareCopyButtonHandler's own comment, further down this file, for the
+  // real bug this caused and how it was caught.
+  const btn = e.currentTarget;
   const raw = encodeArtworkPayload(gameLastEndedStrokes);
   const decoded = decodeArtworkPayload(raw);
   if (!decoded) { console.warn('[share] own payload failed to decode — this should never happen'); return; }
 
-  setScreen('share');
-  renderSharePage(decoded);
-
   const fragment = await encodeToFragment(raw);
   history.replaceState(null, '', '#a=' + fragment);
 
-  // Task 1 Verification: "Report the measured payload size per surface."
+  // Task 1 Verification (brief 29): "Report the measured payload size per surface."
   console.log(`[share] ${gameLastEndedStrokes.surface}: ${raw.length}B raw -> ${fragment.length} base64url chars (${gameLastEndedStrokes.strokes.length} strokes, decimation N=${SHARE_DECIMATE_N})`);
+
+  // Same shared clipboard mechanism AND the same "Copied!"/3s success
+  // callback already used by desktop share's and mobile share's copy-link
+  // buttons (brief 32/31) — one implementation shared by all three, not
+  // three separate ones. shareCopyButtonHandler is defined further down
+  // this file as a function declaration, so it's hoisted and safe to call
+  // from here.
+  shareCopyButtonHandler(btn);
 }
-document.getElementById('btn-share').addEventListener('click', shareCurrentGame);
+document.getElementById('btn-share').addEventListener('click', copyResultsShareLink);
 
 // PAINT/PLAY YOUR OWN — same idle-armed destination as the playing
 // screen's home button and results' PLAY AGAIN (brief 28): a recipient
@@ -3815,15 +4077,30 @@ function copyLinkToClipboard(text, onSuccess) {
     tryFallback();
   }
 }
-function shareCopyButtonHandler(e) {
-  const btn = e.currentTarget;
+// Brief 33 Task 3 fix — takes the BUTTON ELEMENT directly, not a click
+// event. It used to read e.currentTarget, which is only valid while an
+// event is actively dispatching: the DOM spec resets it to null the
+// instant dispatch finishes, which happens synchronously, before any
+// `await` in a listener ever resumes. copyResultsShareLink (below) awaits
+// encodeToFragment() before it can call this, so by the time it got here
+// e.currentTarget was already null — btn.textContent then threw inside an
+// async function, becoming a silently swallowed rejection: no console
+// error surfaced, but "Copied!" never appeared either. Caught live in
+// verification (a real click showed the clipboard write succeeding —
+// tool-flagged — while the button label never changed), confirmed by
+// directly measuring e.currentTarget before/after an awaited microtask.
+// Taking the element itself sidesteps the whole hazard.
+function shareCopyButtonHandler(btn) {
   const original = btn.textContent;
   copyLinkToClipboard(location.href, () => {
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = original; }, 3000);
   });
 }
-document.getElementById('btn-share-copy').addEventListener('click', shareCopyButtonHandler);
+{
+  const btnShareCopyEl = document.getElementById('btn-share-copy');
+  btnShareCopyEl.addEventListener('click', () => shareCopyButtonHandler(btnShareCopyEl));
+}
 
 /* ────────────────────────────────────────────────────────────────────────
    Brief 32 — mobile screens. Task 2 (mobile share, incl. the rotated
@@ -3844,7 +4121,10 @@ document.getElementById('btn-mobile-share-download').addEventListener('click', (
   if (!shareDecoded) return;
   mobileExportArtworkPNG(shareGroundCvFull, shareStrokesCvFull, shareHaikuEl.textContent, shareDecoded.seed);
 });
-document.getElementById('btn-mobile-share-copy').addEventListener('click', shareCopyButtonHandler);
+{
+  const btnMobileShareCopyEl = document.getElementById('btn-mobile-share-copy');
+  btnMobileShareCopyEl.addEventListener('click', () => shareCopyButtonHandler(btnMobileShareCopyEl));
+}
 
 // ── Rotated fullscreen artwork view (Task 2) ──────────────────────────
 // #full gets its OWN canvas pair, redrawn via drawImage() from
@@ -3886,6 +4166,17 @@ function openFullscreenShare() {
   fullStrokesCx.drawImage(shareStrokesCvFull, 0, 0);
   sizeFullRot();
   fullEl.dataset.open = 'true';
+  // Brief 33 Task 5b — #full is position:fixed, so it already covers the
+  // viewport regardless of scroll, but iOS Safari's rubber-band overscroll
+  // can still bounce the background into view behind a fixed overlay
+  // unless html/body are locked. This used to come for free from
+  // updateMobileScreens()'s own lock (mobile-share-active was already true
+  // whenever this could be opened); now that that lock is gone (Task 5b,
+  // content must stay scrollable behind the mobile-share screen itself),
+  // this is the one remaining case that still needs it, so it's scoped
+  // here instead.
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
   // Best-effort — MOBILE-NOTES.md §4: "treat failure as fine, the
   // rotation already works without it."
   if (screen.orientation && screen.orientation.lock) {
@@ -3894,6 +4185,8 @@ function openFullscreenShare() {
 }
 function closeFullscreenShare() {
   fullEl.dataset.open = 'false';
+  document.documentElement.style.overflow = '';
+  document.body.style.overflow = '';
   if (screen.orientation && screen.orientation.unlock) {
     try { screen.orientation.unlock(); } catch (e) {}
   }
@@ -4314,6 +4607,14 @@ function beginGame() {
 // shown again — gameCommittedStrokes/gameStrokesCv get overwritten by the
 // next startGame() call regardless of how idle was reached.
 function goToIdleArmed() {
+  // Brief 33 Task 5a — clear this BEFORE setScreen(), not after: setScreen
+  // calls fitScreenToViewport() -> updateMobileScreens() synchronously, and
+  // that call needs to see the flag already false for the gate to appear
+  // on THIS call (a touch device tapping "play your own") rather than only
+  // on some later screen change or resize. The moment the visitor leaves
+  // the share landing, this flag's job is done — isMobileBlocked() should
+  // start evaluating normally again from here on.
+  landingWithSharePayload = false;
   setScreen('idle');
   idleEl.dataset.idleStep = 'armed';
   idleSub.textContent = 'Choose a surface, then press space or click to begin';
@@ -4321,6 +4622,29 @@ function goToIdleArmed() {
 }
 
 function onGesture(e) {
+  // Brief 33 Task 4 — a gesture that originates on an interactive control
+  // (a surface tile, the palette chip, any button on the idle card) only
+  // ever operates that control; it must never also count as the idle->
+  // playing gesture. The surface tile's own click handler already calls
+  // e.stopPropagation(), which stops the CLICK from bubbling here — but
+  // the idle screen also listens on touchstart (below), which propagation-
+  // stopping on a different listener does nothing for. Checking the
+  // gesture's origin here, at the one place both paths funnel through,
+  // fixes it for click and touchstart alike without depending on every
+  // control remembering to stop propagation.
+  //
+  // Scoped to e.type === click/touchstart specifically, not keydown: this
+  // same function is also called from the window Space-key handler below,
+  // and a keydown event's target is whatever currently has keyboard focus
+  // — e.g. the surface tile a mouse click just focused. Applying this
+  // guard there too regressed the brief's own "a space press still
+  // serves" requirement: pressing space right after clicking a tile
+  // silently did nothing, caught live in verification (screenshot showed
+  // the idle screen never advancing; document.activeElement confirmed the
+  // just-clicked tile still had focus). Space activating whatever control
+  // is genuinely focused is normal, unrelated browser behaviour this
+  // function was never meant to interfere with.
+  if ((e.type === 'click' || e.type === 'touchstart') && e.target.closest('#surface-chip, .ctrl-chip, button')) return;
   if (screenState !== 'idle') return;
   if (idleEl.dataset.idleStep !== 'armed') armIdle();
   else beginGame();

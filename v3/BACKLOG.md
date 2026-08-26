@@ -168,15 +168,14 @@ triaging this whole list, not before.
   Worth a real landscape-specific layout if this becomes a common path
   (an iPad defaults to landscape). *Surfaced: brief 32 verification,
   2026-08-26.*
-- **Mobile export paths unverified in a real browser.** Brief 32's Web
-  Share (`navigator.share`/`canShare`) branch and the real
-  `navigator.clipboard`/`execCommand` copy success paths (gate + mobile
-  share) could not be exercised live — this sandbox has no Web Share API
-  at all, and clipboard writes fail here for an unrelated document-focus
-  reason (same limitation as briefs 29-31). All were code-reviewed and
-  their surrounding logic verified in isolation, not run end-to-end.
-  Needs one real click-through on an actual phone before trusting these
-  past code review. *Surfaced: brief 32 verification, 2026-08-26.*
+- **Mobile export paths still not fully verified in a real browser.**
+  Brief 32's Web Share (`navigator.share`/`canShare`) branch remains
+  entirely untestable here — this sandbox has no Web Share API at all.
+  Partially narrowed by brief 33 (2026-08-27): a real trusted click
+  proved the underlying clipboard mechanism genuinely works (see the
+  resolved copy-link item above), which the gate and mobile share's own
+  copy buttons share — but the Web Share download path and a real device
+  pass are still open. *Surfaced: brief 32 verification, 2026-08-26.*
 - **Doc drift — `DESIGN.md` doesn't carry paper/chalk's new stroke hexes.**
   Brief 31 shipped paper as `#F2716A`/`#54B85B`/`#6D9AFF` and chalk as
   `#E6B816`/`#00D8F6`/`#F695EE` (both in `v3/app/index.html`, verified
@@ -185,15 +184,16 @@ triaging this whole list, not before.
   are now stale. Live code wins per the standing rule; the doc needs a
   sweep to absorb the new values, not the other way round.
   *Surfaced: brief 31 spec, 2026-08-26.*
-- **Copy link's real-clipboard success path is unverified.** Brief 31's
-  fallback (hidden input + `execCommand('copy')`) is implemented and its
-  show/revert timing verified in isolation, but neither
-  `navigator.clipboard.writeText` nor the fallback could be confirmed
-  actually copying anything — both fail in the architect's own sandboxed
-  browser tool with a document-focus permission error unrelated to the
-  code (same limitation hit verifying brief 29's share button). Needs one
-  real click-through in an ordinary browser before this is trusted past
-  code review. *Surfaced: brief 31 verification, 2026-08-26.*
+- ~~**Copy link's real-clipboard success path is unverified.**~~ **Resolved,
+  brief 33** (2026-08-27): a real trusted click (not a JS-dispatched one)
+  on the results screen's share button produced an actual OS clipboard
+  write — confirmed by the sandbox's own synthetic-input warning — with
+  the "Copied!" label showing and reverting correctly. Desktop share and
+  mobile share's copy buttons share the identical `copyLinkToClipboard`/
+  `shareCopyButtonHandler` core that button uses, so the mechanism itself
+  is proven; the gate's own button (different callback, same core) and a
+  real device weren't separately click-tested this session.
+  *Surfaced: brief 31 verification, 2026-08-26.*
 
 ## Engine-wide / Product
 

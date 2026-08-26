@@ -195,12 +195,12 @@ the animation over a static-paddle doodle would be worse than the CSS
 placeholder, and a CSS renderer would be a second, worse renderer to maintain
 forever.
 
-### Brief 33 — Background music
+### Brief 34 — Background music
 Replacing `Oolong.mp3`, which is not licensed for commercial use. Direction to
 be decided — see the log entry; the standing recommendation is generative Web
 Audio rather than licensed tracks.
 
-### Brief 34 — QA sweep + backlog triage
+### Brief 35 — QA sweep + backlog triage
 The checkpoint `BACKLOG.md` names for itself: "once every current surface is
 built and the game is fitted together." Everything deferred during the port,
 plus the small polish Shivang has been holding back, triaged in one pass.

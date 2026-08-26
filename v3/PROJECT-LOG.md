@@ -5,6 +5,114 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-27 — Brief 33 built on `feature/v3-polish`. CTA states, icons, share/surface fixes, mobile repair.
+
+Fifth brief on `feature/v3-polish`, sitting on top of 31/32. Not merged this
+session; same review rhythm as before the ship.
+
+**Task 1 — the CTA state system is real now.** `cta.css` copied verbatim into
+the app's `<style>`, placed after every resting rule so it wins ties, per
+that file's own instruction. The actual work was finding and deleting every
+rule that predated it and fought it — `.rbtn`'s `opacity: .85` hover-dim,
+an equivalent opacity pair scoped to the mobile share screen, `.icon-pill
+svg`'s hover-to-opacity-1 override, and two `.pal-pill` rules (dot hover-
+scale, an un-scoped shuffle hover colour that would have stuck on touch).
+None of these would have thrown an error or looked obviously wrong in a
+diff; they'd have just silently fought the new glow, in some cases only on
+touch. Timeline scrubbing is wired for real now too — `.scrubbing` added on
+`pointerdown`, removed on a `window` `pointerup`, matching the reference
+page's own script. Every state — hover, focus-visible, press, the mute
+persistent glow, the scrub glow — was measured against `cta.css`'s own
+computed values, not eyeballed: exact matches throughout, including
+confirming the icon SVGs' own `stroke` genuinely follows `currentColor`
+through a state change, not just the button chrome around them.
+
+**Task 2 — icon set.** `home`/`replay`/`mute`/`sound` inlined verbatim from
+the new `v3/app/icons/` source files. `home` and `sound` are real visual
+changes (sound gains the two wave arcs the old icon never had); `replay`/
+`mute` were already identical path data. `shuffle` and `cursor` were left
+untouched — Shivang's explicit call: `cursor.svg`'s stroke-only
+`currentColor` glyph would have gone invisible against the cream canvas
+(the shipped cursor is a solid two-tone dark-fill/cream-outline mark for a
+reason), and the shuffle icon already matches `cta-states.html` at its
+current size. `save`/`share`/`link`/`play` are in the repo as source,
+wired nowhere — the results/share buttons stay text-only, as designed.
+
+**Task 3 — results "share" copies in place.** No longer navigates to the
+share screen; encodes and `history.replaceState`s the real `#a=…` fragment
+exactly as before, then copies it via the same shared clipboard core
+already used by desktop share and mobile share, instead of showing the
+player the painting they were already looking at. The share screen itself
+is untouched — still the landing view for a recipient's link.
+
+A real bug came out of verifying this, not the plan: the shared copy
+helper used to read `e.currentTarget`, which the DOM resets to `null` the
+instant an event finishes dispatching — synchronously, before an `await`
+inside the listener ever resumes. The new handler awaits the fragment
+encode before it can call the helper, so `e.currentTarget` was already
+gone by then; the clipboard write itself succeeded, but "Copied!" never
+appeared, silently. Confirmed with a two-line test (`e.currentTarget` true
+mid-listener, false after one awaited microtask) before fixing it — the
+helper now takes the button element itself, captured synchronously, at
+all three of its call sites. Re-verified afterward with an actual trusted
+click (this sandbox's own synthetic-input warning confirmed a real OS
+clipboard write happened): label showed "Copied!", reverted after 3s, no
+navigation. Then went a step further than prior briefs could — fed the
+exact copied fragment back through the real `decodeFromFragment`/
+`decodeArtworkPayload`/`renderSharePage` pipeline and confirmed it
+rendered correctly (8 strokes, matching seed). Every prior brief's share
+verification was code review plus isolated logic checks, because this
+sandbox couldn't produce a real trusted clipboard write; this is the first
+time the actual end-to-end path — real click, real copy, real decode —
+was observed directly.
+
+**Task 4 — surface selection can't start a game.** `onGesture` now ignores
+any click/touchstart that originates on a control (`#surface-chip`,
+`.ctrl-chip`, any `button`) — fixes it at the one place both the mouse and
+touch paths funnel through, rather than trusting every handler to
+`stopPropagation()` correctly (the touch path never did). A second real
+bug turned up live: the first version of the guard checked `e.target` for
+every gesture type, including the ones arriving from the window Space-key
+listener — and a keydown's target is whatever has keyboard focus, which
+after a mouse click on a tile is the tile itself. Spacebar silently did
+nothing right after picking a surface with the mouse. Scoped the guard to
+click/touchstart specifically; a direct keydown dispatch with a tile
+deliberately focused confirmed arm-then-start both still work.
+
+**Task 5 — five real mobile bugs, all fixed at cause, all reverified live:**
+- **5a** (the worst one): `landingWithSharePayload` is `let` now, cleared
+  in `goToIdleArmed()` — and cleared *before* `setScreen()`, not after,
+  since `setScreen` reads it synchronously through its own
+  `fitScreenToViewport()` call. A recipient tapping "play your own" now
+  lands on a genuinely animating gate at once — verified live, including
+  running the exact link produced by Task 3's real copy back through the
+  real decode pipeline first, then tapping through from there.
+- **5b**: `100vh` → `100dvh` on both mobile screens and `#full`'s rotation
+  fallback; the hard `overflow:hidden` scroll lock is gone entirely for
+  the gate/share case (`overflow-y:auto` on the screen containers instead),
+  with `justify-content: safe center` applied on both up front — this
+  sandbox can't reproduce iOS's real 100vh/100dvh gap to confirm the risk
+  either way, so it's not gated on "if observed broken." Verified at a
+  deliberately short 375×500 viewport: every control, including the top
+  logo, reachable by scroll both directions on both screens.
+- **5c**: resolved by 5a/5b landing, confirmed live (real animation, real
+  non-zero canvas height).
+- **5d**: mobile share's logo-to-"tap to view" gap measured at exactly
+  16px after the fix (was ~32, double the spec).
+- **5e**: re-confirmed centred post-5b, at both a tall and a short
+  viewport.
+
+Desktop fully unaffected — a complete game start to finish, zero console
+errors, verified via a temporary debug hook (removed before commit, same
+pattern as every prior brief).
+
+`node v3/build.js` run twice, byte-identical. `git diff --stat main --
+v3/engine/ v3/labs/` empty throughout.
+
+### Next
+Review `feature/v3-polish`, merge when approved. `PORT-PLAN.md` renumbered
+— BGM replacement is now brief 34, the QA sweep is brief 35.
+
 ## 2026-08-26 — Brief 32 built on `feature/v3-polish`. Mobile gate + share screens.
 
 Replaces brief 30's placeholder — a translucent `#mobile-overlay` card

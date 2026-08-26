@@ -5,6 +5,81 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-26 — Brief 31 built on `feature/v3-polish`. Palette, paint, sound, text.
+
+First post-ship polish pass, off `main` per the new branch. Not merged this
+session — sits on `feature/v3-polish` pending review, same rhythm as every
+other brief before the ship.
+
+**Palette (Task 1) — every number verified in code, not eyeballed.** A small
+`deltaE` mirror of palette.js's own private `oklabDeltaE` (off the already-
+exported `hexToOklab`) prints and asserts every claim at load. Measured live,
+matches the brief's own worked table to the decimal: paper hues
+25.2/144.9/264.6° (gaps 119.7/119.7/120.6, triadic), ground ΔE
+0.310/0.313/0.328; chalk ground ΔE 0.605/0.607/0.600, all comfortably clear
+of their floors. Paper's green — the thing that started this brief — now
+holds against cream at a glance. Chalk's new triad reads at genuinely even
+weight on the board, gold/cyan/pink no longer uneven the way yellow used to
+dominate. Paint's default confirmed pinned to the approved reference
+(triadic, base 0, Cream, Crimson/Yellow/Cyan-blue) at both the doodle and a
+fresh game; 20 live shuffles produced only triadic/split-complementary.
+
+Chalk's new palette is an **app-level override**, not an engine edit —
+`v3/engine/chalkboard.js` no longer supplies `CHALK_PALETTE` to the app at
+all (dropped from the import); the app defines its own array of the same
+name. Same pattern `PAPER_PALETTE` already used, same pattern BACKLOG.md
+already documents for paint's width constants — the product value wins,
+the engine file stays untouched.
+
+**Paint marks (Task 2).** Blotches removed everywhere the artwork renders,
+not just the reveal the brief's own text names — results AND the share
+screen (brief 29's `renderSharePage` called the same function to reproduce
+the reveal for a link; leaving it there would have made a shared link show
+a different painting than the one actually shared). Splatter: cooldown
+40->24, target 3-8/game->10-18/game, measured against 20 real headless
+games at the shipped tuning — 19/20 landed inside the range, one short game
+at 9. The cap (18) is doing real work here, not sitting as a rare safety
+net the way it mostly did against the old 3-8 target — a game's total
+splatter count scales with its own rally length, which the port's own
+history (briefs 29/30) already measured varying by thousands of steps game
+to game, so no per-frame probability alone holds a tight band without a
+real ceiling. Pushing the one below-10 outlier up would mean most games
+land on the cap instead of varying — left as measured. No black splatter
+(ink weight dropped from the live color pool entirely — the ball marker
+itself is unaffected, that's a separate legibility call). Paint opacity
+0.88, both strokes and splatter, confirmed at the pixel level
+(224/255 = 0.878); paper and chalk untouched.
+
+**Sound (Task 3).** Game-over is a real two-note "da-DUM" now — D4 then G3,
+a falling perfect fourth 380ms apart — not brief 28's same-bell-twice.
+Verified by spying on every oscillator/gain call against hand-computed
+expected values: exact match, all 10 partials across both strikes.
+
+**Timeline (Task 4) and copy link (Task 5).** Reveal opens at 70%
+(measured: 71/102). Copy link's fallback path (hidden input +
+execCommand) is implemented and its show/revert timing verified in
+isolation, but a real successful copy could not be verified live —
+this session's own sandboxed browser tool fails both
+`navigator.clipboard.writeText` and `execCommand('copy')` for a
+document-focus reason unrelated to the code (same limitation hit during
+brief 29). Worth a real click-through once this is actually reviewed in a
+normal browser.
+
+**Idle text (Task 6).** Both strings rewritten fresh, not ported — root's
+copy was never this game's actual UI text. Cream, not grey; a single
+seamless-loop keyframe floats it ±3px over 3.2s, `prefers-reduced-motion`
+respected.
+
+`node v3/build.js` run twice, byte-identical. `git diff --stat main --
+v3/engine/ v3/labs/` empty throughout — engine and lab genuinely untouched
+despite two of six tasks (chalk palette, blotch removal) touching things
+those files own.
+
+### Next
+Review `feature/v3-polish`, merge when approved. Brief 32 (real mobile
+share/gate screens) and 33 (BGM replacement — `Oolong.mp3` isn't licensed
+for commercial use) are written and waiting; 34 is the QA sweep.
+
 ## 2026-08-26 — v3 live. Post-ship feedback split into briefs 31, 32, 33.
 
 Brief 30 shipped; the live URL serves v3. Architect verification of the built

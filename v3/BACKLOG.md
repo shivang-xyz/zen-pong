@@ -162,6 +162,23 @@ triaging this whole list, not before.
   contain-scale fits the 800px screen to exactly 100% of the width. Cosmetic,
   not broken. Wants a small horizontal inset in the mobile scale so it breathes.
   *Surfaced: architect verification of brief 30, 2026-08-26.*
+- **Doc drift — `DESIGN.md` doesn't carry paper/chalk's new stroke hexes.**
+  Brief 31 shipped paper as `#F2716A`/`#54B85B`/`#6D9AFF` and chalk as
+  `#E6B816`/`#00D8F6`/`#F695EE` (both in `v3/app/index.html`, verified
+  in-code against the triadic/split-complementary + ΔE rule) — `DESIGN.md`
+  §2's colour tables, wherever they still list the old three per surface,
+  are now stale. Live code wins per the standing rule; the doc needs a
+  sweep to absorb the new values, not the other way round.
+  *Surfaced: brief 31 spec, 2026-08-26.*
+- **Copy link's real-clipboard success path is unverified.** Brief 31's
+  fallback (hidden input + `execCommand('copy')`) is implemented and its
+  show/revert timing verified in isolation, but neither
+  `navigator.clipboard.writeText` nor the fallback could be confirmed
+  actually copying anything — both fail in the architect's own sandboxed
+  browser tool with a document-focus permission error unrelated to the
+  code (same limitation hit verifying brief 29's share button). Needs one
+  real click-through in an ordinary browser before this is trusted past
+  code review. *Surfaced: brief 31 verification, 2026-08-26.*
 
 ## Engine-wide / Product
 

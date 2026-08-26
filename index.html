@@ -64,6 +64,18 @@
     --shadow-chip:   0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px rgba(0,0,0,0.52);
     --shadow-canvas: 0 4px 24px rgba(0,0,0,0.28);
     --shadow-btn:    0 4px 24px rgba(0,0,0,0.16), inset 0 0 5px rgba(0,0,0,0.32);
+
+    /* Brief 32 Task 1 — mobile-only, fixed values not a ratio. A 48px
+       radius and 8px frame do not survive on a 358px-wide canvas (the
+       corners eat the artwork), but a RATIO produces fractional radii/
+       frame widths at arbitrary widths — this codebase already lost a
+       day to 2px marks landing on fractional pixels (brief 25). Two
+       stepped values land on whole pixels at any width; closes
+       MOBILE-NOTES.md open question 1. */
+    --radius-mobile-canvas: 24px;
+    --frame-mobile:          5px;
+    --gutter-mobile:        16px;
+    --tap:                  56px;
   }
 
   * { box-sizing: border-box; }
@@ -517,85 +529,212 @@
   .track:active .thumb, .track .thumb:active { cursor: grabbing; }
   .track:focus-visible { outline: 2px solid var(--color-lightest-grey); outline-offset: 4px; } /* browser-default-adjacent, DESIGN.md defines no custom ring (Task 6) */
 
-  /* ── Mobile overlay · brief 30 Task 3 ──
-     Reference: root index.html's #mobile-overlay/#mobile-card (~line
-     306-388) — same mechanism (fixed, full-viewport, translucent card,
-     pointer-events:all so no click/tap ever reaches the game underneath
-     even though it visually shows through), v3's own tokens and type
-     system instead of root's Basier Circle references (v3 doesn't use
-     that font at all). MUST be a direct child of <body>, never nested
-     inside a .screen — a transformed ancestor becomes a new containing
-     block for position:fixed descendants, which would break inset:0
-     full-viewport coverage the moment the mobile fill-scale below applies
-     a transform to whichever .screen is visible. */
-  #mobile-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 99999; /* v3's highest existing z-index anywhere is .frame's 4 — no conflict */
-    background: transparent;
-    align-items: center;
-    justify-content: center;
-    pointer-events: all;
-  }
-  #mobile-card {
-    position: relative;
-    width: 300px;
-    background: rgba(70, 70, 70, 0.60); /* --color-cta (#464646) translucent, root's own treatment */
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-    border-radius: var(--radius);
-    padding: var(--space-xl) var(--space-l);
-    box-shadow: var(--shadow-chip);
-    display: flex; flex-direction: column; align-items: center;
-    text-align: center;
-    pointer-events: all;
-  }
-  #mobile-headline {
-    font-size: 18px; /* body's own DM Serif Display italic applies by inheritance — no font-family override, matches .tagline/#idle-sub's treatment rather than porting root's Basier Circle */
-    color: var(--color-canvas);
-    margin: 0 0 var(--space-m);
-  }
-  #mobile-divider {
-    width: 100%; height: 1px;
-    background: var(--color-lightest-grey);
-    margin-bottom: var(--space-m);
-  }
-  #mobile-body {
-    font-family: 'Space Mono', monospace; font-style: normal;
-    font-size: 13px; line-height: 1.6;
-    color: var(--color-canvas);
-    margin: 0 0 var(--space-l);
-  }
-  #mobile-card .logo-mark { opacity: 0.55; } /* matches the save-artwork export's translucent logo treatment (exportArtworkPNG, ~line 3360) */
+  /* ── Mobile screens · brief 32 ──────────────────────────────────────────
+     Replaces brief 30's placeholder #mobile-overlay entirely: two REAL,
+     dedicated, natively-responsive screens (fluid CSS, matching
+     v3/design/5-mobile-gate.html / 1d-mobile-share.html) instead of the
+     desktop layout scaled down via a JS transform. Direct children of
+     <body>, siblings of the four .screen sections — display:none by
+     default, shown only via the html.mobile-*-active classes
+     updateMobileScreens() toggles (JS section, replacing
+     updateMobileOverlay()). Desktop's four .screen sections get a REAL
+     display:none while either is active — not a visual cover — so there
+     is nothing left to click through and no chrome-hiding rules needed
+     the way brief 30's translucent-card-over-idle approach required. */
+  html.mobile-gate-active .screen,
+  html.mobile-share-active .screen { display: none !important; }
 
-  /* Hides the game's own chrome behind the overlay, not just the game
-     itself — root does the same (its #intro-card gets display:none on
-     is-mobile) so a phone visitor never reads two contradictory pieces of
-     copy at once ("space to begin" behind "this needs a mouse"). Toggled
-     by updateMobileOverlay() via isMobileBlocked(), never by isTouchDevice()
-     alone — #share-row must stay visible and usable on a mobile share
-     screen, which is exactly the case isMobileBlocked() excludes. */
-  html.mobile-blocked #intro-card,
-  html.mobile-blocked #surface-chip,
-  html.mobile-blocked #screen-idle .pal-pill,
-  html.mobile-blocked #ctrl-row-playing { display: none; }
+  #screen-mobile-gate, #screen-mobile-share {
+    display: none;
+    min-height: 100vh;
+    flex-direction: column;
+    justify-content: center;
+    background: var(--color-bg);
+    color: var(--color-lightest-grey);
+    padding: calc(var(--space-m) + env(safe-area-inset-top)) 0 calc(var(--space-m) + env(safe-area-inset-bottom));
+  }
+  html.mobile-gate-active #screen-mobile-gate,
+  html.mobile-share-active #screen-mobile-share { display: flex; }
+
+  /* Fluid stage — overrides the shared .stage class's fixed 1000x630px
+     (desktop) for these two screens only. .canvas-wrap itself is already
+     position:absolute/inset:0 (the shared class), so it fills whatever
+     size .stage resolves to for free — but each <canvas> ELEMENT inside
+     still needs its OWN width:100%/height:100% rule (a canvas's CSS
+     display size does not follow its container by default, only its own
+     width/height ATTRIBUTES, unless told to — the existing
+     #share-ground-canvas rule, ~line 453, is scoped to THOSE specific
+     desktop ids, not a generic "any canvas in .canvas-wrap" rule, so
+     every new canvas id here needs the identical rule spelled out again). */
+  #screen-mobile-gate .stage, #screen-mobile-share .stage {
+    width: 100%; height: auto; aspect-ratio: 1000 / 630;
+  }
+  #screen-mobile-gate .frame, #screen-mobile-share .frame {
+    border-radius: var(--radius-mobile-canvas);
+    border-width: var(--frame-mobile);
+  }
+  #screen-mobile-gate .canvas-wrap, #screen-mobile-share .canvas-wrap {
+    border-radius: var(--radius-mobile-canvas);
+  }
+  #gate-canvas,
+  #mobile-share-ground-canvas, #mobile-share-strokes-canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+  }
+
+  /* ── header cluster (both screens) ── */
+  #screen-mobile-gate header, #screen-mobile-share header {
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-xm);
+    padding: 0 var(--gutter-mobile);
+  }
+  #screen-mobile-gate .tagline { font-size: 15px; color: var(--color-lightest-grey); margin: 0; }
+
+  #screen-mobile-gate main, #screen-mobile-share main {
+    display: flex; flex-direction: column; gap: var(--space-l);
+    padding: var(--space-l) var(--gutter-mobile) 0;
+  }
+  /* logo -> 16 -> label -> 24 -> artwork -> 24 -> haiku -> 32 -> actions,
+     MOBILE-NOTES.md §3 — main's own gap (--space-l/32) covers haiku-to-
+     actions; art-block's own gap (--space-m/24) covers label-to-artwork,
+     header's own gap (--space-xm/16) covers logo-to-label. */
+  #screen-mobile-share main { gap: var(--space-m); }
+  #screen-mobile-share .art-block { display: flex; flex-direction: column; gap: var(--space-m); }
+  #screen-mobile-share .zoom-hint {
+    margin: 0; text-align: center;
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--color-disabled);
+  }
+  #screen-mobile-share .stage { cursor: zoom-in; }
+  #screen-mobile-share .haiku { font-size: 17px; color: var(--color-lightest-grey); margin: 0; text-align: center; }
+
+  /* ── actions — stacked, full-width, var(--tap) tall. Reuses the shared
+     .rbtn/.rbtn-primary/.swap classes (colour, gradient, word-swap
+     animation — unchanged, desktop keeps its own auto-width/padded
+     sizing) with mobile-scoped overrides for width/height only. ── */
+  #screen-mobile-gate .actions, #screen-mobile-share .actions {
+    display: flex; flex-direction: column; gap: var(--space-xxm);
+  }
+  #screen-mobile-share .secondary { display: flex; gap: var(--space-xxm); }
+  #screen-mobile-gate .rbtn-primary, #screen-mobile-share .rbtn-primary { width: 100%; }
+  #screen-mobile-gate .rbtn-primary .inner, #screen-mobile-share .rbtn-primary .inner {
+    display: flex; align-items: center; justify-content: center;
+    height: calc(var(--tap) - 2px);
+    padding: 0; font-size: 12px;
+  }
+  #screen-mobile-share .rbtn {
+    flex: 1; height: var(--tap);
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; font-size: 12px;
+    background: transparent;
+    border: 1px solid rgba(197,197,197,0.22);
+    box-shadow: none;
+  }
+  #screen-mobile-share .rbtn:hover { opacity: 1; } /* no hover state on touch; :active below carries the feedback */
+  #screen-mobile-gate .rbtn-primary:active, #screen-mobile-share .rbtn-primary:active,
+  #screen-mobile-share .rbtn:active { opacity: 0.8; }
+
+  /* ── Gate — demo canvas + real doodle-driven paddles ──
+     Same sizing idiom as the live game's own DOM paddles (.paddle,
+     8x64px) but scaled down (5x38px per the design) and positioned as a
+     PERCENTAGE of the fluid stage height, not px — see
+     updateGatePaddleDOM() in the JS section. z-index above .frame (4) so
+     a bar sitting on the rim stays visible, matching the design exactly. */
+  #screen-mobile-gate .gate-paddle { position: absolute; width: 5px; height: 38px; z-index: 5; }
+  #screen-mobile-gate .gate-paddle .bar { position: absolute; inset: 0; border-radius: 3px; }
+  #screen-mobile-gate .gate-paddle-left { left: 0; }
+  #screen-mobile-gate .gate-paddle-left .bar { background: var(--color-pink); }
+  #screen-mobile-gate .gate-paddle-right { right: 0; }
+  #screen-mobile-gate .gate-paddle-right .bar { background: var(--color-blue); }
+  /* The detached handle dot is dropped at this scale (MOBILE-NOTES.md §5's
+     mobile deviation, adopted as specced — it would hang into the screen
+     gutter) — the cursor glyph takes its place, riding the left paddle. */
+  #screen-mobile-gate .gate-cursor {
+    position: absolute; left: 11px; top: 10px;
+    width: 14px; height: 14px; z-index: 3;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25));
+  }
+
+  /* ── Gate — message card ── */
+  #screen-mobile-gate .card { text-align: center; }
+  #screen-mobile-gate .card h1 {
+    font-size: 27px; line-height: 1.25; margin: 0;
+    color: var(--color-canvas); font-weight: 400;
+  }
+  #screen-mobile-gate .card hr {
+    border: 0; border-top: 1px solid rgba(197,197,197,0.28);
+    margin: var(--space-m) auto; width: 64px;
+  }
+  #screen-mobile-gate .card p {
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 13px; line-height: 1.95; margin: 0;
+    color: var(--color-lightest-grey);
+  }
+  #screen-mobile-gate .hint {
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 11px; letter-spacing: 0.06em;
+    color: var(--color-disabled);
+    text-align: center; margin: 0;
+    min-height: 16px;
+  }
+
+  /* ── Share — rotated fullscreen view ──
+     The artwork is landscape and the phone is portrait, so full screen
+     means rotated: the piece fills the display instead of a letterbox.
+     #full stays a direct child of <body> (matching the design's own DOM,
+     a sibling of <main>, not nested in .stage) — cheap insurance against
+     a future transform landing on an ancestor, same reasoning brief 30
+     documented for #mobile-overlay. Gets its OWN canvas pair, populated
+     via drawImage() on open — NOT the live inline canvases moved in and
+     back out, which is real DOM surgery on the one thing the visitor came
+     to see for a saving (one draw call) that doesn't matter. */
+  #full {
+    position: fixed; inset: 0; z-index: 20;
+    background: #2A2A2A;
+    display: none; align-items: center; justify-content: center;
+    cursor: zoom-out;
+  }
+  #full[data-open="true"] { display: flex; animation: zp-full-fade 260ms ease-out both; }
+  @keyframes zp-full-fade { from { opacity: 0; } to { opacity: 1; } }
+  /* A rotated element's layout box overflows horizontally by design, so it
+     must not shrink to a flex line — absolute + centred, sized via --fw
+     (computed in JS: min(innerHeight-32, (innerWidth-32)*1000/630)). */
+  #full .rot {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+    flex-shrink: 0;
+    width: var(--fw, 100vh);
+    aspect-ratio: 1000 / 630;
+  }
+  #full .stage { width: 100%; height: auto; aspect-ratio: 1000/630; cursor: zoom-out; }
+  #full .canvas-wrap, #full .frame { border-radius: var(--radius-mobile-canvas); }
+  #full-ground-canvas, #full-strokes-canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+  }
+  #full .frame { border-width: var(--frame-mobile); }
+  #full .close {
+    position: absolute; top: calc(var(--space-xm) + env(safe-area-inset-top)); right: var(--space-xm);
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 50%;
+    background: rgba(56,56,56,0.72);
+    color: var(--color-canvas);
+    font-family: 'Space Mono', monospace; font-size: 16px;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
 
-  <!-- ══════════════════════════ MOBILE OVERLAY · brief 30 Task 3 ══════════════════════════
-       Direct child of <body>, before every .screen section — see the CSS
-       comment above for why placement matters. Hidden by default
-       (display:none in CSS); updateMobileOverlay() toggles it based on
-       isTouchDevice() + current screen (never shown while screenState is
-       'share' — a shared link must render, not be blocked). -->
-  <div id="mobile-overlay">
-    <div id="mobile-card">
-      <p id="mobile-headline">this one needs a mouse</p>
-      <div id="mobile-divider"></div>
-      <p id="mobile-body">the paddle follows your hand — best on a desktop or laptop. come back and play.</p>
-      <svg class="logo-mark" width="112" height="22" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+  <!-- ══════════════════════════ MOBILE GATE · brief 32 Task 3 ══════════════════════════
+       Direct child of <body>, sibling of every .screen section. Hidden by
+       default (display:none in CSS); updateMobileScreens() shows it via
+       html.mobile-gate-active. The canvas runs the REAL idle doodle
+       (drawGateFrame(), JS section) — not a CSS stand-in — and the paddle
+       bars are driven from the same paddleL/paddleR objects the doodle's
+       own physics uses, so the ball genuinely bounces off them. -->
+  <section id="screen-mobile-gate">
+    <header>
+      <svg width="112" height="22" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
 <path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
 <path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
 <path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
@@ -607,7 +746,95 @@
 <rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
 <circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
 </svg>
+      <p class="tagline">make uncertainty your play</p>
+    </header>
+    <main>
+      <div class="stage" id="gate-stage">
+        <div class="canvas-wrap">
+          <canvas id="gate-canvas" width="1000" height="630"></canvas>
+        </div>
+        <div class="gate-paddle gate-paddle-left" id="gate-paddle-left">
+          <div class="bar"></div>
+          <svg class="gate-cursor" viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M1 1 L1 11.5 L4.2 8.6 L6.4 13 L8.4 12 L6.2 7.7 L10.6 7.3 Z" fill="#383838" stroke="#FFF5E5" stroke-width="0.9"/>
+          </svg>
+        </div>
+        <div class="gate-paddle gate-paddle-right" id="gate-paddle-right"><div class="bar"></div></div>
+        <div class="frame"></div>
+      </div>
+      <div class="card">
+        <h1>this one needs a mouse</h1>
+        <hr>
+        <p>the paddle follows your hand — best on a desktop or laptop. come back and play.</p>
+      </div>
+      <div class="actions">
+        <button class="rbtn-primary" id="btn-gate-copy">
+          <span class="inner"><span id="gate-copy-label">copy link</span></span>
+        </button>
+        <p class="hint" id="gate-hint">copy the link to shift to your desktop</p>
+      </div>
+    </main>
+  </section>
+
+  <!-- ══════════════════════════ MOBILE SHARE · brief 32 Task 2 ══════════════════════════
+       Same handoff: updateMobileScreens() shows it via
+       html.mobile-share-active. Its own small canvas pair is populated by
+       renderSharePage() alongside the desktop 800x504 pair — one more
+       drawImage() blit target, not a second render path. -->
+  <section id="screen-mobile-share">
+    <header>
+      <svg width="112" height="22" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFF5E5"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFF5E5"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFF5E5"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFF5E5"/>
+<rect width="2" height="27" rx="1" fill="#FFF5E5"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
+<circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
+</svg>
+    </header>
+    <main>
+      <div class="art-block">
+        <p class="zoom-hint">tap to view</p>
+        <div class="stage" id="mobile-share-stage" role="button" tabindex="0" aria-label="Open artwork full screen">
+          <div class="canvas-wrap">
+            <canvas id="mobile-share-ground-canvas" width="800" height="504"></canvas>
+            <canvas id="mobile-share-strokes-canvas" width="800" height="504"></canvas>
+          </div>
+          <div class="frame"></div>
+        </div>
+      </div>
+      <p class="haiku" id="mobile-share-haiku"></p>
+      <div class="actions">
+        <button class="rbtn-primary" id="btn-mobile-share-cta">
+          <span class="inner"><span class="swap"><b>paint</b><i>play</i></span><span class="static-word">your own</span></span>
+        </button>
+        <div class="secondary">
+          <button class="rbtn" id="btn-mobile-share-download">download</button>
+          <button class="rbtn" id="btn-mobile-share-copy">copy link</button>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <!-- Rotated fullscreen artwork view (Task 2) — direct child of <body>,
+       a sibling of #screen-mobile-share, not nested inside it (see the CSS
+       comment). Own canvas pair, populated fresh via drawImage() each time
+       it opens — see openFullscreenShare() in the JS section. -->
+  <div id="full" data-open="false">
+    <div class="rot">
+      <div class="stage">
+        <div class="canvas-wrap">
+          <canvas id="full-ground-canvas" width="1000" height="630"></canvas>
+          <canvas id="full-strokes-canvas" width="1000" height="630"></canvas>
+        </div>
+        <div class="frame"></div>
+      </div>
     </div>
+    <button class="close" id="btn-full-close" aria-label="Close">✕</button>
   </div>
 
   <!-- ══════════════════════════ IDLE SCREEN ══════════════════════════ -->
@@ -2943,10 +3170,8 @@ function isTouchDevice() {
   return document.documentElement.clientWidth <= 600 || matchMedia('(hover: none) and (pointer: coarse)').matches;
 }
 
-const mobileOverlayEl = document.getElementById('mobile-overlay');
-
-// The one flag every mobile decision (overlay, scroll-lock, chrome-hide,
-// fill-vs-fit scale, the spacebar gate below) reads. share is deliberately
+// The one flag every mobile decision (which mobile screen shows,
+// scroll-lock, the spacebar gate below) reads. share is deliberately
 // exempt — Task 3: "a shared link opened on a phone must still show the
 // artwork... the overlay only blocking the game." The idle+
 // landingWithSharePayload clause exists because screenState is still the
@@ -2954,8 +3179,8 @@ const mobileOverlayEl = document.getElementById('mobile-overlay');
 // decodeFromFragment/decodeArtworkPayload promise settling (brief 29's own
 // flash-guard has already hidden #screen-idle by then, synchronously, but
 // screenState itself doesn't flip to 'share' until decode succeeds) —
-// without this clause a phone visitor on a real share link sees the
-// overlay flash on before their artwork appears.
+// without this clause a phone visitor on a real share link sees the gate
+// flash on before their artwork appears.
 function isMobileBlocked() {
   if (!isTouchDevice()) return false;
   if (screenState === 'share') return false;
@@ -2963,14 +3188,36 @@ function isMobileBlocked() {
   return true;
 }
 
-function updateMobileOverlay() {
-  const blocked = isMobileBlocked();
-  mobileOverlayEl.style.display = blocked ? 'flex' : 'none';
-  document.documentElement.classList.toggle('mobile-blocked', blocked);
+// Brief 32 — replaces brief 30's updateMobileOverlay(). That version
+// toggled a translucent card FLOATING OVER the still-fully-rendered
+// desktop screen (pointer-events:all to stop clicks reaching it). This
+// version shows a genuinely separate, dedicated screen and gives the
+// desktop screens a REAL display:none (html.mobile-gate-active
+// .screen/html.mobile-share-active .screen, CSS) — there is nothing left
+// underneath to click through, so no pointer-events trick is needed.
+// mobileShare is its own condition, not just "not blocked": Task 1 says
+// BOTH mobile screens are single-fold/no-scroll, so the scroll lock now
+// applies to isTouchDevice() as a whole, not just the blocked case.
+function updateMobileScreens() {
+  const gate = isMobileBlocked();
+  const mobileShare = isTouchDevice() && screenState === 'share';
+  document.documentElement.classList.toggle('mobile-gate-active', gate);
+  document.documentElement.classList.toggle('mobile-share-active', mobileShare);
+  // Neither screen is designed for landscape (both mockups are portrait-
+  // only), and a rotated phone or a landscape-default iPad is a real,
+  // easy-to-hit case, not an edge case. Locking scroll there — correct
+  // for the designed portrait fold — turned out to make the primary
+  // action (copy link) and, on share, the haiku/download/copy row
+  // genuinely unreachable: content overflows the short viewport and
+  // there is no way to scroll to it. Exempting landscape from the lock
+  // trades "ugly, content pushed below an accessible scroll" for "content
+  // literally cannot be reached" — verified both ways in a real
+  // landscape viewport before choosing this.
+  const locked = (gate || mobileShare) && !isLandscapeViewport();
   // Both html and body — iOS Safari's rubber-band scroll can leak past
   // overflow:hidden set on <html> alone.
-  document.documentElement.style.overflow = blocked ? 'hidden' : '';
-  document.body.style.overflow = blocked ? 'hidden' : '';
+  document.documentElement.style.overflow = locked ? 'hidden' : '';
+  document.body.style.overflow = locked ? 'hidden' : '';
 }
 
 // Brief 25 Task 1 step 4 / Task 5's own fallback: for any viewport still too
@@ -2982,6 +3229,14 @@ function updateMobileOverlay() {
 // subtracts body's own top+bottom padding (outside the .screen element,
 // so getBoundingClientRect() on the screen doesn't include it) from the
 // viewport height, then scales the screen to fit what's left.
+//
+// Mobile no longer needs any of this (brief 32) — the two mobile screens
+// are fluid CSS (width:100%, aspect-ratio:1000/630), not the desktop's
+// fixed-1000px layout scaled down by a JS transform, so there is nothing
+// left to compute here for a touch visitor. updateMobileScreens() picks
+// the right screen; this function returns immediately after, on purpose —
+// not relying on getBoundingClientRect() happening to return a 0x0 rect
+// for a real-display:none desktop .screen the way a deleted branch would.
 function fitScreenToViewport() {
   const visible = screens[screenState];
   if (!visible) return;
@@ -2989,43 +3244,8 @@ function fitScreenToViewport() {
   visible.style.transformOrigin = '';
   visible.style.marginBottom = '';
 
-  updateMobileOverlay();
-  // Mobile branches BEFORE the results early-return below — placing it
-  // after would leave results unscaled/unblocked if a desktop window gets
-  // narrowed mid-game (results reachability aside, isMobileBlocked() must
-  // stay correct for every screenState, not just idle/playing).
-  if (isTouchDevice()) {
-    // rect is 0x0 if `visible` currently carries the `hidden` attribute —
-    // true for #screen-idle during brief 29's synchronous flash-guard
-    // window while a share-link decode is still in flight. Skip the
-    // transform rather than scale a zero-size box; harmless since nothing
-    // hidden is visible anyway, and this re-runs once decode settles.
-    const rect = visible.getBoundingClientRect();
-    // clientWidth/clientHeight, not window.innerWidth/innerHeight — see
-    // isTouchDevice()'s own comment above; same viewport-reporting mismatch
-    // applies here and was caught visually (share's artwork bled off the
-    // right edge on a real mobile-viewport check before this fix).
-    const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
-    if (rect.width > 0 && rect.height > 0) {
-      const scale = isMobileBlocked()
-        // Cover — root's own resize() Math.max behavior. Deliberately
-        // crops; this is decorative motion behind the overlay, not the
-        // deliverable, so filling the viewport reads as "alive" rather
-        // than a small island of content on a dark field.
-        ? Math.max(vw / rect.width, vh / rect.height)
-        // Contain — share is the actual deliverable a phone visitor
-        // arrived for; it must never be cropped, only shrunk to fit,
-        // capped at 1 so it's never scaled UP past its natural size.
-        : Math.min(vw / rect.width, vh / rect.height, 1);
-      visible.style.transform = `scale(${scale})`;
-      // body already centers each .screen via flex (align-items/justify-
-      // content: center) — scaling from center keeps that centering under
-      // either the crop or the fit, instead of drifting toward one corner.
-      visible.style.transformOrigin = 'center';
-    }
-    return; // never falls through to the desktop-only logic below
-  }
+  updateMobileScreens();
+  if (isTouchDevice()) return;
 
   // Brief 28 Task 4 — results deliberately does NOT get the fit clamp: it's
   // a resting screen, allowed to be taller than the viewport and scroll.
@@ -3688,7 +3908,47 @@ function renderStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
 let ball = mkBall(physRng, 1, null, [1.0, 2.4], [0.50, 0.68]);
 doodlePaintTracker.startTrail(ball, ball.x, ball.y);
 
+// Brief 32 Task 3 — the gate's own paddle motion, replacing the design's
+// CSS keyframes (v3/design/5-mobile-gate.html's zp-track/zp-track-r) with
+// real values fed into the SAME advanceBall the doodle's physics already
+// uses, so the ball genuinely bounces off the paddle the cursor is
+// dragging rather than the visible paddle moving independently of it.
+// Reproduced exactly, not approximately: the source CSS sets no
+// per-keyframe timing-function override, so the shorthand's ease-in-out
+// applies independently to EACH segment — zero slope at every stop, so
+// the 100%->0% wrap has zero velocity on both sides (no snap, by
+// construction, not by luck).
+const GATE_PADDLE_DURATION_MS = 4500;
+const GATE_PADDLE_L_KEYFRAMES = [{ t: 0, v: 0.12 }, { t: 0.30, v: 0.58 }, { t: 0.65, v: 0.26 }, { t: 1, v: 0.12 }];
+const GATE_PADDLE_R_KEYFRAMES = [{ t: 0, v: 0.52 }, { t: 0.35, v: 0.18 }, { t: 0.70, v: 0.62 }, { t: 1, v: 0.52 }];
+function gateEaseInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+function gateKeyframeValue(stops, elapsedMs) {
+  const t = (elapsedMs % GATE_PADDLE_DURATION_MS) / GATE_PADDLE_DURATION_MS;
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i].t && t <= stops[i + 1].t) {
+      const segT = (t - stops[i].t) / (stops[i + 1].t - stops[i].t);
+      return stops[i].v + (stops[i + 1].v - stops[i].v) * gateEaseInOut(segT);
+    }
+  }
+  return stops[stops.length - 1].v;
+}
+
 function stepDoodle() {
+  // paddleL/paddleR are read ONLY by advanceBall below (verified: nothing
+  // else in this file reads or assigns them) — safe to override here and
+  // nowhere else. Gated: real motion while the gate is actually showing;
+  // otherwise snapped back to the documented static position every frame,
+  // regardless of wherever the gate's animation last left them, so desktop
+  // never sees anything but the "idle screen never moves them" contract.
+  if (isMobileBlocked()) {
+    const now = performance.now();
+    paddleL.y = gateKeyframeValue(GATE_PADDLE_L_KEYFRAMES, now) * H;
+    paddleR.y = gateKeyframeValue(GATE_PADDLE_R_KEYFRAMES, now) * H;
+  } else {
+    paddleL.y = 180;
+    paddleR.y = 430;
+  }
+
   // Faithful to simulate.js/root index.html's update(): advanceBall moves
   // the ball and resolves wall/paddle collisions FIRST; a commit fires
   // using the trail as it stood before this frame's point is appended (so
@@ -3715,9 +3975,11 @@ function stepDoodle() {
   }
 }
 
-function drawFrame() {
-  const el = layerEls[activeKey];
-  const ctx = el.getContext('2d');
+// The actual paint calls — extracted so the gate canvas (Task 3) can reuse
+// them verbatim against a different destination context instead of this
+// being a second, worse renderer. Same persistCv + live-stroke + ball-
+// marker draw, whichever ctx it's handed.
+function paintDoodleFrame(ctx) {
   ctx.clearRect(0, 0, W, H);
   ctx.drawImage(persistCv, 0, 0);
   // in-flight stroke: raw (unjittered) pts, same as root's live-frame
@@ -3742,10 +4004,76 @@ function drawFrame() {
   ctx.restore();
 }
 
+function drawFrame() {
+  paintDoodleFrame(layerEls[activeKey].getContext('2d'));
+}
+
+// Brief 32 Task 3 — the gate's own canvas + DOM paddle positioning.
+// gateCanvas is declared width=1000 height=630 in the markup (the doodle's
+// own coordinate space) and scaled to the phone purely by CSS
+// (aspect-ratio:1000/630, width:100%) — same convention every other
+// canvas in this file already uses, nothing new here.
+const gateCanvas = document.getElementById('gate-canvas');
+const gateCtx = gateCanvas.getContext('2d');
+const gatePaddleLEl = document.getElementById('gate-paddle-left');
+const gatePaddleREl = document.getElementById('gate-paddle-right');
+function drawGateFrame() {
+  paintDoodleFrame(gateCtx);
+}
+// Percentage, not px — the gate's .stage is fluid-width (unlike the live
+// game's fixed-1000px canvas, which positions its DOM paddles in raw px).
+function updateGatePaddleDOM() {
+  gatePaddleLEl.style.top = (paddleL.y / H * 100) + '%';
+  gatePaddleREl.style.top = (paddleR.y / H * 100) + '%';
+}
+
+// Brief 32 Task 3 — "prefers-reduced-motion: hold a completed still, no
+// loop." No existing JS matchMedia precedent in this file (checked) — this
+// is genuinely new. A visitor landing cold with reduced motion already on
+// would otherwise freeze on an almost-empty canvas (the shared doodle sim
+// starts fresh at page load), so the first freeze fast-forwards stepDoodle
+// headlessly first — CAPPED at 300 steps (not run to any "looks finished"
+// point — a few hundred physics steps in one synchronous burst would stall
+// a phone for a visible beat) and stopped early the instant a reset would
+// occur (detected via the ball object identity changing — stepDoodle
+// reassigns `ball = mkBall(...)` on reset), so the freeze never lands
+// right after a reset back near-empty. This trades a guaranteed "finished"
+// look for a bounded, cheap burst — accepted, not silently glossed over.
+const prefersReducedMotionMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const GATE_FASTFORWARD_MAX_STEPS = 300;
+function fastForwardDoodleForStill() {
+  const startBallRef = ball;
+  for (let i = 0; i < GATE_FASTFORWARD_MAX_STEPS; i++) {
+    stepDoodle();
+    if (ball !== startBallRef) break;
+  }
+}
+let gateFrameFrozen = false;
+let wasGateActive = false;
+prefersReducedMotionMQ.addEventListener('change', () => { gateFrameFrozen = false; });
+
 function doodleLoop() {
   if (screenState === 'idle') {
-    stepDoodle();
-    drawFrame();
+    const gateActive = isMobileBlocked();
+    if (gateActive && !wasGateActive) gateFrameFrozen = false; // re-arm every time the gate is (re)entered
+    wasGateActive = gateActive;
+
+    if (gateActive && prefersReducedMotionMQ.matches) {
+      if (!gateFrameFrozen) {
+        fastForwardDoodleForStill();
+        drawGateFrame();
+        updateGatePaddleDOM();
+        gateFrameFrozen = true;
+      }
+      // else: hold — no stepDoodle, no redraw, "no loop" per the brief.
+    } else if (gateActive) {
+      stepDoodle();
+      drawGateFrame();       // NOT drawFrame() too — the desktop doodle-a/
+      updateGatePaddleDOM(); // doodle-b canvases are invisible (display:none
+    } else {                 // ancestor) the entire time gated; painting them
+      stepDoodle();          // as well would be pure wasted work on a phone.
+      drawFrame();
+    }
   }
   requestAnimationFrame(doodleLoop);
 }
@@ -4696,6 +5024,24 @@ function loadImage(src) {
   });
 }
 
+// Brief 32 Task 2 — loaded ONCE at script init rather than per export call.
+// Closes one of the two async gaps a mobile export has to cross between
+// the click and calling window.open()/navigator.share() — see
+// mobileExportArtworkPNG's own comment for why that gap matters. Free
+// improvement for the desktop export paths too (results/share), which
+// never needed the await to begin with but lose nothing by it being
+// pre-resolved.
+let cachedLogoImg = null;
+let cachedLogoImgPromise = null;
+function preloadLogoImage() {
+  if (!cachedLogoImgPromise) {
+    cachedLogoImgPromise = loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SAVE_LOGO_SVG))
+      .then(img => { cachedLogoImg = img; return img; });
+  }
+  return cachedLogoImgPromise;
+}
+preloadLogoImage();
+
 function roundedRectPath(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
@@ -4709,12 +5055,12 @@ function roundedRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// Brief 26 Task 7, refactored brief 29 to be reusable — share's DOWNLOAD PNG
-// (Task 3: "reuses the brief-26 exporter at full resolution") needs the
-// exact same output, from whatever ground/strokes canvases it has (its own
-// full-res offscreen pair, not results' — see the share section below),
-// not necessarily the live game's own artwork.
-async function exportArtworkPNG(groundCanvas, strokesCanvas, haikuText, seed) {
+// Brief 26 Task 7, refactored brief 29 to be reusable, refactored again
+// brief 32 to split the COMPOSITION (this function — returns the finished
+// canvas, no side effect) from DELIVERY (exportArtworkPNG's anchor-click
+// download below, or mobileExportArtworkPNG's share/new-tab fallback) —
+// one drawing, two ways of handing it to the visitor, not two drawings.
+async function buildArtworkExportCanvas(groundCanvas, strokesCanvas, haikuText) {
   const S = 2, PAD = 32, quoteH = 100;
   const outW = (W + PAD * 2) * S, outH = (H + PAD * 2 + quoteH) * S;
   const out = document.createElement('canvas');
@@ -4739,17 +5085,72 @@ async function exportArtworkPNG(groundCanvas, strokesCanvas, haikuText, seed) {
   oc.textBaseline = 'middle';
   oc.fillText(haikuText, outW / 2, (PAD + H + 22) * S);
 
-  const logoImg = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SAVE_LOGO_SVG));
+  const logoImg = cachedLogoImg || await preloadLogoImage();
   const logoW = 98 * S, logoH = 19 * S; // same reduced size as playing/results headers
   oc.save();
   oc.globalAlpha = 0.55; // subtle, matching §11's translucent text treatment (was rgba(...,0.35) on white text; SVG's own cream needs a touch more to read the same weight)
   oc.drawImage(logoImg, outW / 2 - logoW / 2, (PAD + H + 60) * S - logoH / 2, logoW, logoH);
   oc.restore();
 
+  return out;
+}
+
+// Desktop delivery — anchor-click download, unchanged behaviour from
+// before the split.
+async function exportArtworkPNG(groundCanvas, strokesCanvas, haikuText, seed) {
+  const out = await buildArtworkExportCanvas(groundCanvas, strokesCanvas, haikuText);
   const a = document.createElement('a');
   a.download = `zen-pong-${seed}.png`; // seed, not a timestamp (Task 7)
   a.href = out.toDataURL('image/png');
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// Mobile delivery (brief 32 Task 2) — "iOS Safari will not silently save a
+// canvas PNG... do not let the button appear to do nothing." Tries the Web
+// Share API with a real file first; falls back to a self-contained new tab
+// (image + a "press and hold to save" line — a bare image tab can't carry
+// that instruction text, so it has to be a constructed HTML document, not
+// window.open(dataUrl) directly).
+//
+// Popup-blocker note, real not hypothetical: loadImage() resolves via
+// <img>.onload, a task-queued callback — awaiting it (inside
+// buildArtworkExportCanvas, and again for canvas.toBlob() below) genuinely
+// yields the event loop, and several WebKit versions treat that as loss of
+// the click's transient activation, blocking a window.open() called after
+// it. Same risk applies to navigator.share(), not just window.open(). Only
+// mitigation that doesn't cost a flash-open-then-close on browsers where
+// share() will work: open the fallback tab SYNCHRONOUSLY, before any
+// await, but only on browsers that don't have file-sharing support at all
+// (mainly older iOS Safari) — i.e. exactly the browsers that are going to
+// need the new-tab fallback regardless. If share() is available but then
+// fails for a non-cancellation reason, the fallback window.open() in that
+// branch is NOT pre-opened and carries the small residual popup risk —
+// accepted, not hidden.
+async function mobileExportArtworkPNG(groundCanvas, strokesCanvas, haikuText, seed) {
+  const canShareFiles = !!(navigator.canShare && navigator.share);
+  const fallbackWin = canShareFiles ? null : window.open('', '_blank');
+
+  const out = await buildArtworkExportCanvas(groundCanvas, strokesCanvas, haikuText);
+  const filename = `zen-pong-${seed}.png`;
+
+  if (canShareFiles) {
+    const blob = await new Promise(resolve => out.toBlob(resolve, 'image/png'));
+    const file = new File([blob], filename, { type: 'image/png' });
+    if (navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; } catch (e) { /* cancelled or failed — fall through to the tab below */ }
+    }
+  }
+
+  const dataUrl = out.toDataURL('image/png');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${filename}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;min-height:100vh;background:#383838;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:sans-serif;">
+<img src="${dataUrl}" style="max-width:100%;height:auto;">
+<p style="color:#C5C5C5;font-size:14px;margin:0;">press and hold the image to save</p>
+</body></html>`;
+  const win = fallbackWin || window.open('', '_blank');
+  if (win) { win.document.open(); win.document.write(html); win.document.close(); }
+  else { window.open(dataUrl, '_blank'); } // fully blocked even now — last resort
 }
 
 document.getElementById('btn-save').addEventListener('click', () => {
@@ -5214,6 +5615,17 @@ const shareGroundCx = shareGroundCanvas.getContext('2d');
 const shareStrokesCx = shareStrokesCanvas.getContext('2d');
 const shareHaikuEl = document.getElementById('share-haiku');
 
+// Brief 32 Task 2 — the mobile share screen's own small canvas pair (same
+// 800x504 native resolution as desktop's, displayed fluid via CSS). Not a
+// second render path: renderSharePage() below blits the SAME already-
+// rendered shareGroundCvFull/shareStrokesCvFull into these too, one more
+// drawImage() target alongside the desktop pair.
+const mobileShareGroundCanvas = document.getElementById('mobile-share-ground-canvas');
+const mobileShareStrokesCanvas = document.getElementById('mobile-share-strokes-canvas');
+const mobileShareGroundCx = mobileShareGroundCanvas.getContext('2d');
+const mobileShareStrokesCx = mobileShareStrokesCanvas.getContext('2d');
+const mobileShareHaikuEl = document.getElementById('mobile-share-haiku');
+
 // Full-resolution (1000x630, same as every other canvas pair in this file)
 // offscreen source — the visible pair above is the fixed 0.8x preview
 // (800/1000 = 504/630 = 0.8, Task 2), but DOWNLOAD PNG (Task 3) needs the
@@ -5299,11 +5711,21 @@ function renderSharePage(decoded) {
   shareStrokesCx.clearRect(0, 0, shareStrokesCanvas.width, shareStrokesCanvas.height);
   shareStrokesCx.drawImage(shareStrokesCvFull, 0, 0, shareStrokesCanvas.width, shareStrokesCanvas.height);
 
+  // Brief 32 Task 2 — same blit, mobile share's own pair. Both canvas
+  // pairs stay in sync regardless of which is actually visible; simpler
+  // and cheap enough not to bother gating on isTouchDevice().
+  mobileShareGroundCx.clearRect(0, 0, mobileShareGroundCanvas.width, mobileShareGroundCanvas.height);
+  mobileShareGroundCx.drawImage(shareGroundCvFull, 0, 0, mobileShareGroundCanvas.width, mobileShareGroundCanvas.height);
+  mobileShareStrokesCx.clearRect(0, 0, mobileShareStrokesCanvas.width, mobileShareStrokesCanvas.height);
+  mobileShareStrokesCx.drawImage(shareStrokesCvFull, 0, 0, mobileShareStrokesCanvas.width, mobileShareStrokesCanvas.height);
+
   // Haiku "comes free" off the seed (Task 1) — never transmitted at all.
   // Same formula/salt as gameLastEndedStrokes' own quote pick (~line
   // 1967): identical seed -> identical haiku, live or via a link.
   const quoteRng = makeRng((decoded.seed ^ 0x48414B55) >>> 0); // 'HAKU'
-  shareHaikuEl.textContent = QUOTES[Math.floor(quoteRng() * QUOTES.length)];
+  const haiku = QUOTES[Math.floor(quoteRng() * QUOTES.length)];
+  shareHaikuEl.textContent = haiku;
+  mobileShareHaikuEl.textContent = haiku;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -5351,16 +5773,19 @@ document.getElementById('btn-share-download').addEventListener('click', () => {
   exportArtworkPNG(shareGroundCvFull, shareStrokesCvFull, shareHaikuEl.textContent, shareDecoded.seed);
 });
 
-// COPY LINK — brief 31 Task 5 rebuild. `location.href` at this point is
-// already the full absolute URL including the `#a=…` fragment (written by
-// shareCurrentGame's history.replaceState, or already present if this tab
-// landed on someone else's link) — verified by pasting a copied link into
-// a fresh browser tab, not just by reading this line, per the brief's own
-// instruction. Label swaps to "Copied!" for 3s, no toast, no new component.
-// Falls back to a hidden selectable input + execCommand('copy') if
-// navigator.clipboard.writeText rejects (insecure context, permission
-// denied) — "Copied!" only ever shows on an ACTUAL success, never
-// optimistically before the fallback path is known to have worked.
+// COPY LINK — brief 31 Task 5's core mechanism (`location.href` at this
+// point is already the full absolute URL including the `#a=…` fragment —
+// verified by pasting a copied link into a fresh browser tab, not just by
+// reading this line), pulled out brief 32 into one shared implementation:
+// "one implementation shared by both screens, not two" (Task 2) — desktop
+// share and mobile share use it with the IDENTICAL success callback
+// (label -> "Copied!" for 3s); the gate (below) uses the same core with
+// its OWN different callback (a second label plus a hint line, 3.2s — the
+// brief specifies different copy/timing there, so only the clipboard
+// MECHANISM is shared, not the visual feedback). Falls back to a hidden
+// selectable input + execCommand('copy') if navigator.clipboard.writeText
+// rejects (insecure context, permission denied) — onSuccess only ever
+// fires on an ACTUAL success, never optimistically.
 function copyShareLinkFallback(text) {
   const input = document.createElement('input');
   input.value = text;
@@ -5377,20 +5802,127 @@ function copyShareLinkFallback(text) {
   document.body.removeChild(input);
   return ok;
 }
-document.getElementById('btn-share-copy').addEventListener('click', (e) => {
-  const btn = e.currentTarget;
-  const original = btn.textContent;
-  const showCopied = () => {
-    btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = original; }, 3000);
-  };
+function copyLinkToClipboard(text, onSuccess) {
   const hasClipboardAPI = navigator.clipboard && typeof navigator.clipboard.writeText === 'function';
-  const tryFallback = () => { if (copyShareLinkFallback(location.href)) showCopied(); };
+  const tryFallback = () => { if (copyShareLinkFallback(text)) onSuccess(); };
   if (hasClipboardAPI) {
-    navigator.clipboard.writeText(location.href).then(showCopied).catch(tryFallback);
+    navigator.clipboard.writeText(text).then(onSuccess).catch(tryFallback);
   } else {
     tryFallback();
   }
+}
+function shareCopyButtonHandler(e) {
+  const btn = e.currentTarget;
+  const original = btn.textContent;
+  copyLinkToClipboard(location.href, () => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 3000);
+  });
+}
+document.getElementById('btn-share-copy').addEventListener('click', shareCopyButtonHandler);
+
+/* ────────────────────────────────────────────────────────────────────────
+   Brief 32 — mobile screens. Task 2 (mobile share, incl. the rotated
+   fullscreen view) and Task 3 (the gate) flows.
+   ──────────────────────────────────────────────────────────────────────── */
+
+// Mobile share's three actions mirror desktop share's exactly, against
+// its own DOM elements. PAINT/PLAY YOUR OWN -> goToIdleArmed() (same
+// function desktop uses): screenState becomes 'idle', and
+// updateMobileScreens() — called at the end of every setScreen(), already
+// unchanged from brief 30 — automatically flips from mobile-share-active
+// to mobile-gate-active on its own. No separate "show the gate" function
+// needed.
+document.getElementById('btn-mobile-share-cta').addEventListener('click', () => {
+  goToIdleArmed();
+});
+document.getElementById('btn-mobile-share-download').addEventListener('click', () => {
+  if (!shareDecoded) return;
+  mobileExportArtworkPNG(shareGroundCvFull, shareStrokesCvFull, shareHaikuEl.textContent, shareDecoded.seed);
+});
+document.getElementById('btn-mobile-share-copy').addEventListener('click', shareCopyButtonHandler);
+
+// ── Rotated fullscreen artwork view (Task 2) ──────────────────────────
+// #full gets its OWN canvas pair, redrawn via drawImage() from
+// shareGroundCvFull/shareStrokesCvFull on every open() — NOT the live
+// inline canvases moved in and back out. Moving would work (same DOM
+// node, bitmap intact) but is real surgery on the one thing the visitor
+// came to see, for a saving (one draw call) that doesn't matter; the
+// boring option is two lines and nothing can end up misplaced.
+const fullEl = document.getElementById('full');
+const fullRotEl = fullEl.querySelector('.rot');
+const fullGroundCanvas = document.getElementById('full-ground-canvas');
+const fullStrokesCanvas = document.getElementById('full-strokes-canvas');
+const fullGroundCx = fullGroundCanvas.getContext('2d');
+const fullStrokesCx = fullStrokesCanvas.getContext('2d');
+
+function isLandscapeViewport() {
+  return matchMedia('(orientation: landscape)').matches;
+}
+// min(innerHeight-32, (innerWidth-32) * 1000/630) — MOBILE-NOTES.md §4 /
+// the design's own sizeRot(). clientWidth/clientHeight, not innerWidth/
+// innerHeight — same viewport-reporting mismatch documented on
+// isTouchDevice() applies here too.
+function sizeFullRot() {
+  if (isLandscapeViewport()) {
+    fullRotEl.style.transform = 'translate(-50%, -50%)'; // skip the rotation, fit width
+    fullRotEl.style.width = 'min(' + (document.documentElement.clientWidth - 32) + 'px, ' +
+      ((document.documentElement.clientHeight - 32) * (1000 / 630)) + 'px)';
+    return;
+  }
+  fullRotEl.style.transform = 'translate(-50%, -50%) rotate(90deg)';
+  const w = Math.min(document.documentElement.clientHeight - 32, (document.documentElement.clientWidth - 32) * (1000 / 630));
+  fullRotEl.style.width = w + 'px';
+}
+function openFullscreenShare() {
+  if (!shareDecoded) return;
+  fullGroundCx.clearRect(0, 0, W, H);
+  fullGroundCx.drawImage(shareGroundCvFull, 0, 0);
+  fullStrokesCx.clearRect(0, 0, W, H);
+  fullStrokesCx.drawImage(shareStrokesCvFull, 0, 0);
+  sizeFullRot();
+  fullEl.dataset.open = 'true';
+  // Best-effort — MOBILE-NOTES.md §4: "treat failure as fine, the
+  // rotation already works without it."
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(() => {});
+  }
+}
+function closeFullscreenShare() {
+  fullEl.dataset.open = 'false';
+  if (screen.orientation && screen.orientation.unlock) {
+    try { screen.orientation.unlock(); } catch (e) {}
+  }
+}
+const mobileShareStageEl = document.getElementById('mobile-share-stage');
+mobileShareStageEl.addEventListener('click', openFullscreenShare);
+mobileShareStageEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFullscreenShare(); }
+});
+fullEl.addEventListener('click', closeFullscreenShare);
+document.getElementById('btn-full-close').addEventListener('click', (e) => { e.stopPropagation(); closeFullscreenShare(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFullscreenShare(); });
+window.addEventListener('resize', () => { if (fullEl.dataset.open === 'true') sizeFullRot(); });
+window.addEventListener('orientationchange', () => { if (fullEl.dataset.open === 'true') sizeFullRot(); });
+
+// ── The gate's one action (Task 3) ────────────────────────────────────
+// Its own label/hint progression, per the brief — NOT the shared
+// "Copied!"/3s pattern above (different copy, different duration, and a
+// second element to update), sharing only the clipboard mechanism.
+const gateCopyBtn = document.getElementById('btn-gate-copy');
+const gateCopyLabelEl = document.getElementById('gate-copy-label');
+const gateHintEl = document.getElementById('gate-hint');
+const GATE_COPY_LABEL_DEFAULT = gateCopyLabelEl.textContent;
+const GATE_HINT_DEFAULT = gateHintEl.textContent;
+gateCopyBtn.addEventListener('click', () => {
+  copyLinkToClipboard(location.href, () => {
+    gateCopyLabelEl.textContent = 'link copied';
+    gateHintEl.textContent = 'paste it into your desktop browser';
+    setTimeout(() => {
+      gateCopyLabelEl.textContent = GATE_COPY_LABEL_DEFAULT;
+      gateHintEl.textContent = GATE_HINT_DEFAULT;
+    }, 3200);
+  });
 });
 
 /* ════════════════════════════════════════════════════════════════════
@@ -5791,12 +6323,13 @@ function onGesture(e) {
 }
 
 window.addEventListener('keydown', (e) => {
-  // Brief 30 Task 3 — #mobile-overlay's pointer-events:all already stops
-  // every click/tap from reaching the game underneath it, but CSS
-  // pointer-events has no effect on keyboard events at all (they ignore
-  // stacking order entirely) — a real gap on the desktop-narrow-resize
-  // edge case (no physical spacebar exists on an actual phone, so this
-  // never matters there) without this explicit gate.
+  // Brief 32 — #screen-idle now gets a real display:none while blocked
+  // (html.mobile-gate-active .screen, CSS), which stops the click/
+  // touchstart listeners bound directly to it, but has zero effect on a
+  // window-level keydown listener — display:none blocks hit-testing, not
+  // keyboard events, which ignore stacking/visibility entirely. Real gap
+  // on the desktop-narrow-resize edge case (no physical spacebar exists on
+  // an actual phone, so this never matters there) without this guard.
   if (isMobileBlocked()) return;
   if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); onGesture(e); }
 });

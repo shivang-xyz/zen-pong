@@ -5,6 +5,89 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-26 — v3 live. Post-ship feedback split into briefs 31, 32, 33.
+
+Brief 30 shipped; the live URL serves v3. Architect verification of the built
+artifact (sandbox, not the live URL — no egress to github.io from here): rebuild
+byte-identical to committed, no `type="module"`, og-image exactly 1200x630,
+`pointer: coarse` detection present, all three surfaces play to results and
+share with zero console errors and zero 4xx, payloads 533-1080 chars, **`file://`
+loads and animates** (the single-file build earning its keep), mobile overlay
+gates the game, and a share link on a phone viewport renders the artwork with
+the overlay correctly standing down. Share screen sits flush edge-to-edge on
+mobile — measured, no overflow, purely cosmetic — backlogged and now superseded
+by brief 32.
+
+### Why the feedback became three briefs, not one
+Shivang sent everything together. Tasks 1-6 are one file, one review, one
+rhythm. The mobile work is two new screens with a rotated full-screen view and a
+real-engine gate — a brief on its own by any measure. Music is an open direction
+that needs a decision before anything is written. Splitting keeps each review
+tractable; bundling would have produced one unreviewable session.
+
+### Brief 31 — the palette finding worth recording
+"Make the paper green darker" turned into a structural problem once measured in
+OKLCh. Paper's pink is at hue **354.2**, blue at **263.0** — a **91-degree gap**,
+which is neither triadic (120) nor split-complementary (150/60). And the green
+`#8CFFB4` sits at L **0.913** against the other two at 0.70-0.73: it does not
+disappear on cream because it is slightly light, it disappears because it is a
+whole tonal register brighter than its own palette.
+
+So the requested rule cannot be satisfied without moving one of the three. Two
+measurements made the choice:
+
+- A true triad at **25 / 145 / 265, L 0.70, C 0.16** puts the blue at `#6D9AFF`,
+  which is **dE 0.005** from the existing `#689AFF` — perceptually the same
+  colour. The paddle token never moves and nothing looks like it shifted.
+- The red lands at `#F2716A`, **dE 0.104** from the paddle's `#FF68AE` — *below*
+  the 0.15 accent-separation floor, so it reads as the same hue family rather
+  than a near-miss. A coral at dE 0.2 would have looked like a bug; this doesn't.
+
+Split-complementary was measured too and rejected on evidence: its two partners
+sit 60 degrees apart, producing green/blue pairwise dE of **0.149** — under the
+0.15 floor. Triadic separates properly, split-comp does not, at these hues.
+
+Chalk had the same illness: hue spacing 101/93/166, and uneven ground contrast
+(yellow 0.647 vs blue/pink ~0.46). Rebuilt as a triad at L 0.80 with a new
+**dE >= 0.55 against `#1A1A1E`** guard asserted in code — a chalk palette that
+goes invisible on the board is the one failure mode this surface has already
+hit twice (BACKLOG's brief-10 smudge item, brief 17's retune).
+
+### Brief 32 — the gate question, answered yes
+Shivang asked whether the gate could keep the design's paddle-and-cursor
+animation but run the real idle doodle inside the canvas. Yes, and
+`MOBILE-NOTES.md` §5 independently recommends the same thing.
+
+The part that needed deciding: **do not layer the design's paddle animation over
+a doodle whose paddles are static.** The ball would visibly bounce off nothing
+while the visible paddles moved elsewhere — worse than the CSS placeholder.
+Instead, drive the doodle's own `paddleL`/`paddleR` objects from the design's
+keyframe motion and position the DOM paddles from those same values. The ball
+then genuinely bounces off the paddle the cursor is dragging, which is the
+entire point of the screen. The seam already exists (the doodle passes those
+objects into `advanceBall`), so it is a few lines.
+
+Shipping the CSS stand-in would have meant maintaining a second, worse renderer
+of the same thing forever — the two-algorithms trap briefs 19-20 spent two
+sessions escaping.
+
+Mobile tokens ship as fixed values rather than a ratio (closing MOBILE-NOTES
+open question 1): a ratio produces fractional radii and frame widths at
+arbitrary widths, and this codebase has already lost a round to 2px marks
+landing on fractional pixels (brief 25).
+
+### Brief 33 — music: recommendation on record
+`Oolong.mp3` is not licensed for commercial use and has to go. The
+recommendation given to Shivang is **generative ambient synthesised in Web
+Audio** rather than sourcing licensed tracks. It removes the licensing question
+entirely (he owns the output), removes a 2.5MB asset and makes the build
+genuinely self-contained (closing a brief-30 backlog item), never repeats, and
+can follow game state. The bell synthesis from briefs 28 and 31 is most of the
+instrument already. Decision pending.
+
+### Next
+31 -> 32 -> 33 -> 34 (QA sweep + backlog triage).
+
 ## 2026-08-25/26 — Brief 30 shipped. The port is done. v3 is live.
 
 `https://shivang-xyz.github.io/zen-pong/` serves v3. `v2-final` tags the

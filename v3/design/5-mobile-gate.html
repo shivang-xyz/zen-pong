@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zen Pong — mobile gate</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-bg:            #383838;
+    --color-cta:           #464646;
+    --color-disabled:      #777777;
+    --color-lightest-grey: #C5C5C5;
+    --color-canvas:        #FFF5E5;
+    --color-canvas-border: #888888;
+    --color-pink:          #FF68AE;
+    --color-blue:          #689AFF;
+    --color-green:         #8CFFB4;
+    --color-orange:        #FFAE68;
+    --color-cyan:          #68D7FF;
+
+    --space-xs: 4px;  --space-s: 8px;   --space-xxm: 12px; --space-xm: 16px;
+    --space-m: 24px;  --space-l: 32px;  --space-xl: 40px;  --space-xxl: 48px;
+
+    --radius:        48px;
+    --radius-small:  12px;
+
+    --shadow-canvas: 0 4px 24px rgba(0,0,0,0.28);
+    --shadow-btn:    0 4px 24px rgba(0,0,0,0.16), inset 0 0 5px rgba(0,0,0,0.32);
+
+    /* NEW — mobile only. UNRESOLVED (DESIGN-DELTA §11):
+       mobile canvas radius steps down from 48 → 24 and the frame from 8 → 5,
+       because a 48px radius on a 358px-wide canvas eats the corners. */
+    --radius-mobile-canvas: 24px;
+    --frame-mobile: 5px;
+    --gutter-mobile: 16px;          /* --space-xm */
+    --tap: 56px;                    /* min tap target height */
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-bg);
+    font-family: 'DM Serif Display', serif;
+    font-style: italic;
+    color: var(--color-lightest-grey);
+    display: flex;
+    flex-direction: column; justify-content: center;
+    padding: calc(var(--space-m) + env(safe-area-inset-top)) 0 calc(var(--space-m) + env(safe-area-inset-bottom));
+  }
+
+  .mono {
+    font-family: 'Space Mono', monospace; font-style: normal;
+    letter-spacing: 0.12em; text-transform: uppercase;
+  }
+
+  /* One centred cluster: logo → 16 → tagline → 32 → canvas → 32 → message → 32 → action.
+     Slack sits above and below the cluster, never inside it. */
+  header {
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-xm);
+    padding: 0 var(--gutter-mobile);
+  }
+  header .tagline { font-size: 15px; color: var(--color-lightest-grey); margin: 0; }
+
+  main {
+    display: flex; flex-direction: column;
+    gap: var(--space-l);
+    padding: var(--space-l) var(--gutter-mobile) 0;
+  }
+
+  /* ── Demo canvas ──
+     Same object as the artwork canvas, scaled to the phone: it plays a short
+     rally by itself so the reason for the gate is visible, not just stated. */
+  .stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1000 / 630;
+    border-radius: var(--radius-mobile-canvas);
+  }
+  .canvas {
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    background: var(--color-canvas);
+    box-shadow: var(--shadow-canvas);
+  }
+  .frame {
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    border: var(--frame-mobile) solid var(--color-canvas-border);
+    pointer-events: none; z-index: 4;
+  }
+  .grain, .trails { position: absolute; inset: 0; }
+  .trails polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Strokes accumulate on a 9s loop — placeholder for engine output.
+     FLAG: this is a CSS stand-in for the idle doodle, matched on stroke set,
+     weight and stagger only. Frame-accurate parity with the live engine is not
+     achievable in CSS; ship this screen running the real engine read-only. */
+  @keyframes zp-draw { 0% { stroke-dashoffset: 3200; } 55% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 0; } }
+  .trails polyline {
+    stroke-dasharray: 3200;
+    animation: zp-draw 9s cubic-bezier(0.35,0,0.65,1) infinite;
+  }
+  .trails polyline:nth-child(2) { animation-delay: 1.2s; }
+  .trails polyline:nth-child(3) { animation-delay: 2.4s; }
+  .trails polyline:nth-child(4) { animation-delay: 0.6s; }
+  .trails polyline:nth-child(5) { animation-delay: 1.8s; }
+  .trails polyline:nth-child(6) { animation-delay: 3s; }
+
+  /* Paddles · DESIGN.md §7 — scaled 0.6 for the small canvas.
+     Mobile deviation: bars sit ON the frame rim and the detached handle dot is
+     dropped — at this size the dot would hang outside the canvas, into the
+     screen gutter. The cursor glyph takes its place, inside the canvas. */
+  /* z-index 5: above the frame ring, so a bar sitting on the rim stays visible. */
+  .paddle { position: absolute; width: 5px; height: 38px; z-index: 5; }
+  .paddle .bar { position: absolute; inset: 0; border-radius: 3px; }
+  .paddle-left  { left: 0; }
+  .paddle-left  .bar { background: var(--color-pink); }
+  .paddle-right { right: 0; }
+  .paddle-right .bar { background: var(--color-blue); }
+
+  /* The left paddle is dragged by a cursor: the hand is the missing input,
+     so the cursor glyph rides the handle rather than sitting anywhere else. */
+  @keyframes zp-track   { 0%,100% { top: 12%; } 30% { top: 58%; } 65% { top: 26%; } }
+  @keyframes zp-track-r { 0%,100% { top: 52%; } 35% { top: 18%; } 70% { top: 62%; } }
+  .paddle-left  { animation: zp-track   4.5s ease-in-out infinite; }
+  .paddle-right { animation: zp-track-r 4.5s ease-in-out infinite; }
+  .cursor {
+    position: absolute; left: 11px; top: 10px;
+    width: 14px; height: 14px; z-index: 3;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25));
+  }
+
+  /* ── Message ── */
+  .card { text-align: center; }
+  .card h1 {
+    font-size: 27px; line-height: 1.25; margin: 0;
+    color: var(--color-canvas); font-weight: 400;
+    text-wrap: pretty;
+  }
+  .card hr {
+    border: 0; border-top: 1px solid rgba(197,197,197,0.28);
+    margin: var(--space-m) auto; width: 64px;
+  }
+  .card p {
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 13px; line-height: 1.95; margin: 0;
+    color: var(--color-lightest-grey);
+    text-transform: none; letter-spacing: 0;
+  }
+
+  /* ── Actions · stacked, full-width, 56px ──
+     On a phone the only useful action is carrying the link across, so that is
+     the primary and there is nothing else competing with it. */
+  .actions { display: flex; flex-direction: column; gap: var(--space-xxm); }
+
+  @keyframes zp-flow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+  .rbtn-primary {
+    padding: 1px; border: 0; width: 100%;
+    border-radius: var(--radius-small);
+    background: linear-gradient(90deg,
+      var(--color-pink), var(--color-blue), var(--color-green),
+      var(--color-orange), var(--color-cyan), var(--color-pink));
+    background-size: 200% 100%;
+    animation: zp-flow 12s linear infinite;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.16);
+    cursor: pointer;
+  }
+  .rbtn-primary .inner {
+    display: flex; align-items: center; justify-content: center; gap: var(--space-s);
+    height: calc(var(--tap) - 2px);
+    background: var(--color-cta);
+    border-radius: var(--radius-small);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: #FFFFFF;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.32);
+  }
+  .rbtn {
+    width: 100%; height: var(--tap);
+    background: transparent;
+    border: 1px solid rgba(197,197,197,0.22);
+    border-radius: var(--radius-small);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--color-lightest-grey);
+    cursor: pointer;
+  }
+  .rbtn:active, .rbtn-primary:active { opacity: 0.8; }
+
+  .hint {
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 11px; letter-spacing: 0.06em; text-transform: none;
+    color: var(--color-disabled);
+    text-align: center; margin: 0;
+    min-height: 16px;
+  }
+
+</style>
+</head>
+<body>
+
+  <header>
+    <svg width="112" height="22" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFF5E5"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFF5E5"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFF5E5"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFF5E5"/>
+<rect width="2" height="27" rx="1" fill="#FFF5E5"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
+<circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
+</svg>
+    <p class="tagline">make uncertainty your play</p>
+  </header>
+
+  <main>
+    <div class="stage">
+      <div class="canvas">
+        <svg class="grain" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">
+          <filter id="grain-gate"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3"/></filter>
+          <rect width="100%" height="100%" filter="url(#grain-gate)" opacity="0.12"/>
+        </svg>
+        <svg class="trails" viewBox="0 0 1000 630" preserveAspectRatio="none" aria-hidden="true">
+          <polyline stroke="var(--color-pink)"   stroke-width="24" points="10,420 355,95"/>
+          <polyline stroke="var(--color-orange)" stroke-width="18" points="355,95 660,600 900,505"/>
+          <polyline stroke="var(--color-green)"  stroke-width="14" points="0,355 895,415"/>
+          <polyline stroke="var(--color-blue)"   stroke-width="22" points="355,560 640,105"/>
+          <polyline stroke="var(--color-cyan)"   stroke-width="16" points="640,105 900,320"/>
+          <polyline stroke="var(--color-blue)"   stroke-width="10" points="360,600 1000,250"/>
+        </svg>
+      </div>
+      <div class="paddle paddle-left">
+        <div class="bar"></div>
+        <svg class="cursor" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M1 1 L1 11.5 L4.2 8.6 L6.4 13 L8.4 12 L6.2 7.7 L10.6 7.3 Z"
+                fill="#383838" stroke="#FFF5E5" stroke-width="0.9"/>
+        </svg>
+      </div>
+      <div class="paddle paddle-right"><div class="bar"></div></div>
+      <div class="frame"></div>
+    </div>
+
+    <div class="card">
+      <h1>this one needs a mouse</h1>
+      <hr>
+      <p>the paddle follows your hand — best on a desktop or laptop. come back and play.</p>
+    </div>
+
+    <div class="actions">
+      <button class="rbtn-primary" id="copy">
+        <span class="inner"><span id="copy-label">copy link</span></span>
+      </button>
+      <p class="hint" id="hint">copy the link to shift to your desktop</p>
+    </div>
+  </main>
+
+
+<script>
+  const btn = document.getElementById('copy');
+  const label = document.getElementById('copy-label');
+  const hint = document.getElementById('hint');
+  btn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText('https://zenpong.xyz'); } catch (e) {}
+    label.textContent = 'link copied';
+    hint.textContent = 'paste it into your desktop browser';
+    setTimeout(() => {
+      label.textContent = 'copy link';
+      hint.textContent = 'copy the link to shift to your desktop';
+    }, 3200);
+  });
+</script>
+</body>
+</html>

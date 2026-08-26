@@ -155,6 +155,14 @@ triaging this whole list, not before.
   reference," not "literally zero other bytes on disk." Neither blocks
   ship; both are pre-existing. *Surfaced: brief 30 Task 2, 2026-08-25.*
 
+- **Share screen sits flush edge-to-edge on mobile.** Verified working
+  (artwork renders, overlay correctly does not block, `scrollWidth` exactly
+  equals the viewport, no overflow) — but with zero side margin: the canvas and
+  the button row both run to both screen edges on a 390px viewport, because the
+  contain-scale fits the 800px screen to exactly 100% of the width. Cosmetic,
+  not broken. Wants a small horizontal inset in the mobile scale so it breathes.
+  *Surfaced: architect verification of brief 30, 2026-08-26.*
+
 ## Engine-wide / Product
 
 Carried forward from `PROJECT-LOG.md`'s 2026-07-10/11 entries — status not

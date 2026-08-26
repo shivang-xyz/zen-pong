@@ -172,7 +172,35 @@ link. Mobile is the real ship blocker: v3 has none, and a shared link opened on
 a phone must still show the artwork. `v2-final` tag before the swap, `--no-ff`
 merge, verified on the live URL and from `file://`.
 
-### Brief 31 — QA sweep + backlog triage
+### Brief 31 — Palette system, paint, sound, text
+Post-ship polish. A palette RULE for all three modes (triadic or
+split-complementary in OKLCh, matched L and C). Paper's pink/blue turn out to be
+91 degrees apart — neither rule — and its green sits a whole tonal register
+brighter than the other two, which is why it vanishes on cream; resolved with a
+true triad at 25/145/265 that lands the blue within dE 0.005 of the existing
+token and the red inside the paddle-pink family. Chalk rebuilt for even contrast
+on the black ground with a new dE>=0.55 ground guard. Paint pinned to the
+approved triadic/base-0 default. Blotches out, splatter up and colour-only,
+paint opacity -12%. Game-over becomes a two-note falling fourth. Timeline
+defaults to 70%. Idle text cream and gently floating.
+
+### Brief 32 — Mobile screens
+Real mobile share and gate screens, replacing brief 30's placeholder overlay.
+Mobile-only tokens (radius 24, frame 5, gutter 16, tap 56) as fixed values not a
+ratio — fractional radii are how brief 25's 2px marks went blurry. Share gets a
+rotated full-screen view. The gate runs the REAL idle doodle read-only, with the
+design's paddle animation driving the doodle's own `paddleL`/`paddleR` objects
+so the ball genuinely bounces off the paddle the cursor is dragging — layering
+the animation over a static-paddle doodle would be worse than the CSS
+placeholder, and a CSS renderer would be a second, worse renderer to maintain
+forever.
+
+### Brief 33 — Background music
+Replacing `Oolong.mp3`, which is not licensed for commercial use. Direction to
+be decided — see the log entry; the standing recommendation is generative Web
+Audio rather than licensed tracks.
+
+### Brief 34 — QA sweep + backlog triage
 The checkpoint `BACKLOG.md` names for itself: "once every current surface is
 built and the game is fitted together." Everything deferred during the port,
 plus the small polish Shivang has been holding back, triaged in one pass.

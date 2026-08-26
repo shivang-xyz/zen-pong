@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zen Pong — shared artwork (mobile)</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-bg:            #383838;
+    --color-cta:           #464646;
+    --color-disabled:      #777777;
+    --color-lightest-grey: #C5C5C5;
+    --color-canvas:        #FFF5E5;
+    --color-canvas-border: #888888;
+    --color-pink:          #FF68AE;
+    --color-blue:          #689AFF;
+    --color-green:         #8CFFB4;
+    --color-orange:        #FFAE68;
+    --color-cyan:          #68D7FF;
+
+    --space-xs: 4px;  --space-s: 8px;   --space-xxm: 12px; --space-xm: 16px;
+    --space-m: 24px;  --space-l: 32px;  --space-xl: 40px;  --space-xxl: 48px;
+
+    --radius:        48px;
+    --radius-small:  12px;
+
+    --shadow-canvas: 0 4px 24px rgba(0,0,0,0.28);
+
+    /* NEW — mobile only (DESIGN-DELTA §11). The artwork no longer bleeds to
+       the screen edge: a 16px gutter and a stepped-down radius/frame keep it
+       reading as an object on a page. */
+    --radius-mobile-canvas: 24px;
+    --frame-mobile: 5px;
+    --gutter-mobile: 16px;
+    --tap: 56px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-bg);
+    font-family: 'DM Serif Display', serif;
+    font-style: italic;
+    color: var(--color-lightest-grey);
+    display: flex; flex-direction: column; justify-content: center;
+    padding: calc(var(--space-m) + env(safe-area-inset-top)) 0 calc(var(--space-m) + env(safe-area-inset-bottom));
+  }
+
+  /* One centred cluster: logo → 16 → label → 24 → artwork → 24 → haiku → 32 → actions.
+     Slack falls above and below the cluster, never inside it, so the whole
+     stack holds in one fold at any phone height. */
+  header {
+    display: flex; justify-content: center;
+    padding: 0 var(--gutter-mobile);
+  }
+
+  main {
+    display: flex; flex-direction: column;
+    gap: var(--space-m);
+    padding: var(--space-xm) var(--gutter-mobile) 0;
+  }
+
+  /* logo → 16px → label → 24px → artwork */
+  .art-block { display: flex; flex-direction: column; gap: var(--space-m); }
+
+  /* ── Artwork ── */
+  .stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1000 / 630;
+    border-radius: var(--radius-mobile-canvas);
+    cursor: zoom-in;
+  }
+  .canvas {
+    position: absolute; inset: 0;
+    border-radius: inherit; overflow: hidden;
+    background: var(--color-canvas);
+    box-shadow: var(--shadow-canvas);
+  }
+  .frame {
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    border: var(--frame-mobile) solid var(--color-canvas-border);
+    pointer-events: none; z-index: 2;
+  }
+  .ground { position: absolute; inset: 0; background: rgba(245, 205, 142, 0.24); }
+  .grain, .trails { position: absolute; inset: 0; }
+  .trails polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0.9; }
+
+  .zoom-hint {
+    margin: 0;
+    text-align: center;
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--color-disabled);
+  }
+
+  .haiku { font-size: 17px; color: var(--color-lightest-grey); margin: 0; text-align: center; }
+
+  /* ── Actions · stacked, 56px, full width ── */
+  /* 24 (main gap) + 8 = 32 between the haiku and the actions. */
+  .actions { display: flex; flex-direction: column; gap: var(--space-xxm); margin-top: var(--space-s); }
+
+  @keyframes zp-flow  { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+  @keyframes zp-word-a { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  @keyframes zp-word-b { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
+
+  .rbtn-primary {
+    padding: 1px; border: 0; width: 100%;
+    border-radius: var(--radius-small);
+    background: linear-gradient(90deg,
+      var(--color-pink), var(--color-blue), var(--color-green),
+      var(--color-orange), var(--color-cyan), var(--color-pink));
+    background-size: 200% 100%;
+    animation: zp-flow 12s linear infinite;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.16);
+    cursor: pointer;
+  }
+  .rbtn-primary .inner {
+    display: flex; align-items: center; justify-content: center;
+    height: calc(var(--tap) - 2px);
+    background: var(--color-cta);
+    border-radius: var(--radius-small);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: #FFFFFF;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.32);
+  }
+  .swap { position: relative; display: inline-block; width: 48px; text-align: left; }
+  .swap b { font-weight: 400; animation: zp-word-a 6s steps(1, end) infinite; }
+  .swap i { position: absolute; left: 0; top: 0; font-style: normal;
+            animation: zp-word-b 6s steps(1, end) infinite; }
+  .static-word { margin-left: var(--space-s); }
+
+  /* Secondary pair sits on one row — both are utilities, neither is a step. */
+  .secondary { display: flex; gap: var(--space-xxm); }
+  .rbtn {
+    flex: 1; height: var(--tap);
+    background: transparent;
+    border: 1px solid rgba(197,197,197,0.22);
+    border-radius: var(--radius-small);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--color-lightest-grey);
+    cursor: pointer;
+  }
+  .rbtn:active, .rbtn-primary:active { opacity: 0.8; }
+
+  /* ── Fullscreen view ──
+     The artwork is landscape and the phone is portrait, so full screen means
+     rotated: the piece fills the display instead of sitting in a letterbox. */
+  #full {
+    position: fixed; inset: 0; z-index: 20;
+    background: #2A2A2A;
+    display: none; align-items: center; justify-content: center;
+    cursor: zoom-out;
+  }
+  #full[data-open="true"] { display: flex; animation: zp-fade 260ms ease-out both; }
+  @keyframes zp-fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* A rotated element's layout box overflows horizontally by design, so it
+     must not shrink to the flex line. */
+  #full .rot {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+    flex-shrink: 0;
+    width: var(--fw, 100vh);
+    aspect-ratio: 1000 / 630;
+  }
+  #full .stage { width: 100%; cursor: zoom-out; }
+  #full .close {
+    position: absolute; top: calc(var(--space-xm) + env(safe-area-inset-top)); right: var(--space-xm);
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 50%;
+    background: rgba(56,56,56,0.72);
+    color: var(--color-canvas);
+    font-family: 'Space Mono', monospace; font-size: 16px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+  <header>
+    <svg width="112" height="22" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFF5E5"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFF5E5"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFF5E5"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFF5E5"/>
+<rect width="2" height="27" rx="1" fill="#FFF5E5"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
+<circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
+</svg>
+  </header>
+
+  <main>
+    <div class="art-block">
+    <p class="zoom-hint">tap to view</p>
+    <div class="stage" id="art" role="button" tabindex="0" aria-label="Open artwork full screen">
+      <div class="canvas">
+        <div class="ground"></div>
+        <svg class="grain" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">
+          <filter id="grain-m"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3"/></filter>
+          <rect width="100%" height="100%" filter="url(#grain-m)" opacity="0.12"/>
+        </svg>
+        <svg class="trails" viewBox="0 0 1000 630" preserveAspectRatio="none" aria-hidden="true">
+          <polyline stroke="var(--color-pink)"   stroke-width="28" points="10,420 355,95"/>
+          <polyline stroke="var(--color-orange)" stroke-width="22" points="355,95 660,600 900,505"/>
+          <polyline stroke="var(--color-green)"  stroke-width="16" points="0,355 895,415"/>
+          <polyline stroke="var(--color-pink)"   stroke-width="12" points="30,120 940,560"/>
+          <polyline stroke="var(--color-blue)"   stroke-width="26" points="355,560 640,105"/>
+          <polyline stroke="var(--color-cyan)"   stroke-width="18" points="640,105 900,320"/>
+          <polyline stroke="var(--color-blue)"   stroke-width="14" points="360,600 1000,250"/>
+          <polyline stroke="var(--color-orange)" stroke-width="10" points="20,540 620,60"/>
+          <circle cx="240" cy="300" r="12" fill="var(--color-pink)"/>
+          <circle cx="760" cy="180" r="8"  fill="var(--color-cyan)"/>
+          <circle cx="540" cy="470" r="10" fill="var(--color-green)"/>
+        </svg>
+      </div>
+      <div class="frame"></div>
+    </div>
+    </div>
+
+    <p class="haiku">old pond, silent still</p>
+
+    <div class="actions">
+      <a href="5-mobile-gate.html" style="text-decoration: none;">
+        <button class="rbtn-primary">
+          <span class="inner"><span class="swap"><b>paint</b><i>play</i></span><span class="static-word">your own</span></span>
+        </button>
+      </a>
+      <div class="secondary">
+        <button class="rbtn">download</button>
+        <button class="rbtn" id="copy">copy link</button>
+      </div>
+    </div>
+  </main>
+
+  <div id="full" data-open="false">
+    <div class="rot"></div>
+    <button class="close" aria-label="Close">✕</button>
+  </div>
+
+<script>
+  const art = document.getElementById('art');
+  const full = document.getElementById('full');
+  const rot = full.querySelector('.rot');
+  const clone = art.cloneNode(true);
+  clone.id = 'art-full';
+  rot.appendChild(clone);
+
+  function sizeRot() {
+    // Rotated 90°, so the artwork's width runs along the viewport height.
+    const w = Math.min(window.innerHeight - 32, (window.innerWidth - 32) * (1000 / 630));
+    rot.style.setProperty('--fw', w + 'px');
+  }
+  sizeRot();
+  window.addEventListener('resize', sizeRot);
+
+  const open  = () => { sizeRot(); full.dataset.open = 'true'; };
+  const close = () => { full.dataset.open = 'false'; };
+  art.addEventListener('click', open);
+  art.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  full.addEventListener('click', close);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+
+  const copy = document.getElementById('copy');
+  copy.addEventListener('click', async e => {
+    e.stopPropagation();
+    try { await navigator.clipboard.writeText(location.href); } catch (err) {}
+    copy.textContent = 'copied';
+    setTimeout(() => { copy.textContent = 'copy link'; }, 2200);
+  });
+</script>
+</body>
+</html>

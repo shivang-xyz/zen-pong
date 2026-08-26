@@ -5,6 +5,108 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-26 — Brief 32 built on `feature/v3-polish`. Mobile gate + share screens.
+
+Replaces brief 30's placeholder — a translucent `#mobile-overlay` card
+floated over the still-rendered desktop screen via a JS cover/contain
+scale-transform — with two real, natively-responsive mobile screens. Not
+merged this session; sits on `feature/v3-polish` behind brief 31, same
+review rhythm as every brief before the ship.
+
+**Architecture.** A new presentation-layer selector, `updateMobileScreens()`,
+sits alongside the untouched `screenState`/`screens`/`setScreen()` machine —
+it means exactly what it meant before, mobile or desktop. The selector
+toggles `mobile-gate-active`/`mobile-share-active` on `<html>`, which give
+the four desktop `.screen` sections a REAL `display:none` (not a visual
+cover) and show one of two new sections instead. `isTouchDevice()`/
+`isMobileBlocked()` detection is unchanged, per the brief. The old cover/
+contain scale-transform branch in `fitScreenToViewport()` is gone entirely,
+replaced by a call to `updateMobileScreens()` and an explicit early-out on
+touch — not left to an accidental side effect of the desktop fit-math
+against a zero-sized `display:none` element.
+
+**Task 3 — the gate, running the real doodle.** This was the brief's own
+flag as "the one with real thought in it," and it's the one thing brief 30
+explicitly punted on (`MOBILE-NOTES.md`'s own recommendation: run the real
+engine, not a CSS stand-in). `paddleL`/`paddleR` — previously static
+`{180}`/`{430}`, doubling as the doodle ball's real collision surfaces —
+are now driven by a JS reproduction of the design's own CSS keyframes
+(4.5s loop, per-segment ease-in-out, confirmed exact against the design's
+own timing, not approximated) whenever `isMobileBlocked()`, and snapped
+back to their static values every frame otherwise (verified nothing else
+in the file ever reads/writes them, so this is safe). Verified with a real
+collision measurement, not a visual guess: drove 2000 physics steps and
+confirmed the ball's closest approach to the left edge landed inside the
+paddle's own animated span at that exact moment. `drawGateFrame()` shares
+one paint routine (`paintDoodleFrame(ctx)`, extracted from the old
+`drawFrame()`) with the desktop doodle canvases — same draw calls, one
+different destination — and `doodleLoop()` calls only the gate path while
+gated, skipping the desktop canvases entirely rather than painting them
+invisibly every frame (a real perf fix a Plan-agent review caught before
+this was built, not found after). Reduced motion holds one completed
+still via a capped 300-step headless fast-forward (stops early the instant
+a ball reset would occur) — measured at 2.4–3.4ms per burst, safe for a
+phone's first paint.
+
+**Task 2 — mobile share.** New screen (logo, tap-hint, artwork, haiku,
+actions) populated by one more `drawImage()` blit off `renderSharePage()`'s
+existing full-size canvases — no new render logic. Tap opens a rotated
+fullscreen view; per Shivang's explicit edit to the plan, this draws a
+FRESH COPY into its own canvas pair on open rather than moving the live DOM
+node (`cloneNode()` on a canvas never copies its bitmap — confirmed against
+spec, so the design's own literal approach was never viable either way).
+Sized to `MOBILE-NOTES.md`'s exact formula; skips the rotation in a real
+landscape viewport. Copy-link unified into one `copyLinkToClipboard(text,
+onSuccess)` core, reused by desktop share, mobile share, and the gate, each
+with its own success callback per its own copy spec. The logo image is now
+preloaded once at script init instead of per-export, closing an async gap
+(an `<img>.onload` yield) that risked WebKit treating a subsequent
+`window.open()`/`navigator.share()` as no longer user-triggered — same fix
+benefits every export path, not just the new mobile one.
+
+**Two real bugs, caught and fixed during verification, neither anticipated
+in the plan:**
+- The new canvases (`#gate-canvas`, the mobile-share and fullscreen pairs)
+  don't inherit `width:100%;height:100%` for free — that rule is scoped to
+  the existing desktop canvas IDs specifically, not generic. Without it
+  they rendered at native 1000×630 clipped inside a ~343px-wide wrapper.
+  Added matching rules for the new IDs; re-verified via
+  `getComputedStyle` and fresh screenshots.
+- A forced landscape+touch viewport (812×375) exposed that the scroll lock
+  made below-fold content — the gate's message card and copy button,
+  mobile share's haiku and all three buttons — genuinely unreachable, not
+  merely ugly, on a rotated phone or a landscape-default iPad. Per
+  Shivang's own instruction on this exact risk ("if it's ugly but usable,
+  fine — just say so"), this crossed that bar, so it got a minimal fix:
+  landscape is exempted from the scroll lock. Verified reachable via
+  scroll afterward.
+
+**Verification gaps, flagged honestly rather than glossed over:** real
+clipboard copy still can't be verified live in this sandbox (same
+document-focus limitation as briefs 29–31) — the label/hint swap logic was
+verified in isolation instead. `navigator.share`/`canShare` are entirely
+unavailable in this sandbox, so only the no-Web-Share fallback path was
+live-exercised; the Web Share branch itself is code-reviewed, not run.
+Reduced-motion's end-to-end freeze in `doodleLoop()` was verified via the
+fast-forward function running in isolation, not a live
+`prefers-reduced-motion` render — this sandbox's `matchMedia` reports
+`false` for it and (unlike coarse-pointer) can't be monkey-patched the same
+way. Worth a real click-through on all three once this is reviewed outside
+the sandbox.
+
+Desktop regression: a full game start to results/share is unaffected. A
+cold load with a real share-link fragment at mobile viewport renders via
+the mobile share screen, never intercepted by the gate — including the
+brief-29 `landingWithSharePayload` race-window case.
+
+`node v3/build.js` run twice, byte-identical (319650 bytes). `git diff
+--stat main -- v3/engine/ v3/labs/` empty throughout.
+
+### Next
+Review `feature/v3-polish`, merge when approved. Brief 33 (BGM replacement
+— `Oolong.mp3` isn't licensed for commercial use) is written and waiting;
+34 is the QA sweep.
+
 ## 2026-08-26 — Brief 31 built on `feature/v3-polish`. Palette, paint, sound, text.
 
 First post-ship polish pass, off `main` per the new branch. Not merged this

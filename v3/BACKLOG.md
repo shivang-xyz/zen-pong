@@ -155,13 +155,28 @@ triaging this whole list, not before.
   reference," not "literally zero other bytes on disk." Neither blocks
   ship; both are pre-existing. *Surfaced: brief 30 Task 2, 2026-08-25.*
 
-- **Share screen sits flush edge-to-edge on mobile.** Verified working
-  (artwork renders, overlay correctly does not block, `scrollWidth` exactly
-  equals the viewport, no overflow) — but with zero side margin: the canvas and
-  the button row both run to both screen edges on a 390px viewport, because the
-  contain-scale fits the 800px screen to exactly 100% of the width. Cosmetic,
-  not broken. Wants a small horizontal inset in the mobile scale so it breathes.
+- ~~**Share screen sits flush edge-to-edge on mobile.**~~ **Resolved, brief
+  32** (2026-08-26): the mobile share screen is now a real, dedicated
+  section with its own `--gutter-mobile: 16px` inset, not a contain-scale
+  of the desktop layout.
   *Surfaced: architect verification of brief 30, 2026-08-26.*
+- **Gate/mobile-share landscape is scroll-reachable but not laid out for
+  it.** Brief 32 exempted landscape from the single-fold scroll lock after
+  finding below-fold content (message card, buttons) genuinely
+  unreachable at 812×375 — that fix restores reachability but the layout
+  itself is still the portrait single-fold design, just scrollable now.
+  Worth a real landscape-specific layout if this becomes a common path
+  (an iPad defaults to landscape). *Surfaced: brief 32 verification,
+  2026-08-26.*
+- **Mobile export paths unverified in a real browser.** Brief 32's Web
+  Share (`navigator.share`/`canShare`) branch and the real
+  `navigator.clipboard`/`execCommand` copy success paths (gate + mobile
+  share) could not be exercised live — this sandbox has no Web Share API
+  at all, and clipboard writes fail here for an unrelated document-focus
+  reason (same limitation as briefs 29-31). All were code-reviewed and
+  their surrounding logic verified in isolation, not run end-to-end.
+  Needs one real click-through on an actual phone before trusting these
+  past code review. *Surfaced: brief 32 verification, 2026-08-26.*
 - **Doc drift — `DESIGN.md` doesn't carry paper/chalk's new stroke hexes.**
   Brief 31 shipped paper as `#F2716A`/`#54B85B`/`#6D9AFF` and chalk as
   `#E6B816`/`#00D8F6`/`#F695EE` (both in `v3/app/index.html`, verified

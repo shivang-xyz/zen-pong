@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zen Pong — CTA states</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --color-bg: #383838; --color-cta: #464646; --color-lightest-grey: #C5C5C5;
+    --color-disabled: #777777; --color-canvas: #FFF5E5;
+    --color-pink: #FF68AE; --color-blue: #689AFF; --color-green: #8CFFB4;
+    --color-orange: #FFAE68; --color-cyan: #68D7FF;
+    --space-xs: 4px; --space-s: 8px; --space-xxm: 12px; --space-xm: 16px;
+    --space-m: 24px; --space-l: 32px; --space-xxl: 48px;
+    --radius-small: 12px; --radius-nested: 8px;
+    --shadow-chip: 0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px rgba(0,0,0,0.52);
+    --shadow-btn:  0 4px 24px rgba(0,0,0,0.16), inset 0 0 5px rgba(0,0,0,0.32);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 56px 64px 88px; background: var(--color-bg);
+    font-family: 'DM Serif Display', serif; font-style: italic; color: var(--color-lightest-grey);
+  }
+  a { color: var(--color-cyan); } a:hover { color: var(--color-canvas); }
+  h1 { font-size: 26px; color: var(--color-canvas); margin: 0 0 8px; font-weight: 400; }
+  .lede { font-family: 'Space Mono', monospace; font-style: normal; font-size: 12px;
+          line-height: 1.9; color: var(--color-disabled); margin: 0 0 48px; max-width: 62ch; }
+  h2 { font-family: 'Space Mono', monospace; font-style: normal; font-size: 11px;
+       letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-disabled);
+       margin: 0 0 20px; font-weight: 400; }
+  section { margin-bottom: 48px; }
+  .row { display: flex; align-items: center; gap: var(--space-xm); flex-wrap: wrap; }
+  .mono { font-family: 'Space Mono', monospace; font-style: normal; font-size: 11px;
+          letter-spacing: 0.12em; text-transform: uppercase; }
+
+  .ctrl-chip { height: var(--space-xxl); border-radius: var(--radius-small);
+    background: var(--color-cta); box-shadow: var(--shadow-chip);
+    display: flex; align-items: center; border: 0; color: var(--color-lightest-grey); }
+  .icon-pill { width: var(--space-xxl); justify-content: center; cursor: pointer; }
+  .pal-pill { padding: 0 var(--space-xm); gap: var(--space-s); }
+  .pal-pill .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .pal-pill .shuffle { margin-left: var(--space-s); cursor: pointer; }
+
+  .rbtn { background: var(--color-cta); border: 0; border-radius: var(--radius-small);
+    padding: var(--space-xxm) var(--space-m); font-family: 'Space Mono', monospace;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #FFFFFF;
+    box-shadow: var(--shadow-btn); cursor: pointer; }
+
+  @keyframes zp-flow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+  .rbtn-primary { padding: 1px; border: 0; border-radius: var(--radius-small);
+    background: linear-gradient(90deg, var(--color-pink), var(--color-blue), var(--color-green),
+      var(--color-orange), var(--color-cyan), var(--color-pink));
+    background-size: 200% 100%; animation: zp-flow 12s linear infinite;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.16); cursor: pointer; }
+  .rbtn-primary .inner { display: block; background: var(--color-cta);
+    border-radius: var(--radius-small); padding: var(--space-xxm) var(--space-m);
+    font-family: 'Space Mono', monospace; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.12em; color: #FFFFFF; box-shadow: inset 0 0 5px rgba(0,0,0,0.32); }
+
+  #timeline-chip { padding: 0 var(--space-xm); gap: var(--space-xm); }
+  .track { position: relative; width: 320px; height: var(--space-xs);
+    border-radius: var(--space-xs); background: var(--color-bg); cursor: pointer; }
+  .track .fill { position: absolute; left: 0; top: 0; height: var(--space-xs);
+    border-radius: var(--space-xs); background: var(--color-lightest-grey); width: 49%; }
+  .track .thumb { position: absolute; top: -6px; left: calc(49% - 8px);
+    width: var(--space-xm); height: var(--space-xm); border-radius: 50%;
+    background: var(--color-canvas); box-shadow: 0 4px 24px rgba(0,0,0,0.29); }
+
+  #surface-chip { width: 420px; padding: 0 var(--space-s); gap: var(--space-s); }
+  #surface-chip .tile { flex: 1; height: 32px; border: 0; border-radius: var(--radius-nested);
+    display: flex; align-items: center; justify-content: center; gap: var(--space-s);
+    background: transparent; cursor: pointer; }
+  #surface-chip .tile span { font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-lightest-grey); }
+  #surface-chip .tile[aria-selected="true"] { background: var(--color-bg); }
+  #surface-chip .swatch { width: 12px; height: 12px; border-radius: 4px; }
+
+  .caption { font-family: 'Space Mono', monospace; font-style: normal; font-size: 11px;
+    line-height: 1.9; color: var(--color-disabled); margin: 16px 0 0; max-width: 68ch;
+    text-transform: none; letter-spacing: 0; }
+  code { color: var(--color-lightest-grey); }
+</style>
+<link rel="stylesheet" href="cta.css">
+</head>
+<body>
+
+  <h1>CTA states</h1>
+  <p class="lede">Every actionable control, live. Hover, press and tab through them — this page loads
+    the same <code>cta.css</code> the screens do, so what happens here is the specification.
+    Nothing moves, nothing changes fill, nothing resizes: the label or icon takes the warm accent
+    and the drop shadow takes the same hue, soft and restrained — warmed, not lit up.</p>
+
+  <section>
+    <h2>Text button · .rbtn — 1c save / share / play again, 1d download / copy link</h2>
+    <div class="row">
+      <button class="rbtn">save artwork</button>
+      <button class="rbtn">share</button>
+      <button class="rbtn">play again</button>
+      <button class="rbtn">download png</button>
+      <button class="rbtn">copy link</button>
+    </div>
+    <p class="caption">Hover and focus-visible: <code>color: #FFAE68</code> +
+      <code>--shadow-glow</code>. Press: bloom contracts, inset deepens
+      (<code>--shadow-press</code>). The old <code>opacity: .85</code> hover is removed.</p>
+  </section>
+
+  <section>
+    <h2>Primary · .rbtn-primary — 1d</h2>
+    <div class="row">
+      <button class="rbtn-primary"><span class="inner">play zen pong</span></button>
+    </div>
+    <p class="caption">The 12s travelling hairline is unaffected by hover. The glow lands on the
+      wrapper (<code>--shadow-glow-flat</code>, no inset) and the label warms.</p>
+  </section>
+
+  <section>
+    <h2>Icon chip · .icon-pill — 1b home / replay / mute</h2>
+    <div class="row">
+      <button class="ctrl-chip icon-pill" aria-label="Home">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2.5 7.5 9 2l6.5 5.5V15a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/><path d="M7 16v-5h4v5"/>
+        </svg>
+      </button>
+      <button class="ctrl-chip icon-pill" aria-label="Restart">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 9a6 6 0 1 1-2-4.5"/><polyline points="15,2 15,5 12,5"/>
+        </svg>
+      </button>
+      <button class="ctrl-chip icon-pill" aria-label="Mute" aria-pressed="false">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="2,7 5,7 9,3 9,15 5,11 2,11"/><line x1="12" y1="6" x2="16" y2="12"/><line x1="16" y1="6" x2="12" y2="12"/>
+        </svg>
+      </button>
+      <button class="ctrl-chip icon-pill" aria-label="Muted" aria-pressed="true">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C5C5C5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="2,7 5,7 9,3 9,15 5,11 2,11"/><line x1="12" y1="6" x2="16" y2="12"/><line x1="16" y1="6" x2="12" y2="12"/>
+        </svg>
+      </button>
+    </div>
+    <p class="caption">The fourth chip is the persistent muted state:
+      <code>aria-pressed="true"</code> holds the warm colour and glow with no pointer on it.
+      Icons take their colour from the button (<code>stroke: currentColor</code>), so the same
+      icon file serves every state.</p>
+  </section>
+
+  <section>
+    <h2>Palette chip · .pal-pill — 1a, 1b</h2>
+    <div class="row">
+      <div class="ctrl-chip pal-pill">
+        <i class="dot" style="background:var(--color-pink)"></i>
+        <i class="dot" style="background:var(--color-blue)"></i>
+        <i class="dot" style="background:var(--color-green)"></i>
+        <i class="dot" style="background:var(--color-orange)"></i>
+        <i class="dot" style="background:var(--color-cyan)"></i>
+        <svg class="shuffle" width="20" height="20" viewBox="0 0 20 20" fill="none"
+             stroke="#C5C5C5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="13,3 17,6.5 13,10"/><path d="M2 6.5h15"/>
+          <polyline points="7,10 3,13.5 7,17"/><path d="M18 13.5H3"/>
+        </svg>
+      </div>
+    </div>
+    <p class="caption">The chip is one target: hovering anywhere on it warms the chip and the
+      shuffle icon. The colour dots have no hover state of their own.</p>
+  </section>
+
+  <section>
+    <h2>Surface selector · #surface-chip — 1a armed</h2>
+    <div class="row">
+      <div id="surface-chip" class="ctrl-chip">
+        <button class="tile" aria-selected="true"><i class="swatch" style="background:#FFF5E5"></i><span>paper</span></button>
+        <button class="tile"><i class="swatch" style="background:#383838"></i><span>chalkboard</span></button>
+        <button class="tile"><i class="swatch" style="background:#FFAE68"></i><span>paint</span></button>
+      </div>
+    </div>
+    <p class="caption">No hover state by design — the tiles carry a persistent selection
+      (<code>#383838</code> recess) and a hover treatment there reads as selecting. Keyboard focus
+      warms the label only.</p>
+  </section>
+
+  <section>
+    <h2>Timeline · #timeline-chip — 1c</h2>
+    <div class="row">
+      <div id="timeline-chip" class="ctrl-chip">
+        <label class="mono" for="tl">timeline</label>
+        <div class="track" id="tl" tabindex="0"><div class="fill"></div><div class="thumb"></div></div>
+      </div>
+    </div>
+    <p class="caption">Scrub state, not hover state: press the track (or tab to it) and the fill and
+      thumb go warm with the chip glowing; release and it returns. Hovering alone gives the thumb a
+      faint warm ring only. Implementation: add <code>.scrubbing</code> to the track on pointerdown,
+      remove on window pointerup — <code>:active</code> and <code>:focus-within</code> are fallbacks.</p>
+  </section>
+
+<script>
+  var tl = document.getElementById('tl');
+  tl.addEventListener('pointerdown', function () { tl.classList.add('scrubbing'); });
+  window.addEventListener('pointerup', function () { tl.classList.remove('scrubbing'); });
+</script>
+</body>
+</html>

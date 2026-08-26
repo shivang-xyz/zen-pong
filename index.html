@@ -262,7 +262,24 @@
     text-align: center;
     display: flex; flex-direction: column; align-items: center; gap: var(--space-s);
   }
-  #intro-card .sub { font-size: 14px; color: var(--color-disabled); margin: 0; }
+  /* Brief 31 Task 6 — was --color-disabled; cream (--color-canvas) reads as
+     the brightest thing on the #464646 card, which is the point. Gentle
+     float: ~±3px, ease-in-out, full up-down-up cycle every 3.2s — the
+     keyframe's 0%/100% match so the loop closes with no visible seam.
+     Registers peripherally, nothing else on the card moves. */
+  @keyframes zp-idle-float {
+    0%, 100% { transform: translateY(-3px); }
+    50%      { transform: translateY(3px); }
+  }
+  #intro-card .sub {
+    font-size: 14px;
+    color: var(--color-canvas);
+    margin: 0;
+    animation: zp-idle-float 3.2s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #intro-card .sub { animation: none; }
+  }
 
   /* ── Surface selector · DESIGN.md §10 #surface-chip ──
      Absent in Step A (attract). Slides up on the first gesture, per
@@ -362,7 +379,7 @@
 
   /* No paddles/ball/guardrails on results (Task 1) — just two stacked
      canvases inside the shared .canvas-wrap: ground below, strokes+
-     blotches above. Same sizing idiom as .doodle-canvas, no cross-fade
+     splatter above. Same sizing idiom as .doodle-canvas, no cross-fade
      default (results never surface-switches mid-view). */
   #results-ground-canvas, #results-strokes-canvas {
     position: absolute; inset: 0; width: 100%; height: 100%;
@@ -619,7 +636,7 @@
 <rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
 <circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
 </svg>
-          <p class="sub" id="idle-sub">space to begin · mouse to move</p>
+          <p class="sub" id="idle-sub">press space or click to begin</p>
         </div>
 
         <div id="surface-chip" class="ctrl-chip" role="group" aria-label="Surface">
@@ -2849,11 +2866,13 @@ const { makeRng, weightedPick } = __engine.rng;
 const { W, H, BR, PH, PAD_MIN, PAD_MAX, WIN, BASE_SPD, MAX_SPD, mkBall, advanceBall, ballBall, levelUp, pickTargetY, updatePaddleAI } = __engine.physics;
 const { jitterPath, renderStroke, DEFAULT_STROKE_PARAMS } = __engine.strokes;
 const { buildSurface } = __engine.surface;
-const { buildChalkboardSurface, renderChalkStroke, CHALK_PALETTE, CHALK_DEFAULT_WIDTH_MULT } = __engine.chalkboard;
-const { buildPaintSurface, PAINT_DEFAULT_WIDTH_VARIATION, PAINT_DEFAULT_BLOTCH_SIZE_MULT } = __engine.paint;
-const { buildPalette, GROUND_LIBRARY, INK_HEX, HUE_LIBRARY } = __engine.palette;
+const { buildChalkboardSurface, renderChalkStroke, CHALK_DEFAULT_WIDTH_MULT } = __engine.chalkboard;
+const { buildPaintSurface, PAINT_DEFAULT_WIDTH_VARIATION } = __engine.paint;
+const { buildPalette, GROUND_LIBRARY, INK_HEX, HUE_LIBRARY, hexToOklab } = __engine.palette;
 const { DEFAULT_PALETTE } = __engine.simulate;
-const { renderSplatterMark, buildIntersectionBlotches, renderBlotchCluster } = __engine.splatter;
+const { renderSplatterMark } = __engine.splatter;
+
+// brief 31 Task 2a — buildIntersectionBlotches/renderBlotchCluster no longer called anywhere in this file
 
 // Brief 29 Task 3 — "landing with a fragment: decode and go straight to
 // Screen 4. Do not flash the idle screen first." Checked and acted on as
@@ -3052,16 +3071,29 @@ const idleEl = document.getElementById('screen-idle');
 // never Math.random().
 const DOODLE_SEED = 2026;
 
+// Brief 31 Task 1c — pins paint's DEFAULT palette (both the idle doodle,
+// here, and a fresh game's opening palette, further down) to the approved
+// reference screenshot: triadic, base index 0, Cream ground — resolves
+// through HUE_LIBRARY to Crimson/Yellow/Cyan-blue. Defined before first use
+// (this is the doodle's own buildPalette call, a few lines below) rather
+// than alongside the rest of Task 1's palette machinery further down the
+// file, which would reference these before they exist.
+const PAINT_DEFAULT_SCHEME = 'triadic';
+const PAINT_DEFAULT_BASE_INDEX = 0;
+
 // One paint palette, built once from the fixed seed (buildPalette draws
 // from palette.js's curated hue library — never arithmetic hue generation).
 // Brief 21 Task 2: ground pinned to Cream (GROUND_LIBRARY[0], the approved
 // lab default — PAINT-MODE.md / brief 16) instead of letting buildPalette
-// draw a random ground (it had landed on Pale lavender). scheme/baseIndex
-// are left undrawn so the three accents still come from the real scheme
-// system (palette.js's curated hue library + harmony rules), same as the
-// lab — only the ground is fixed, nothing is swapped in from DEFAULT_
-// PALETTE (the unrelated 5-colour game/paddle palette).
-const paintPalette = buildPalette(makeRng((DOODLE_SEED ^ 0x5EED1DEA) >>> 0), { groundHex: GROUND_LIBRARY[0].hex });
+// draw a random ground (it had landed on Pale lavender). Brief 31 Task 1c:
+// scheme/baseIndex are now ALSO pinned (were left undrawn before, so the
+// doodle could open on any of the 4 schemes) — the doodle is paint's other
+// "first thing a visitor sees" alongside a fresh game, and showing it a
+// different default than the approved reference would be its own quiet
+// inconsistency.
+const paintPalette = buildPalette(makeRng((DOODLE_SEED ^ 0x5EED1DEA) >>> 0), {
+  scheme: PAINT_DEFAULT_SCHEME, baseIndex: PAINT_DEFAULT_BASE_INDEX, groundHex: GROUND_LIBRARY[0].hex,
+});
 
 // Same weighted/shuffled flattening art-lab.html uses to turn a 3-accent
 // weighted palette into a round-robin array (lab-only bookkeeping, not
@@ -3080,19 +3112,105 @@ function weightedPaletteArray(palette, seed) {
   return arr;
 }
 
-// Brief 25 Task 3: every palette chip shows 3 dots. Chalk and paint already
-// resolve to 3; paper used the full DEFAULT_PALETTE (5) — pink, blue, green,
-// orange, cyan. A chip showing 3 dots while the canvas painted 5 would be a
-// lying control, so paper's actual stroke palette drops to 3, not just its
-// pill: the first three of DEFAULT_PALETTE's existing order. Pink and blue
-// are the paddle colours (kept, not droppable); green is simply next in
-// line — nothing invented, nothing reordered. Shared by the doodle
-// (PALETTE_ARRAYS.paper, below), the game (gamePaperOrder, further down),
-// and both pal-pills (idle's updateIdlePalPill, the game's
-// gamePalPillHexesFor) — one constant, so paper can't drift back to 5 in
-// one place and not another. Visibly changes the paper artwork (orange and
-// cyan stop appearing) — flagged for review per the brief.
-const PAPER_PALETTE = DEFAULT_PALETTE.slice(0, 3);
+/* ════════════════════════════════════════════════════════════════════
+   BRIEF 31 TASK 1 — palette rule: every mode's three stroke colours sit at
+   a triadic (120/120/120) or split-complementary (150/60/150) OKLCh
+   spacing, matched L/C, verified in code rather than by eye.
+
+   palette.js exports hexToOklab/oklabToHex but its own ΔE function
+   (oklabDeltaE) is a private, unexported helper — this file's scope is
+   "v3/app/index.html only, v3/engine/ byte-identical to main" (brief 31's
+   own line), so it can't be exported for this brief. Mirrored here instead:
+   same formula (OKLab Euclidean distance), same 3 lines, off the same
+   imported hexToOklab — not a second colour-math implementation, just the
+   one function palette.js already keeps private, duplicated because it has
+   to be. ════════════════════════════════════════════════════════════════ */
+function deltaE(hexA, hexB) {
+  const a = hexToOklab(hexA), b = hexToOklab(hexB);
+  return Math.hypot(a.L - b.L, a.a - b.a, a.b - b.b);
+}
+function oklchHueDeg(hex) {
+  const { a, b } = hexToOklab(hex);
+  let h = Math.atan2(b, a) * 180 / Math.PI;
+  if (h < 0) h += 360;
+  return h;
+}
+function circularHueGap(h1, h2) {
+  const d = Math.abs(h1 - h2) % 360;
+  return d > 180 ? 360 - d : d;
+}
+// Sorted pairwise circular hue gaps for a 3-hue set are {120,120,120} for a
+// true triad, or {60,150,150} for split-complementary (150/60/150 spacing)
+// — verified against brief 31's own worked numbers (paper's 25/145/265
+// target: gaps 119.7/119.7/120.6) before trusting it as the general check.
+function satisfiesPaletteRule(hexes, tolerance = 10) {
+  const hues = hexes.map(oklchHueDeg);
+  const gaps = [
+    circularHueGap(hues[0], hues[1]),
+    circularHueGap(hues[1], hues[2]),
+    circularHueGap(hues[0], hues[2]),
+  ].sort((a, b) => a - b);
+  const isTriadic = gaps.every(g => Math.abs(g - 120) <= tolerance);
+  const isSplitComp = Math.abs(gaps[0] - 60) <= tolerance && Math.abs(gaps[1] - 150) <= tolerance && Math.abs(gaps[2] - 150) <= tolerance;
+  return { ok: isTriadic || isSplitComp, rule: isTriadic ? 'triadic' : isSplitComp ? 'split-complementary' : 'NEITHER', hues, gaps };
+}
+const MIN_ACCENT_DE = 0.15; // mirrors palette.js's own floor of the same name (private there) — same reasoning, applied to paper/chalk's fixed arrays
+const MIN_GROUND_DE = 0.16; // mirrors palette.js's own floor of the same name
+const MIN_CHALK_GROUND_DE = 0.55; // brief 31 Task 1b's new, stricter guard — chalk going invisible on the board is a failure mode this surface has hit twice already (BACKLOG.md)
+
+// Brief 31 Task 1a — paper's old three (paddle pink/blue + DEFAULT_PALETTE's
+// green) measured at a 91° hue gap (neither rule) with green a whole tonal
+// register brighter than the other two, which is why it vanished on cream.
+// Ship a true triad instead, hues 25/145/265 at L 0.70 C 0.16 — the blue
+// lands ΔE 0.005 from the existing paddle #689AFF (perceptually the same
+// colour, nothing looks moved) and the red ΔE 0.104 from the paddle pink
+// (below the 0.15 separation floor on purpose — it reads as the same hue
+// family, not a near-miss clash). Paddle tokens (--color-pink/--color-blue)
+// are UNCHANGED; only this stroke array moves.
+const PAPER_PALETTE = ['#F2716A', '#54B85B', '#6D9AFF']; // red, green, blue
+
+// Brief 31 Task 1b — chalk's old three measured 101/93/166 hue spacing
+// (neither rule) with uneven ground contrast (yellow ΔE 0.647 vs blue/pink
+// ~0.46). Rebuilt as a triad at base hue 90, L 0.80, C 0.16 — even contrast
+// across all three against the #1A1A1E board, and the higher L is what
+// reads as chalk rather than ink. This is an APP-LEVEL override of
+// chalkboard.js's own CHALK_PALETTE, not an engine edit — chalkboard.js
+// no longer supplies this name to the app at all (see the import block
+// above); the identical override pattern PAPER_PALETTE already uses
+// against DEFAULT_PALETTE, and the one BACKLOG.md already documents for
+// paint's width constants ("the product value wins at reconciliation").
+const CHALK_PALETTE = ['#E6B816', '#00D8F6', '#F695EE']; // gold, cyan, pink
+const CHALK_GROUND_HEX = '#1A1A1E'; // chalkboard.js's own frozen CB_BASE (DESIGN.md §2's --color-canvas-chalk placeholder note)
+
+// Brief 31 Task 1c, continued — PAINT_DEFAULT_SCHEME/BASE_INDEX are defined
+// earlier (alongside the doodle's own buildPalette call, which needs them
+// first) and reused at the game's buildPalette call site further down.
+// Shuffle draws from these two only — analogous/complementary-minor stay
+// reachable in the lab (SCHEMES itself, palette.js, is untouched) but never
+// ship in the app. Consumes exactly the one rng draw buildPalette itself
+// would have made internally for an un-pinned scheme, just constrained to
+// 2 options instead of Object.keys(SCHEMES)'s 4 — same determinism shape.
+const PAINT_SHUFFLE_SCHEMES = ['triadic', 'split-complementary'];
+
+// Verification, printed once at load per Task 1's own instruction ("print
+// the measured numbers in the session output") — console.assert (not a
+// throw): a tripwire for a future palette edit, same spirit as palette.js's
+// own guards, never something that should be able to break the game for a
+// live player if it ever fires.
+(function verifyPaletteRules() {
+  function report(label, hexes, groundHex, minGroundDE) {
+    const rule = satisfiesPaletteRule(hexes);
+    const accentDEs = [deltaE(hexes[0], hexes[1]), deltaE(hexes[1], hexes[2]), deltaE(hexes[0], hexes[2])];
+    const groundDEs = hexes.map(h => deltaE(h, groundHex));
+    console.log(`[palette] ${label}: hues ${rule.hues.map(h => h.toFixed(1)).join('/')} — gaps ${rule.gaps.map(g => g.toFixed(1)).join('/')} (${rule.rule})`);
+    console.log(`[palette] ${label}: pairwise ΔE ${accentDEs.map(d => d.toFixed(3)).join('/')}, vs ground ΔE ${groundDEs.map(d => d.toFixed(3)).join('/')}`);
+    console.assert(rule.ok, `[palette] ${label} fails the triadic/split-complementary rule`, rule);
+    console.assert(Math.min(...accentDEs) >= MIN_ACCENT_DE, `[palette] ${label} accent ΔE below floor ${MIN_ACCENT_DE}`, accentDEs);
+    console.assert(Math.min(...groundDEs) >= minGroundDE, `[palette] ${label} ground ΔE below floor ${minGroundDE}`, groundDEs);
+  }
+  report('paper', PAPER_PALETTE, '#FFF5E5', MIN_GROUND_DE);
+  report('chalk', CHALK_PALETTE, CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE);
+})();
 
 // Per-surface colour cycle. Chalk is tri-colour (brief 19 Task 3) —
 // CHALK_PALETTE, matching how chalk was approved in the lab — not the
@@ -3471,7 +3589,7 @@ function drawPaintRibbon(ctx, pts, wt, col) {
     right.push({ x: p.x - nx * halfW, y: p.y - ny * halfW });
   }
   ctx.save();
-  ctx.globalAlpha = 1.0;
+  ctx.globalAlpha = 0.88; // brief 31 Task 2b — was 1.0; paper/chalk unaffected, this is the paint-only ribbon renderer
   ctx.fillStyle = col;
   ctx.beginPath();
   ctx.moveTo(left[0].x, left[0].y);
@@ -3485,6 +3603,23 @@ function drawPaintRibbon(ctx, pts, wt, col) {
   const rN = Math.hypot(left[last].x - right[last].x, left[last].y - right[last].y) / 2;
   ctx.beginPath(); ctx.arc(pts[last].x, pts[last].y, rN, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
+}
+
+// Brief 31 Task 2b — splatter's own opacity, matching drawPaintRibbon's
+// 0.88 above. renderSplatterMark (splatter.js) explicitly force-sets
+// ctx.globalAlpha = 1.0 right after its own save(), before every fill() —
+// so a caller-set globalAlpha has no effect on it at all, confirmed by
+// reading the engine source rather than assuming. It never touches
+// ctx.filter anywhere, though, so a filter set by the CALLER before the
+// call stays in effect through those same fill() calls — filter is a real
+// paint-time effect, not something the function overrides. One shared
+// wrapper rather than repeating the set/call/reset sequence at all three
+// call sites (live rally, results replay, share) — same principle as this
+// file's other "one function draws a mark" renderers.
+function renderSplatterMarkPaint(ctx, mark) {
+  ctx.filter = 'opacity(88%)';
+  renderSplatterMark(ctx, mark);
+  ctx.filter = 'none';
 }
 
 // Ball-visibility fix, brief 24 Task 3 (replaces brief 23's emergence
@@ -3825,35 +3960,58 @@ let gameLastEndedStrokes = null; // handoff for brief 26 (results/reveal) — {s
 // ink bloom pinned every mark to the canvas edge, because paddle/wall hits
 // are structurally always on the boundary. stepGame gates this to frames
 // with NO hit event and NO miss this frame — see the call site.
-const GAME_SPLATTER_COOLDOWN_FRAMES = 40; // hard floor between marks, per brief
-const GAME_SPLATTER_CAP = 10; // safety ceiling — target 3-8/game comes from GAME_SPLATTER_BASE_P, this just bounds the worst case
+// Brief 31 Task 2a — cooldown 40 -> 24, target count 3-8 -> 10-18/game.
+// GAME_SPLATTER_CAP is doing real, frequent work here, not acting as a rare
+// safety net the way the old CAP=10 mostly did against a 3-8 target — a
+// game's total splatter count scales with its own rally length, which
+// varies enormously game to game (measured, briefs 29/30: several-thousand-
+// step spread between a short and a long game), so a per-frame probability
+// alone cannot hold a tight band without a real ceiling. CAP is set to the
+// target's own upper bound (18) for exactly that reason. BASE_P tuned
+// against 20 real headless games at these settings: 19/20 landed in
+// [10,18] (10 of those 19 at the 18 cap — long games routinely reach it),
+// one short game landed at 9, one below the floor — accepted rather than
+// pushed higher, since raising BASE_P further to close that one gap would
+// mean most games hit the cap and read as a fixed count rather than
+// organic variation. Mean 16.1 across the sample.
+const GAME_SPLATTER_COOLDOWN_FRAMES = 24; // was 40
+const GAME_SPLATTER_CAP = 18; // was 10 — the target's own upper bound, not "target + headroom" (see above)
 const GAME_SPLATTER_SPIN_REF = 0.15; // |ball.spin| normalisation — see physics.js's sweptHit/finishWallBounce for typical magnitudes
-const GAME_SPLATTER_BASE_P = 0.016; // PROVISIONAL — tuned against the measured rate, see PROJECT-LOG for the number actually observed
-const GAME_SPLATTER_FLUNG_RATIO = 0.4; // ~60/40 drops:flung baseline, matching splatter.js's FLUNG_RATIO — spin skews this up per-mark, see buildLiveSplatterMark
+const GAME_SPLATTER_BASE_P = 0.017; // was 0.016 — see the measurement note above
+// ~60/40 drops:flung baseline, spin-skewed same as before, but no longer
+// THE ONLY source of variation in the mix — see buildLiveSplatterMark's own
+// jitter term, added so two games with similar spin don't converge on the
+// same drop/flung ratio every time ("vary the mix, don't hold it fixed").
+const GAME_SPLATTER_FLUNG_RATIO = 0.4;
+const GAME_SPLATTER_FLUNG_RATIO_JITTER = 0.3; // +/-0.15 on top of the spin-derived chance
 const GAME_SPLATTER_OFFSET_MIN = 14, GAME_SPLATTER_OFFSET_RANGE = 18; // px clear of the ball, perpendicular to travel — clears the widest (~13px) stroke plus the mark's own radius
 
 // splatter.js's own size constants (DROP_R, FLUNG_LEN, FLUNG_HEAD_R) are
 // private/unexported, tuned against a 24px-wide stroke the game no longer
 // has (~13px widest now, brief 24 Task 2) — mirrored here at ~0.58x per the
 // brief's own numbers, same pattern and same BACKLOG.md reconciliation item
-// as the width constants above.
-const GAME_SPLATTER_DROP_R_MIN = 2.5, GAME_SPLATTER_DROP_R_MAX = 12.0;
+// as the width constants above. Brief 31 Task 2a widens all three ranges
+// further still ("no two marks read as siblings") — tuned by eye, verified
+// on a real finished canvas (see the session report for a screenshot).
+const GAME_SPLATTER_DROP_R_MIN = 1.5, GAME_SPLATTER_DROP_R_MAX = 16.0; // was 2.5-12.0
 const GAME_SPLATTER_DROP_SIZE_POWER = 3.5; // mirrors splatter.js's DROP_SIZE_POWER — heavy-tailed toward small
-const GAME_SPLATTER_FLUNG_LEN_MIN = 15, GAME_SPLATTER_FLUNG_LEN_MAX = 35;
-const GAME_SPLATTER_HEAD_R_MIN = 4, GAME_SPLATTER_HEAD_R_MAX = 9;
+const GAME_SPLATTER_FLUNG_LEN_MIN = 10, GAME_SPLATTER_FLUNG_LEN_MAX = 45; // was 15-35
+const GAME_SPLATTER_HEAD_R_MIN = 3, GAME_SPLATTER_HEAD_R_MAX = 12; // was 4-9
 const GAME_SPLATTER_SATELLITE_COUNT_MIN = 2, GAME_SPLATTER_SATELLITE_COUNT_MAX = 5; // a count, not a size — unscaled
-const GAME_SPLATTER_INK_WEIGHT = 0.15; // mirrors splatter.js's private INK_WEIGHT
 
 let gameSplatterRng; // own stream, salted off the per-game seed like every other — see startGame()
 let gameSplatterCooldown = 0;
 let gameSplatterMarks = []; // { mark, afterStrokes } — see maybeEmitSplatter's brief-26 comment
 
-// Mirrors splatter.js's private splatterColorWeights(palette) — ink at a
-// minor weight alongside the 3 accents at their own weights. Not exported,
-// so mirrored, same as the size constants above.
+// Brief 31 Task 2a — "no black splatter": drops the ink entry entirely.
+// Was mirroring splatter.js's private splatterColorWeights(palette), which
+// includes ink at a minor weight alongside the 3 accents; the app now
+// diverges from it on purpose — splatter draws only from the 3 accents, at
+// their own palette weights, never ink. (The ball marker itself stays
+// solid ink/black in paint mode — brief 24's legibility decision, separate
+// from this and not affected by it.)
 function gameSplatterColorWeights(palette) {
   return [
-    { value: palette.ink, weight: GAME_SPLATTER_INK_WEIGHT },
     ...palette.accents.map(a => ({ value: a.hex, weight: a.weight })),
   ];
 }
@@ -3876,9 +4034,14 @@ function buildLiveSplatterMark(ball, palette, rng) {
   const colorHex = weightedPick(rng, gameSplatterColorWeights(palette));
 
   // High spin favours 'flung' (brief 24 Task 6), oriented perpendicular to
-  // travel — not the ~60/40 flat ratio alone.
+  // travel — not the ~60/40 flat ratio alone. Brief 31 Task 2a adds a
+  // random jitter on top of the spin term so the drop/flung mix actually
+  // varies game to game instead of being a deterministic function of spin
+  // alone — two balls with near-identical spin no longer produce the same
+  // ratio every time.
   const spinNorm = Math.min(1, Math.abs(ball.spin) / GAME_SPLATTER_SPIN_REF);
-  const flungChance = Math.min(0.85, GAME_SPLATTER_FLUNG_RATIO + spinNorm * 0.4);
+  const jitter = (rng() - 0.5) * GAME_SPLATTER_FLUNG_RATIO_JITTER;
+  const flungChance = Math.max(0.1, Math.min(0.9, GAME_SPLATTER_FLUNG_RATIO + spinNorm * 0.4 + jitter));
 
   if (rng() < flungChance) {
     const dx = nx * sign, dy = ny * sign; // fling continues outward along the same perpendicular
@@ -3922,7 +4085,7 @@ function maybeEmitSplatter() {
   // Splatter is artwork, not chrome (brief 24 Task 6) — into gameStrokesCx,
   // so it dims with everything else during play and comes up to full at
   // game end (Task 4), same as a committed stroke.
-  renderSplatterMark(gameStrokesCx, mark);
+  renderSplatterMarkPaint(gameStrokesCx, mark);
   // Brief 26: also KEEP the descriptor, tagged with how many strokes were
   // committed when it fired. gameStrokesCv only ever holds baked pixels —
   // fine for live play, but the results screen's timeline scrubber (Task 6)
@@ -4085,8 +4248,12 @@ function startGame() {
   // start was never fixed) — invisible while paint played on the neutral
   // substrate, but it would have made Task 3's premise false the moment the
   // reveal made the ground visible. Mirrors the doodle's own brief-21 fix
-  // (paintPalette above, same groundHex).
-  gamePaintPalette = buildPalette(makeRng((gameSeed ^ 0x6A2F1C9E) >>> 0), { groundHex: GROUND_LIBRARY[0].hex });
+  // (paintPalette above, same groundHex). Brief 31 Task 1c: scheme/
+  // baseIndex pinned too, same reasoning as the doodle's own call — a
+  // fresh game's opening palette is the approved reference, not a draw.
+  gamePaintPalette = buildPalette(makeRng((gameSeed ^ 0x6A2F1C9E) >>> 0), {
+    scheme: PAINT_DEFAULT_SCHEME, baseIndex: PAINT_DEFAULT_BASE_INDEX, groundHex: GROUND_LIBRARY[0].hex,
+  });
   gamePaintArray = weightedPaletteArray(gamePaintPalette, (gameSeed ^ 0x6A2F1C9E) >>> 0);
 
   Object.keys(gameGroundCache).forEach(k => delete gameGroundCache[k]);
@@ -4182,7 +4349,7 @@ function stepGame() {
         quote: QUOTES[Math.floor(quoteRng() * QUOTES.length)],
       };
       setScreen('results');
-      startReveal(); // brief 26 — builds ground/blotches, resets the scrubber, runs the reveal animation
+      startReveal(); // brief 26 — builds ground, resets the scrubber, runs the reveal animation
       return;
     }
 
@@ -4269,7 +4436,15 @@ pgShuffleEl.addEventListener('click', (e) => {
   const shuffleRng = makeRng(shuffleSeed);
   const t0 = performance.now();
   if (currentSurface === 'paint') {
-    gamePaintPalette = buildPalette(shuffleRng, { groundHex: gamePaintPalette.ground }); // ground fixed — not part of shuffle
+    // Brief 31 Task 1c — shuffle only ever lands on triadic or split-
+    // complementary now. This draw replaces the one buildPalette would
+    // have made internally for scheme when opts.scheme is omitted (same
+    // rng, same single draw), just over PAINT_SHUFFLE_SCHEMES's 2 options
+    // instead of all 4 SCHEMES — baseIndex is still left to buildPalette's
+    // own draw, so which hues land is still fully random, only the harmony
+    // RULE is constrained.
+    const shuffleScheme = PAINT_SHUFFLE_SCHEMES[Math.floor(shuffleRng() * PAINT_SHUFFLE_SCHEMES.length)];
+    gamePaintPalette = buildPalette(shuffleRng, { scheme: shuffleScheme, groundHex: gamePaintPalette.ground }); // ground fixed — not part of shuffle
     gamePaintArray = weightedPaletteArray(gamePaintPalette, shuffleSeed);
   } else if (currentSurface === 'chalk') {
     shuffleArrayInPlace(gameChalkOrder, shuffleRng);
@@ -4335,10 +4510,8 @@ const timelineTrackEl = document.getElementById('timeline-track');
 const timelineFillEl = document.getElementById('timeline-fill');
 const timelineThumbEl = document.getElementById('timeline-thumb');
 
-// Set once per reveal by startReveal(), read by the scrubber. `blotches` is
-// paint-only (empty array otherwise) and NEVER changes with the scrubber —
-// Task 6's explicit compromise, see renderResultsStrokes.
-let resultsData = null; // { strokes, splatterMarks, blotches, surface, groundCv }
+// Set once per reveal by startReveal(), read by the scrubber.
+let resultsData = null; // { strokes, splatterMarks, surface, groundCv } — no `blotches` (brief 31 Task 2a removed them)
 
 // Forces a CSS animation to restart from its beginning — results can be
 // shown many times in a session (one per game), and simply re-adding a
@@ -4368,9 +4541,8 @@ function buildResultsGroundCv(surface, seed, groundHex) {
 
 // Brief 26 Task 6 — rebuilds the strokes canvas for a given stroke count
 // (the scrubber's position). Always the SAME renderGameStrokeAs/
-// renderSplatterMark/renderBlotchCluster functions used live and at brief
-// 24's build — never a second algorithm, per this file's standing
-// invariant.
+// renderSplatterMark functions used live and at brief 24's build — never a
+// second algorithm, per this file's standing invariant.
 //
 // Splatter marks are interleaved at their ORIGINAL chronological position
 // (matching `afterStrokes`, not drawn as one batch after all strokes).
@@ -4381,24 +4553,19 @@ function buildResultsGroundCv(surface, seed, groundHex) {
 // output against gameStrokesCv's actual live pixels for the same stroke
 // set: interleaved is 0 pixels different; drawing all splatter last (the
 // first version of this function) was ~16-19% of the canvas different on
-// a real rally. Blotches are NOT part of this ordering — they're a
-// reveal-only addition with no live equivalent, always drawn last/on top,
-// matching art-lab.html's own renderTile order (strokes, blotches, then
-// splatter — here, splatter is woven through the strokes step instead of
-// following it, because unlike the lab's static finished-set render, this
-// function also has to reproduce a specific chronology).
+// a real rally.
 //
-// Blotches are placed from the FULL stroke set and drawn regardless of
-// `count` — recomputing them per scrubber position would make the control
-// feel unstable (a blotch popping in/out as you scrub past its trigger
-// point) and cost a rebuild per frame for a result nobody asked to see
-// change. Compromise noted here per the brief's own instruction.
+// Brief 31 Task 2a — blotches removed entirely ("reads as random rather
+// than composed"). buildIntersectionBlotches/renderBlotchCluster are no
+// longer imported or called anywhere in this file; the engine functions
+// themselves are untouched (splatter.js is unchanged — the brief is
+// explicit that this is a call-site removal, not a deprecation).
 function renderResultsStrokes(count) {
   resultsStrokesCx.clearRect(0, 0, W, H);
   let splatterIdx = 0;
   function flushSplatterUpTo(n) {
     while (splatterIdx < resultsData.splatterMarks.length && resultsData.splatterMarks[splatterIdx].afterStrokes <= n) {
-      renderSplatterMark(resultsStrokesCx, resultsData.splatterMarks[splatterIdx].mark);
+      renderSplatterMarkPaint(resultsStrokesCx, resultsData.splatterMarks[splatterIdx].mark);
       splatterIdx++;
     }
   }
@@ -4407,9 +4574,14 @@ function renderResultsStrokes(count) {
     renderGameStrokeAs(resultsStrokesCx, resultsData.surface, st.pts, st.wt, st.op, st.index);
     flushSplatterUpTo(i + 1);
   });
-  resultsData.blotches.forEach(cluster => renderBlotchCluster(resultsStrokesCx, cluster));
 }
 
+// Brief 31 Task 4 — timeline opens at 70%, not the full painting. A
+// finished piece reads a little sparser on arrival; pulling the scrubber
+// right visibly adds to it, which is the point of having a scrubber at
+// all. Save and share are unaffected — both read whatever the scrubber
+// currently shows, same as before.
+const TIMELINE_DEFAULT_FRACTION = 0.70;
 function updateTimelineUI(count) {
   const total = resultsData.strokes.length;
   const pct = total > 0 ? (count / total) * 100 : 100;
@@ -4422,40 +4594,25 @@ function updateTimelineUI(count) {
 
 // Brief 26 Task 2 — entry point, called once from stepGame's win branch
 // right after setScreen('results'). Builds everything the reveal needs
-// from gameLastEndedStrokes, draws the FULL (100%) painting once, and
-// triggers the reveal animations. The scrubber (below) can rebuild
-// resultsStrokesCx again later at the user's request; that is a distinct,
-// explicit, user-driven action — not part of the reveal transition itself.
+// from gameLastEndedStrokes, draws the default (70%, Task 4) painting
+// once, and triggers the reveal animations. The scrubber (below) can
+// rebuild resultsStrokesCx again later at the user's request; that is a
+// distinct, explicit, user-driven action — not part of the reveal
+// transition itself.
 function startReveal() {
   const h = gameLastEndedStrokes;
   if (!h) return;
 
-  // Blotches: paint only, computed ONCE from the full finished stroke set
-  // — buildIntersectionBlotches reads each stroke's resolved `.col`
-  // (splatter.js's contributingStrokes), which our stroke objects don't
-  // carry (colour is resolved lazily via gameColourFor at render time
-  // everywhere else in this file) — mapped on here, not stored on the
-  // live objects, so this doesn't change how strokes work anywhere else.
-  let blotches = [];
-  if (h.surface === 'paint') {
-    const strokesWithColor = h.strokes.map(st => ({ ...st, col: gameColourFor(h.surface, st.index) }));
-    const blotchRng = makeRng((h.seed ^ 0x424C4F54) >>> 0); // 'BLOT'
-    blotches = buildIntersectionBlotches(strokesWithColor, gamePaintPalette, blotchRng, W, H, {
-      sizeMult: PAINT_DEFAULT_BLOTCH_SIZE_MULT, // frozen product default (paint.js) — no lab slider on this screen
-    });
-  }
-
   resultsData = {
     strokes: h.strokes,
     splatterMarks: h.splatterMarks,
-    blotches,
     surface: h.surface,
     groundCv: buildResultsGroundCv(h.surface, h.seed, h.paintGroundHex),
   };
 
   resultsGroundCx.clearRect(0, 0, W, H);
   resultsGroundCx.drawImage(resultsData.groundCv, 0, 0);
-  updateTimelineUI(resultsData.strokes.length); // default: every committed stroke (100%)
+  updateTimelineUI(Math.round(resultsData.strokes.length * TIMELINE_DEFAULT_FRACTION)); // brief 31 Task 4 — was 100%
 
   resultsHaikuEl.textContent = h.quote;
 
@@ -5117,32 +5274,23 @@ function renderSharePage(decoded) {
   shareStrokesCxFull.clearRect(0, 0, W, H);
   decoded.strokes.forEach(st => renderStrokeWithColor(shareStrokesCxFull, decoded.surface, st.pts, st.wt, st.op, st.colorHex));
 
-  // Blotches — paint only, off the SAME 'BLOT' salt startReveal uses
-  // (~line 2235), so a shared link reproduces the identical clusters the
-  // player saw on their own results screen. buildIntersectionBlotches'
-  // `palette` parameter (2nd arg) is read nowhere in its body — confirmed
-  // at brief 26 — so there is no live gamePaintPalette to substitute here;
-  // null is exactly as valid as what results already passes it.
-  if (decoded.surface === 'paint') {
-    const strokesWithColor = decoded.strokes.map(st => ({ ...st, col: st.colorHex }));
-    const blotchRng = makeRng((decoded.seed ^ 0x424C4F54) >>> 0); // 'BLOT'
-    const blotches = buildIntersectionBlotches(strokesWithColor, null, blotchRng, W, H, {
-      sizeMult: PAINT_DEFAULT_BLOTCH_SIZE_MULT,
-    });
-    blotches.forEach(cluster => renderBlotchCluster(shareStrokesCxFull, cluster));
-  }
-
+  // Brief 31 Task 2a — blotches removed from the reveal entirely, and that
+  // has to hold everywhere the artwork is rendered, not just results: a
+  // shared link exists specifically to reproduce what the player saw at
+  // the reveal, so leaving blotches in here while removing them from
+  // results would make share show a DIFFERENT painting than the one being
+  // shared. buildIntersectionBlotches/renderBlotchCluster are no longer
+  // called anywhere in this file.
+  //
   // Splatter — sent explicitly (Task 1: brief-24 splatter is a per-frame
   // probability event, not reproducible from the seed alone). Drawn as ONE
-  // BATCH after strokes+blotches here, NOT interleaved at each mark's
-  // original `afterStrokes` position the way results' renderResultsStrokes
-  // does — a deliberate simplification specific to the share payload only.
-  // The bar Task 1 sets is "visually indistinguishable", not
-  // pixel-identical (the recipient never saw the original to compare
-  // against), and not transmitting `afterStrokes` saves a byte per mark.
-  // Matches art-lab.html's own proven strokes -> blotches -> splatter
-  // order, same as the lab's static finished-set render.
-  decoded.splatterMarks.forEach(mark => renderSplatterMark(shareStrokesCxFull, mark));
+  // BATCH after strokes here, NOT interleaved at each mark's original
+  // `afterStrokes` position the way results' renderResultsStrokes does —
+  // a deliberate simplification specific to the share payload only. The
+  // bar Task 1 sets is "visually indistinguishable", not pixel-identical
+  // (the recipient never saw the original to compare against), and not
+  // transmitting `afterStrokes` saves a byte per mark.
+  decoded.splatterMarks.forEach(mark => renderSplatterMarkPaint(shareStrokesCxFull, mark));
 
   // Blit down to the fixed 0.8x preview (Task 2). Border/radius are CSS on
   // #share-stage/.frame and are NOT scaled down with it — untouched here.
@@ -5203,17 +5351,46 @@ document.getElementById('btn-share-download').addEventListener('click', () => {
   exportArtworkPNG(shareGroundCvFull, shareStrokesCvFull, shareHaikuEl.textContent, shareDecoded.seed);
 });
 
-// COPY LINK — the full URL including the fragment (written by
+// COPY LINK — brief 31 Task 5 rebuild. `location.href` at this point is
+// already the full absolute URL including the `#a=…` fragment (written by
 // shareCurrentGame's history.replaceState, or already present if this tab
-// landed on someone else's link). Label swap only, ~1.5s, no toast, no new
-// component — per the brief.
+// landed on someone else's link) — verified by pasting a copied link into
+// a fresh browser tab, not just by reading this line, per the brief's own
+// instruction. Label swaps to "Copied!" for 3s, no toast, no new component.
+// Falls back to a hidden selectable input + execCommand('copy') if
+// navigator.clipboard.writeText rejects (insecure context, permission
+// denied) — "Copied!" only ever shows on an ACTUAL success, never
+// optimistically before the fallback path is known to have worked.
+function copyShareLinkFallback(text) {
+  const input = document.createElement('input');
+  input.value = text;
+  input.style.position = 'fixed';
+  input.style.top = '-1000px'; // off-screen, not display:none — execCommand needs it in the render tree to select
+  input.style.opacity = '0';
+  input.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+  input.setSelectionRange(0, input.value.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  document.body.removeChild(input);
+  return ok;
+}
 document.getElementById('btn-share-copy').addEventListener('click', (e) => {
   const btn = e.currentTarget;
-  navigator.clipboard.writeText(location.href).then(() => {
-    const original = btn.textContent;
-    btn.textContent = 'copied';
-    setTimeout(() => { btn.textContent = original; }, 1500);
-  }).catch(() => {});
+  const original = btn.textContent;
+  const showCopied = () => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 3000);
+  };
+  const hasClipboardAPI = navigator.clipboard && typeof navigator.clipboard.writeText === 'function';
+  const tryFallback = () => { if (copyShareLinkFallback(location.href)) showCopied(); };
+  if (hasClipboardAPI) {
+    navigator.clipboard.writeText(location.href).then(showCopied).catch(tryFallback);
+  } else {
+    tryFallback();
+  }
 });
 
 /* ════════════════════════════════════════════════════════════════════
@@ -5526,29 +5703,48 @@ function sndChalk() {
   } catch (e) {}
 }
 
-// Game over — brief 28 Task 5d rebuilds this the same way as sndPoint: a
-// deeper, slower struck bowl, still one strike/no melody. 4.5s means it is
-// deliberately still ringing as the brief-26 reveal's ground wipe (900ms)
-// settles under the haiku (1300ms) — do not shorten it to fit.
-// Optional second strike (brief's own suggestion) shipped: the SAME stack
-// again at 45% gain, 1.6s later — the identical partials read as one bell
-// answering itself (temple-like); two different pitches would be a
-// melody, which the brief explicitly does not want.
+// Game over — brief 31 Task 3 rebuilds brief 28's single-fundamental
+// two-strike version ("same 220Hz bell, second hit at 45% gain") into an
+// actual "da-DUM": two DIFFERENT pitches, D4 then G3, a falling perfect
+// fourth. Unambiguous as two notes without becoming a melody — still one
+// bell answering itself, just at a different pitch, which is what makes it
+// read as an ending rather than a phrase.
+//
+// Everything else from brief 28's bell recipe carries over unchanged in
+// SHAPE, scaled per strike from the brief's own table (gain 0.72x / 1.15x,
+// decay 1.8s / 5.0s): the same inharmonic partials at ×2.74/×5.4, the
+// ×1.004 beat partner, the noise strike transient, and a sub. Partial/
+// beat/sub decays scale by the same ratio the fundamental's own decay
+// moves by (k = new decay / 4.5, brief 28's fundamental decay) — this
+// preserves brief 28's approved "brightness fades faster than the
+// fundamental" spectral shape at the new target decays, rather than
+// inventing a new shape per strike. The sub is pitched an octave below
+// each strike's OWN fundamental (was a fixed 110Hz under a fixed 220Hz
+// fundamental) — a fixed sub under two different fundamentals would blur
+// exactly the falling-fourth character the two pitches exist to create.
+// The strike transient stays fixed at 1400Hz/Q2 for both — that is the
+// mallet/board's own resonance, not a pitched partial, so it does not
+// move with the note being struck, same as a real instrument.
+//
+// The second strike's 5s decay means it is still ringing under the
+// brief-26 reveal's ground wipe (900ms) and into the haiku (1300ms) —
+// deliberately, brief 28's original reasoning carries over unchanged. Do
+// not shorten it to fit.
 function sndGameOver() {
   if (muted || !actx || !sfxBus) return;
   try {
     const a = actx;
-    const fundamental = 220;
-    const strike = (mult, startAt) => {
-      bellStrike(a, 1400, 2, 0.12 * mult, 0.020, startAt);
-      bellPartial(a, fundamental, 0.34 * mult, 4.5, 0.015, startAt);
-      bellPartial(a, fundamental * 2.74, 0.18 * mult, 3.0, 0.015, startAt);
-      bellPartial(a, fundamental * 5.4, 0.08 * mult, 1.6, 0.015, startAt);
-      bellPartial(a, fundamental * 1.004, 0.14 * mult, 4.5, 0.015, startAt); // beat partner
-      bellPartial(a, 110, 0.12 * mult, 3.0, 0.015, startAt); // sub
+    const strike = (fundamental, decay, gainMult, startAt) => {
+      const k = decay / 4.5; // brief 28's own fundamental decay — the scale reference
+      bellStrike(a, 1400, 2, 0.12 * gainMult, 0.020, startAt);
+      bellPartial(a, fundamental, 0.34 * gainMult, decay, 0.015, startAt);
+      bellPartial(a, fundamental * 2.74, 0.18 * gainMult, 3.0 * k, 0.015, startAt);
+      bellPartial(a, fundamental * 5.4, 0.08 * gainMult, 1.6 * k, 0.015, startAt);
+      bellPartial(a, fundamental * 1.004, 0.14 * gainMult, decay, 0.015, startAt); // beat partner
+      bellPartial(a, fundamental / 2, 0.12 * gainMult, 3.0 * k, 0.015, startAt); // sub, an octave down from THIS strike's fundamental
     };
-    strike(1, 0);
-    strike(0.45, 1.6); // second strike — shipped, see this function's own comment
+    strike(293.66, 1.8, 0.72, 0);     // D4 — "da"
+    strike(196.00, 5.0, 1.15, 0.380); // G3 — "DUM", a falling perfect fourth below
   } catch (e) {}
 }
 
@@ -5557,7 +5753,7 @@ const idleSub = document.getElementById('idle-sub');
 function armIdle() {
   if (idleEl.dataset.idleStep === 'armed') return;
   idleEl.dataset.idleStep = 'armed';
-  idleSub.textContent = 'choose a surface, then space to serve';
+  idleSub.textContent = 'Choose a surface, then press space or click to begin';
   startBGM(); // fire-and-forget: startBGM is itself async/awaits actx.resume()
 }
 
@@ -5584,7 +5780,7 @@ function beginGame() {
 function goToIdleArmed() {
   setScreen('idle');
   idleEl.dataset.idleStep = 'armed';
-  idleSub.textContent = 'choose a surface, then space to serve';
+  idleSub.textContent = 'Choose a surface, then press space or click to begin';
   setBGMLevel(BGM_LEVEL_IDLE); // brief 28 Task 5b — back to rest
 }
 

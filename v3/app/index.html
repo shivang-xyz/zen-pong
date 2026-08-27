@@ -181,11 +181,19 @@
      .ctrl-chip. The live v2 build has shipped this exact glow since launch
      and Shivang asked for it back — logged as doc drift in BACKLOG.md
      rather than softened to split the difference. */
+  /* Brief 34 Task 6b — replaces the hard ring + tight blur (0 0 0 6px …,
+     0 0 48px …) with a soft, wide, diffused bloom — no hard ring at all,
+     layered blurs only, in the spirit of cta.css's own hover glow
+     (--shadow-glow-flat) but bigger and louder, since this only flashes
+     for a moment rather than sitting under a resting pointer. Amber stays
+     rgba(255,215,140,·) at both strengths, gameover kept larger (bigger
+     spread/blur, slightly higher opacity) and longer (1400ms vs 900ms,
+     unchanged — see flashGameFrame's own duration param) than point. */
   #game-frame.canvas-glow-point {
-    box-shadow: 0 0 0 6px rgba(255,215,140,0.38), 0 0 48px rgba(255,215,140,0.34) !important;
+    box-shadow: 0 0 44px 10px rgba(255,215,140,0.5), 0 0 90px 28px rgba(255,215,140,0.3) !important;
   }
   #game-frame.canvas-glow-gameover {
-    box-shadow: 0 0 0 8px rgba(255,215,140,0.45), 0 0 64px rgba(255,215,140,0.45) !important;
+    box-shadow: 0 0 56px 14px rgba(255,215,140,0.55), 0 0 110px 34px rgba(255,215,140,0.35) !important;
   }
 
   /* ── Paddles · DESIGN.md §7/§8 — DOM divs, never canvas ── */
@@ -272,6 +280,13 @@
     box-shadow: var(--shadow-chip);
     text-align: center;
     display: flex; flex-direction: column; align-items: center; gap: var(--space-s);
+    /* Brief 34 Task 2 — #surface-chip's own slide-down starts at
+       translateY(-16px), tucked up toward the card's own bottom edge; this
+       keeps the card painting above that overlap so the reveal reads as
+       emerging from underneath it, not poking out beside it. Both are
+       siblings in .intro-stack's one stacking context (z-index:4) — DOM
+       order alone would put surface-chip (later) on top without this. */
+    position: relative; z-index: 1;
   }
   /* Brief 31 Task 6 — was --color-disabled; cream (--color-canvas) reads as
      the brightest thing on the #464646 card, which is the point. Gentle
@@ -293,10 +308,14 @@
   }
 
   /* ── Surface selector · DESIGN.md §10 #surface-chip ──
-     Absent in Step A (attract). Slides up on the first gesture, per
-     brief 18 Task 3, and never leaves — that gesture also unlocks audio. */
-  @keyframes zp-slide-up {
-    from { transform: translateY(64px); opacity: 0; }
+     Absent in Step A (attract). Slides DOWN from under the title card on
+     the first gesture (brief 34 Task 2, replaces brief 18 Task 3's
+     slide-up), and never leaves — that gesture also unlocks audio. Brief
+     34 Task 2 also applies this same mechanic to #pal-pill (below) — same
+     keyframe, same 600ms, same easing, each animating in its own current
+     position (pal-pill is not relocated next to the card). */
+  @keyframes zp-slide-down {
+    from { transform: translateY(-16px); opacity: 0; }
     to   { transform: translateY(0);     opacity: 1; }
   }
   #surface-chip {
@@ -305,7 +324,10 @@
   }
   [data-idle-step="armed"] #surface-chip {
     display: flex;
-    animation: zp-slide-up 400ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: zp-slide-down 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-idle-step="armed"] #surface-chip { animation: none; }
   }
   #surface-chip .tile {
     flex: 1; height: 32px;
@@ -332,12 +354,40 @@
   .pal-pill { padding: 0 var(--space-xm); gap: var(--space-s); }
   .pal-pill .dot { width: 10px; height: 10px; border-radius: 50%; }
   .pal-pill .shuffle { margin-left: var(--space-s); cursor: pointer; }
+  /* Brief 34 Task 2 — idle's OWN pal-pill only (#pal-pill), scoped by ID,
+     never the shared .pal-pill class — the playing screen's #pg-pal-pill
+     must stay visible unconditionally, it has no attract/armed steps. */
+  #pal-pill { display: none; }
+  [data-idle-step="armed"] #pal-pill {
+    display: flex;
+    animation: zp-slide-down 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-idle-step="armed"] #pal-pill { animation: none; }
+  }
   /* Brief 33 Task 1 — dot hover-scale and the un-scoped shuffle hover
      colour removed: cta.css's "Palette chip" section is explicit that
      dots get no hover state, and the shuffle's own hover colour now
      comes from cta.css's @media (hover: hover)-scoped rule below — this
      old rule had no such scoping, so it would have kept the shuffle
      turning white on a touch device's "stuck" post-tap hover. */
+
+  /* ── Idle music credit · brief 34 Task 1 ──
+     Reuses the mobile gate's own .hint token values (11px Space Mono,
+     natural case, --color-disabled) rather than the shoutier uppercase
+     .mono utility — "Music by Omni Gardens — Oolong" is a name/title, not
+     a label, and the brief's own "quiet, present not shouting" calls for
+     natural case. A standing credit, not part of Task 2's reveal — sits
+     outside anything gated by [data-idle-step], so it shows in both. */
+  .idle-credit {
+    display: block; margin-top: var(--space-m);
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 11px; letter-spacing: 0.06em;
+    color: var(--color-disabled);
+    text-decoration: underline; text-decoration-color: rgba(119,119,119,0.5);
+    text-underline-offset: 2px;
+  }
+  .idle-credit:hover, .idle-credit:focus-visible { color: var(--color-lightest-grey); }
 
   /* ── Playing screen control row · DESIGN.md §8 Screen 2 / §10 ──
      3-column grid, 1000px wide: pal-pill left, score-pill centred,
@@ -382,17 +432,6 @@
      default (0,1,0), so `display:block` above won and the "hidden" icon
      showed anyway — two speakers side by side. This rule outranks both. */
   .icon-pill svg[hidden] { display: none; }
-
-  /* Serve indicator · DESIGN.md §7 — grey ball outside the canvas
-     top-left, shown between points while the next ball is pending. Never
-     shown while a ball is in flight. */
-  .serve-dot {
-    position: absolute; left: -32px; top: -40px;
-    width: 16px; height: 16px; border-radius: 50%;
-    background: var(--color-canvas-border);
-    z-index: 3;
-  }
-  .serve-dot[hidden] { display: none; }
 
   /* ── Results screen · DESIGN.md §8 Screen 3, v3/design/3-results-reveal.html ── */
 
@@ -477,8 +516,6 @@
      because Shivang asked for the CTA per the design, not because it has
      been signed off; see BACKLOG.md. */
   @keyframes zp-flow    { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
-  @keyframes zp-word-a  { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
-  @keyframes zp-word-b  { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
   .rbtn-primary {
     padding: 1px;
     border: 0;
@@ -504,13 +541,10 @@
     color: #FFFFFF;
     box-shadow: inset 0 0 5px rgba(0,0,0,0.32);
   }
-  .swap { position: relative; display: inline-block; width: 44px; text-align: left; }
-  .swap b { font-weight: 400; animation: zp-word-a 6s steps(1, end) infinite; }
-  .swap i {
-    position: absolute; left: 0; top: 0; font-style: normal;
-    animation: zp-word-b 6s steps(1, end) infinite;
-  }
-  .static-word { margin-left: var(--space-s); }
+  /* Brief 34 Task 6d — .swap/.static-word and their zp-word-a/zp-word-b
+     keyframes removed: the PAINT/PLAY word-swap they implemented is gone
+     (both .rbtn-primary CTAs now show a static label), and these were
+     their only two consumers — dead code, not left behind. */
 
   /* ── #timeline-chip — DESIGN.md §10, primitives resolved by the design
      file per the brief (DESIGN.md itself flags them UNRESOLVED) (Task 6) ── */
@@ -535,7 +569,14 @@
     cursor: grab;
   }
   .track:active .thumb, .track .thumb:active { cursor: grabbing; }
-  .track:focus-visible { outline: 2px solid var(--color-lightest-grey); outline-offset: 4px; } /* browser-default-adjacent, DESIGN.md defines no custom ring (Task 6) */
+  /* Brief 34 Task 6c — the browser-default-adjacent ring an earlier brief
+     added here is gone: it showed inconsistently (first focus only, in
+     practice) and fought with cta.css's own amber scrub/focus-within
+     state, which is the only focus treatment the track should ever show.
+     outline:none on both :focus and :focus-visible — cta.css's
+     #timeline-chip:focus-within / .scrubbing box-shadow rules are
+     untouched and still the sole focus feedback. */
+  .track:focus, .track:focus-visible { outline: none; }
 
   /* ── Mobile screens · brief 32 ──────────────────────────────────────────
      Replaces brief 30's placeholder #mobile-overlay entirely: two REAL,
@@ -583,7 +624,12 @@
     overflow-y: auto;
     background: var(--color-bg);
     color: var(--color-lightest-grey);
-    padding: calc(var(--space-m) + env(safe-area-inset-top)) 0 calc(var(--space-m) + env(safe-area-inset-bottom));
+    /* Brief 34 Task 5a — top padding only, tightened --space-m(24)
+       -> --space-xm(16); bottom stays --space-m, the brief names only the
+       gap above the logo. Split into two declarations (was one shorthand)
+       so only the top value changes. */
+    padding-top: calc(var(--space-xm) + env(safe-area-inset-top));
+    padding-bottom: calc(var(--space-m) + env(safe-area-inset-bottom));
   }
   html.mobile-gate-active #screen-mobile-gate,
   html.mobile-share-active #screen-mobile-share { display: flex; }
@@ -635,6 +681,11 @@
      structure (moving zoom-hint into header would have meant rebuilding
      art-block's own label-to-artwork gap too, for no benefit). */
   #screen-mobile-share main { gap: var(--space-m); padding-top: var(--space-xm); }
+  /* Brief 34 Task 5a — gate's header->content gap tightened to match, same
+     --space-xm(16) value share already carries from Task 5d above (the
+     brief names no specific target for the gate; matching its sibling
+     screen keeps both consistent rather than introducing a third value). */
+  #screen-mobile-gate main { padding-top: var(--space-xm); }
   #screen-mobile-share .art-block { display: flex; flex-direction: column; gap: var(--space-m); }
   #screen-mobile-share .zoom-hint {
     margin: 0; text-align: center;
@@ -646,9 +697,9 @@
   #screen-mobile-share .haiku { font-size: 17px; color: var(--color-lightest-grey); margin: 0; text-align: center; }
 
   /* ── actions — stacked, full-width, var(--tap) tall. Reuses the shared
-     .rbtn/.rbtn-primary/.swap classes (colour, gradient, word-swap
-     animation — unchanged, desktop keeps its own auto-width/padded
-     sizing) with mobile-scoped overrides for width/height only. ── */
+     .rbtn/.rbtn-primary classes (colour, gradient — unchanged, desktop
+     keeps its own auto-width/padded sizing) with mobile-scoped overrides
+     for width/height only. ── */
   #screen-mobile-gate .actions, #screen-mobile-share .actions {
     display: flex; flex-direction: column; gap: var(--space-xxm);
   }
@@ -717,6 +768,24 @@
     text-align: center; margin: 0;
     min-height: 16px;
   }
+  /* Brief 34 Task 5b — quiet, not a button: no background, no border, no
+     box-shadow, .hint's own token values (11px Space Mono, natural case,
+     --color-disabled) so it reads as a caption, not a CTA. Tap target
+     still >=44px via min-height + centring, per the brief's own
+     accessibility floor even for a text-only control. */
+  .gate-back-link {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 44px; width: 100%;
+    margin: 0; padding: 0; border: 0; background: transparent;
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 11px; letter-spacing: 0.06em;
+    color: var(--color-disabled);
+    text-decoration: underline; text-decoration-color: rgba(119,119,119,0.5);
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .gate-back-link:hover, .gate-back-link:focus-visible { color: var(--color-lightest-grey); }
+  .gate-back-link[hidden] { display: none; }
 
   /* ── Share — rotated fullscreen view ──
      The artwork is landscape and the phone is portrait, so full screen
@@ -983,6 +1052,11 @@
           <span class="inner"><span id="gate-copy-label">copy link</span></span>
         </button>
         <p class="hint" id="gate-hint">copy the link to shift to your desktop</p>
+        <!-- Brief 34 Task 5b — quiet tertiary link, not a full button; only
+             shown when arrivedViaShare is true (JS toggles [hidden]). A
+             cold gate visit (never came from a share link) never shows
+             this — there is nothing to go back to. -->
+        <button class="gate-back-link" id="gate-back-link" hidden>go back to artwork</button>
       </div>
     </main>
   </section>
@@ -1020,8 +1094,11 @@
       </div>
       <p class="haiku" id="mobile-share-haiku"></p>
       <div class="actions">
+        <!-- Brief 34 Task 6d — static label, no PAINT/PLAY word-swap
+             animation (was always flagged at review as unratified, see
+             the desktop button's own comment below). -->
         <button class="rbtn-primary" id="btn-mobile-share-cta">
-          <span class="inner"><span class="swap"><b>paint</b><i>play</i></span><span class="static-word">your own</span></span>
+          <span class="inner">play zen pong</span>
         </button>
         <div class="secondary">
           <button class="rbtn" id="btn-mobile-share-download">download</button>
@@ -1110,6 +1187,13 @@
         <polyline points="7,10 3,13.5 7,17"/><path d="M18 13.5H3"/>
       </svg>
     </div>
+
+    <!-- Brief 34 Task 1 — standing credit, not part of Task 2's reveal:
+         placed as a direct child of #screen-idle (a sibling of .stage and
+         #pal-pill, not gated by [data-idle-step]), so it shows in both
+         attract and armed. Bandcamp URL is the brief's own placeholder —
+         Shivang to confirm the real one. -->
+    <a class="idle-credit" href="https://omnigardens.bandcamp.com/album/moss-king" target="_blank" rel="noopener">Music by Omni Gardens — Oolong</a>
   </section>
 
   <!-- ══════════════════════════ PLAYING SCREEN ══════════════════════════ -->
@@ -1132,7 +1216,6 @@
     </div>
 
     <div class="stage">
-      <div class="serve-dot" id="serve-dot" hidden></div>
       <div class="canvas-wrap">
         <canvas id="game-canvas" width="1000" height="630"></canvas>
       </div>
@@ -1297,12 +1380,11 @@
     <div class="spacer-l"></div>
 
     <div id="share-row">
-      <!-- .rbtn-primary — DESIGN.md §10, built as designed per the brief.
-           The PAINT/PLAY word-swap has never been ratified (DESIGN.md §10
-           says so itself) — flagged at review, one CSS rule to drop if it
-           reads as a fidget. -->
+      <!-- .rbtn-primary — DESIGN.md §10. Brief 34 Task 6d: static label,
+           dropping the PAINT/PLAY word-swap this comment itself flagged as
+           never ratified. -->
       <button class="rbtn-primary" id="btn-share-cta">
-        <span class="inner"><span class="swap"><b>paint</b><i>play</i></span><span class="static-word">your own</span></span>
+        <span class="inner">play zen pong</span>
       </button>
       <div class="secondary">
         <button class="rbtn" id="btn-share-download">download png</button>
@@ -1344,6 +1426,15 @@ const SHARE_HASH_PREFIX = '#a=';
 // mobile gate for the rest of the tab's life. Cleared in goToIdleArmed().
 let landingWithSharePayload = location.hash.startsWith(SHARE_HASH_PREFIX);
 if (landingWithSharePayload) document.getElementById('screen-idle').hidden = true;
+// Brief 34 Task 5b — distinct from landingWithSharePayload above, and
+// deliberately NEVER cleared: that flag exists only to bridge the
+// split-second gap before the share decode settles, and brief 33 clears
+// it the moment the visitor leaves the share landing (goToIdleArmed) so
+// the gate can show. This one instead answers "did this visit ever come
+// from a share link" for the whole life of the tab — it's what lets the
+// gate offer a way back to the artwork instead of being a dead end for a
+// phone visitor who tapped "play your own".
+const arrivedViaShare = landingWithSharePayload;
 
 // Brief 26 Task 5 — ported verbatim from root index.html (~line 566), text
 // and attributions unchanged. Picked by the per-game seed (see
@@ -1550,7 +1641,13 @@ const PAINT_DEFAULT_BASE_INDEX = 0;
 // "first thing a visitor sees" alongside a fresh game, and showing it a
 // different default than the approved reference would be its own quiet
 // inconsistency.
-const paintPalette = buildPalette(makeRng((DOODLE_SEED ^ 0x5EED1DEA) >>> 0), {
+// Brief 34 Task 3a — `let`, not `const`: the idle shuffle (below) now
+// reassigns this wholesale, same as the game's own gamePaintPalette
+// already does. This INITIAL call is untouched — still the pinned
+// reference (Task 4c's own carve-out: "the fixed-seed doodle defaults can
+// stay pinned, they're the reference") — only the shuffle handler draws
+// a fresh scheme/hue afterward.
+let paintPalette = buildPalette(makeRng((DOODLE_SEED ^ 0x5EED1DEA) >>> 0), {
   scheme: PAINT_DEFAULT_SCHEME, baseIndex: PAINT_DEFAULT_BASE_INDEX, groundHex: GROUND_LIBRARY[0].hex,
 });
 
@@ -1640,16 +1737,45 @@ const PAPER_PALETTE = ['#F2716A', '#54B85B', '#6D9AFF']; // red, green, blue
 // paint's width constants ("the product value wins at reconciliation").
 const CHALK_PALETTE = ['#E6B816', '#00D8F6', '#F695EE']; // gold, cyan, pink
 const CHALK_GROUND_HEX = '#1A1A1E'; // chalkboard.js's own frozen CB_BASE (DESIGN.md §2's --color-canvas-chalk placeholder note)
+const PAPER_GROUND_HEX = '#FFF5E5'; // DESIGN.md --color-canvas, "the play area" — NOT palette.js's GROUND_LIBRARY[0]/#F4EBD4, which is paint's own distinct "Cream" ground constant, a different, coincidentally similar hex
 
-// Brief 31 Task 1c, continued — PAINT_DEFAULT_SCHEME/BASE_INDEX are defined
-// earlier (alongside the doodle's own buildPalette call, which needs them
-// first) and reused at the game's buildPalette call site further down.
-// Shuffle draws from these two only — analogous/complementary-minor stay
-// reachable in the lab (SCHEMES itself, palette.js, is untouched) but never
-// ship in the app. Consumes exactly the one rng draw buildPalette itself
-// would have made internally for an un-pinned scheme, just constrained to
-// 2 options instead of Object.keys(SCHEMES)'s 4 — same determinism shape.
-const PAINT_SHUFFLE_SCHEMES = ['triadic', 'split-complementary'];
+// Brief 31 Task 1c / brief 34 Task 4c — PAINT_DEFAULT_SCHEME/BASE_INDEX are
+// defined earlier (alongside the doodle's own buildPalette call, which
+// needs them first) and reused at the game's buildPalette call site
+// further down. Analogous/complementary-minor stay reachable in the lab
+// (SCHEMES itself, palette.js, is untouched) but never ship in the app.
+//
+// FINDING, caught in verification, changes what this constant can honestly
+// be: brief 34 Task 4c asks every generated palette to draw its scheme
+// 50-50 from ['triadic','split-complementary']. Measured directly —
+// buildPalette({scheme:'triadic'}) against every one of HUE_LIBRARY's 12
+// possible base rotations, 50 different seeds, 1200 trials total — and it
+// NEVER once produced a result satisfiesPaletteRule recognises as
+// triadic (0/1200). SCHEMES.triadic = [0,4,8] (palette.js) assumes
+// HUE_LIBRARY's 12 hues are evenly spaced at 30° each; they are a curated,
+// deliberately UNEVEN set (a 65° real gap Chartreuse->Green sits next to
+// an 8° gap Amber->Yellow), so picking indices 4 apart does not land
+// ~120° apart in real degrees. Only 'split-complementary' is ever
+// actually achievable this way (~17% of attempts). This is a palette.js-
+// level mismatch between SCHEMES' index offsets and real hue geometry —
+// out of this brief's edit scope (v3/engine/ stays byte-identical to
+// main) — logged in BACKLOG.md as a real, separate fix needed there.
+//
+// Consequence, applied here: SHUFFLE_SCHEMES no longer varies. Keeping a
+// draw between two options where one can never win would have shipped
+// chalk's shuffle as a silent no-op — CHALK_PALETTE's own hues are
+// genuinely triadic, generation can't reach that pattern, so every
+// shuffle would exhaust its retry budget and fall back to the identical
+// fixed default every time (confirmed live: 10/10 "shuffled" chalk
+// results were byte-identical to the untouched CHALK_PALETTE). Every
+// generated palette (paint's per-game default, paint/paper/chalk shuffle,
+// idle shuffle) now targets the one pattern buildPalette can actually
+// deliver, so shuffle stays genuinely functional on every surface. The
+// FIXED opening defaults (paper/chalk's approved triads, the doodle's
+// pinned paint reference) are hand-picked, not generated, and stay
+// genuinely triadic exactly as before — a real play session still shows
+// both patterns, just not literally 50-50 within the shuffles alone.
+const SHUFFLE_SCHEMES = ['split-complementary'];
 
 // Verification, printed once at load per Task 1's own instruction ("print
 // the measured numbers in the session output") — console.assert (not a
@@ -1667,16 +1793,91 @@ const PAINT_SHUFFLE_SCHEMES = ['triadic', 'split-complementary'];
     console.assert(Math.min(...accentDEs) >= MIN_ACCENT_DE, `[palette] ${label} accent ΔE below floor ${MIN_ACCENT_DE}`, accentDEs);
     console.assert(Math.min(...groundDEs) >= minGroundDE, `[palette] ${label} ground ΔE below floor ${minGroundDE}`, groundDEs);
   }
-  report('paper', PAPER_PALETTE, '#FFF5E5', MIN_GROUND_DE);
+  report('paper', PAPER_PALETTE, PAPER_GROUND_HEX, MIN_GROUND_DE);
   report('chalk', CHALK_PALETTE, CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE);
 })();
+
+// Brief 34 Task 3b/4c — shared generator behind every paper/chalk shuffle
+// (idle and in-game), drawing from SHUFFLE_SCHEMES (see its own comment —
+// single-valued, not the 50-50 draw Task 4c originally asked for; 'triadic'
+// turned out to be unreachable via generation). buildPalette's own
+// internal retry loop (palette.js, MAX_ATTEMPTS=12) already guards its
+// OWN MIN_GROUND_DE
+// (0.16) / MIN_ACCENT_DE (0.15) — but chalk's floor here is the stricter
+// 0.55 (MIN_CHALK_GROUND_DE), which buildPalette has no way to know about,
+// and if buildPalette's own loop exhausts it falls back to "best attempt
+// seen" — not guaranteed to clear ANY floor. So this wraps buildPalette in
+// its OWN outer retry loop, checking real ΔE numbers against the caller's
+// actual floor, never trusting the return value on faith.
+//
+// Corrected during verification: passing `scheme` was assumed to satisfy
+// the triadic/split-complementary rule by construction (SCHEMES[scheme]
+// being the hue-OFFSET structure, in HUE_LIBRARY's 12-slot INDEX space) —
+// wrong. HUE_LIBRARY's own 12 hues are a curated, UNEVENLY spaced set
+// (e.g. a 65° real gap Chartreuse->Green, an 8° gap Amber->Yellow), so
+// picking indices 4 apart does not reliably land ~120° apart in actual
+// degrees. Caught live: a real generated paper triad measured hues
+// 347.6/149.1/90.4 (gaps 58.7/102.9/161.5) — neither rule, well outside
+// tolerance. satisfiesPaletteRule is now checked explicitly, same as the
+// fixed arrays above needed after being hand-picked.
+// baseIndex is left to buildPalette's own draw (opts.baseIndex omitted) —
+// Task 3b's "random base hue". Returns null on exhaustion; every caller
+// falls back to the fixed approved triad, never ships a bad set.
+const SURFACE_ACCENT_MAX_TRIES = 30;
+function generateSurfaceAccents(rng, groundHex, minGroundDE) {
+  for (let i = 0; i < SURFACE_ACCENT_MAX_TRIES; i++) {
+    const scheme = SHUFFLE_SCHEMES[Math.floor(rng() * SHUFFLE_SCHEMES.length)];
+    const built = buildPalette(rng, { scheme, groundHex });
+    const hexes = built.accents.map(a => a.hex);
+    const groundDEs = hexes.map(h => deltaE(h, groundHex));
+    const accentDEs = [deltaE(hexes[0], hexes[1]), deltaE(hexes[1], hexes[2]), deltaE(hexes[0], hexes[2])];
+    if (Math.min(...groundDEs) >= minGroundDE && Math.min(...accentDEs) >= MIN_ACCENT_DE && satisfiesPaletteRule(hexes).ok) {
+      return hexes;
+    }
+  }
+  return null;
+}
+
+// Brief 34 — paint's own equivalent, discovered necessary during
+// verification: paint's shuffle (brief 31) and Task 4c's new game-opening
+// draw both call buildPalette with an explicit `scheme` and trust it to
+// satisfy the triadic/split-complementary rule by construction, the exact
+// assumption generateSurfaceAccents' own comment above already documents
+// as wrong. Measured directly: only 14% of 200 buildPalette({scheme})
+// calls actually passed satisfiesPaletteRule. Since Task 3b explicitly
+// keeps this guard and Task 4c's whole premise is a genuine 50-50 split,
+// leaving paint unchecked would mean both tasks' own stated guarantees
+// are false ~86% of the time despite the scheme LABEL alternating
+// correctly. Wraps buildPalette the same way, returns the FULL built
+// object (paint's downstream code needs ground/ink/scheme/baseIndex, not
+// just accent hexes). Falls back to the approved pinned reference
+// (PAINT_DEFAULT_SCHEME/BASE_INDEX) on exhaustion, mirroring paper/
+// chalk's own fixed-triad fallback.
+function generatePaintPalette(rng, groundHex) {
+  for (let i = 0; i < SURFACE_ACCENT_MAX_TRIES; i++) {
+    const scheme = SHUFFLE_SCHEMES[Math.floor(rng() * SHUFFLE_SCHEMES.length)];
+    const built = buildPalette(rng, { scheme, groundHex });
+    const hexes = built.accents.map(a => a.hex);
+    if (satisfiesPaletteRule(hexes).ok) return built;
+  }
+  return buildPalette(rng, { scheme: PAINT_DEFAULT_SCHEME, baseIndex: PAINT_DEFAULT_BASE_INDEX, groundHex });
+}
 
 // Per-surface colour cycle. Chalk is tri-colour (brief 19 Task 3) —
 // CHALK_PALETTE, matching how chalk was approved in the lab — not the
 // white-mode override brief 18 shipped.
+//
+// Brief 34 Task 3a — the doodle's own LIVE palette state. paper/chalk
+// start as COPIES of the fixed approved arrays (.slice(), never the same
+// reference) so the idle shuffle handler can reassign PALETTE_ARRAYS.paper/
+// .chalk wholesale without ever touching PAPER_PALETTE/CHALK_PALETTE
+// themselves — those stay the untouched opening/fallback reference. The
+// object binding (const) never changes; only its paper/chalk/paint
+// property VALUES do, on shuffle. colourFor reads this object fresh on
+// every call, so a reassignment takes effect on the very next stroke.
 const PALETTE_ARRAYS = {
-  paper: PAPER_PALETTE,
-  chalk: CHALK_PALETTE,
+  paper: PAPER_PALETTE.slice(),
+  chalk: CHALK_PALETTE.slice(),
   paint: weightedPaletteArray(paintPalette, (DOODLE_SEED ^ 0x5EED1DEA) >>> 0),
 };
 
@@ -1809,15 +2010,16 @@ layerEls[activeKey].style.opacity = '1';
 
 // Brief 25 Task 3 — the idle pal-pill's own colour source. Mirrors
 // gamePalPillHexesFor's shape (chalk/paper: distinct swatches; paint: the 3
-// accents, not PALETTE_ARRAYS.paint's weighted 20-slot CYCLE array) but
-// reads the doodle's own fixed data (PAPER_PALETTE/CHALK_PALETTE/
-// paintPalette), never the game's per-game shuffle-able state — the idle
-// screen has no shuffle interaction wired to this pill, it's a preview of
-// what the doodle itself is currently painting.
+// accents, not PALETTE_ARRAYS.paint's weighted 20-slot CYCLE array).
+// Brief 34 Task 3a: now reads the doodle's own LIVE, shuffle-able state
+// (PALETTE_ARRAYS.paper/.chalk, paintPalette) instead of the fixed
+// PAPER_PALETTE/CHALK_PALETTE constants directly — the idle shuffle
+// (wired below) reassigns that live state, and this needs to reflect it,
+// never the frozen opening reference.
 function idlePalPillHexesFor(surfaceKey) {
-  if (surfaceKey === 'chalk') return CHALK_PALETTE;
+  if (surfaceKey === 'chalk') return PALETTE_ARRAYS.chalk;
   if (surfaceKey === 'paint') return paintPalette.accents.map(a => a.hex);
-  return PAPER_PALETTE;
+  return PALETTE_ARRAYS.paper;
 }
 function updateIdlePalPill() {
   const el = document.getElementById('pal-pill');
@@ -1831,6 +2033,35 @@ function updateIdlePalPill() {
   });
 }
 updateIdlePalPill(); // initial paint, matches currentSurface's 'paper' default
+
+// Brief 34 Task 3a — the idle shuffle was previously wired to nothing
+// (#idle-shuffle had no click listener at all). Regenerates the doodle's
+// LIVE palette for whichever surface is currently showing and repaints
+// the pill — same generate-and-guard mechanism the playing screen's own
+// shuffle uses (Task 3b, below), same shared generateSurfaceAccents
+// helper, just targeting the doodle's PALETTE_ARRAYS/paintPalette state
+// instead of the game's. Own entropy stream (idleShuffleNonce), separate
+// from the game's shuffleNonce — this can fire while a game has never
+// even started. e.stopPropagation() matches the tile/pgShuffle pattern;
+// onGesture's own .ctrl-chip guard (brief 33 Task 4) already covers this
+// element too (the shuffle SVG is a descendant of #pal-pill's
+// .ctrl-chip), so this is belt-and-suspenders, not load-bearing.
+let idleShuffleNonce = 0;
+document.getElementById('idle-shuffle').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const shuffleSeed = (Date.now() ^ (idleShuffleNonce++)) >>> 0;
+  const shuffleRng = makeRng(shuffleSeed);
+  if (currentSurface === 'paint') {
+    paintPalette = generatePaintPalette(shuffleRng, paintPalette.ground);
+    PALETTE_ARRAYS.paint = weightedPaletteArray(paintPalette, shuffleSeed);
+  } else if (currentSurface === 'chalk') {
+    PALETTE_ARRAYS.chalk = generateSurfaceAccents(shuffleRng, CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE) || CHALK_PALETTE.slice();
+  } else {
+    PALETTE_ARRAYS.paper = generateSurfaceAccents(shuffleRng, PAPER_GROUND_HEX, MIN_GROUND_DE) || PAPER_PALETTE.slice();
+  }
+  rebuildPersist(currentSurface); // restyle the WHOLE accumulated doodle, not just strokes from here on — same principle as rebuildGameStrokes()
+  updateIdlePalPill();
+});
 
 function switchSurface(newKey) {
   if (newKey === currentSurface) return;
@@ -2031,7 +2262,22 @@ const doodlePaintTracker = makePaintTracker(paintWidthRng, {
 // (drawGameFrame/drawFrame) — neither touches this function or the stroke's
 // own shape. Do not re-add a taper here; if ball legibility regresses again,
 // the gap width is the knob, not this function.
-function drawPaintRibbon(ctx, pts, wt, col) {
+// Brief 34 Task 4b — two alpha levels, not one. Brief 31 Task 2b's 0.88 is
+// the LIVE strength (rally, doodle) — kept exactly as it was, "unchanged"
+// per the brief. A separate, lower FINISHED strength applies only where a
+// completed piece is actually seen: results, the exported PNG (which just
+// composites whatever the source canvas already holds, no separate
+// render), and a recipient's shared/downloaded view. (The brief itself
+// names gameStrokesAlpha=1.0 as the cause — traced and found that
+// variable only drives the PLAYING screen's own live-frame compositor,
+// never read by results/renderResultsStrokes or share/
+// renderStrokeWithColor, so changing it would have had no visible effect
+// on the piece anyone actually sees. This is the mechanism that actually
+// reaches it. Target ~0.80, not the brief's own suggested 0.86 — tuned by
+// eye per Shivang's review, 0.86 read as too small a change to see.)
+const PAINT_LIVE_ALPHA = 0.88;
+const PAINT_FINISHED_ALPHA = 0.80;
+function drawPaintRibbon(ctx, pts, wt, col, alpha = PAINT_LIVE_ALPHA) {
   if (pts.length < 2) return;
   const n = pts.length;
   const left = [], right = [];
@@ -2048,7 +2294,7 @@ function drawPaintRibbon(ctx, pts, wt, col) {
     right.push({ x: p.x - nx * halfW, y: p.y - ny * halfW });
   }
   ctx.save();
-  ctx.globalAlpha = 0.88; // brief 31 Task 2b — was 1.0; paper/chalk unaffected, this is the paint-only ribbon renderer
+  ctx.globalAlpha = alpha; // brief 31 Task 2b set this to 0.88 (was 1.0); brief 34 Task 4b made it a param so a finished piece can use a different value — paper/chalk unaffected, this is the paint-only ribbon renderer
   ctx.fillStyle = col;
   ctx.beginPath();
   ctx.moveTo(left[0].x, left[0].y);
@@ -2075,8 +2321,14 @@ function drawPaintRibbon(ctx, pts, wt, col) {
 // wrapper rather than repeating the set/call/reset sequence at all three
 // call sites (live rally, results replay, share) — same principle as this
 // file's other "one function draws a mark" renderers.
-function renderSplatterMarkPaint(ctx, mark) {
-  ctx.filter = 'opacity(88%)';
+// Brief 34 Task 4b — alphaPct threaded through, same live/finished split
+// as drawPaintRibbon: splatter is part of the finished piece exactly like
+// strokes are (both introduced at the same 0.88 together, brief 31 Task
+// 2b), so "the finished artwork is too dark" applies to it too. Default
+// stays the LIVE 88 (unchanged for the live-rally call site); the
+// results/share call sites now pass the finished 80 explicitly.
+function renderSplatterMarkPaint(ctx, mark, alphaPct = 88) {
+  ctx.filter = `opacity(${alphaPct}%)`;
   renderSplatterMark(ctx, mark);
   ctx.filter = 'none';
 }
@@ -2399,17 +2651,27 @@ function getGameGround(surfaceKey) {
 
 // ── Task 5 — per-surface palette state (game-scoped, independently
 // shufflable — never touches the doodle's fixed PALETTE_ARRAYS) ────────
-let gamePaperOrder;   // shuffled index map into PAPER_PALETTE (3, brief 25 Task 3 — was DEFAULT_PALETTE's full 5)
-let gameChalkOrder;   // shuffled index map into CHALK_PALETTE (3)
+//
+// Brief 34 Task 3b — gamePaperOrder/gameChalkOrder (shuffled INDEX maps
+// into the fixed PAPER_PALETTE/CHALK_PALETTE) are gone: that data shape
+// only ever supported reordering the same 3 fixed hexes, which was
+// exactly the bug ("shuffle only re-orders, never generates a new
+// scheme"). Replaced with gamePaperPalette/gameChalkPalette — real 3-hex
+// arrays, mirroring how gamePaintPalette already worked — reset to a
+// COPY of the fixed approved triad every new game (never the same
+// reference, same reasoning as PALETTE_ARRAYS.paper/.chalk above), and
+// replaced wholesale by the shuffle handler via generateSurfaceAccents.
+let gamePaperPalette; // 3 hexes, generated fresh on shuffle — starts as PAPER_PALETTE.slice()
+let gameChalkPalette; // 3 hexes, generated fresh on shuffle — starts as CHALK_PALETTE.slice()
 let gamePaintPalette; // buildPalette() result — ground fixed once per game, not touched by shuffle
 let gamePaintArray;   // weightedPaletteArray(gamePaintPalette, ...) — a flattened, weighted 20-slot
                        // round-robin CYCLE used for stroke colour assignment, NOT the dot list —
                        // see gamePalPillHexesFor for the 3 distinct accents shown in the pill.
 
 function gamePaletteArrayFor(surfaceKey) {
-  if (surfaceKey === 'chalk') return gameChalkOrder.map(i => CHALK_PALETTE[i]);
+  if (surfaceKey === 'chalk') return gameChalkPalette;
   if (surfaceKey === 'paint') return gamePaintArray;
-  return gamePaperOrder.map(i => PAPER_PALETTE[i]);
+  return gamePaperPalette;
 }
 function gameColourFor(surfaceKey, index) {
   const arr = gamePaletteArrayFor(surfaceKey);
@@ -2428,15 +2690,9 @@ function gameColourFor(surfaceKey, index) {
 // now-3-colour paper (below) — pill and actual stroke palette agree on all
 // three surfaces, which is the whole point of Task 3.
 function gamePalPillHexesFor(surfaceKey) {
-  if (surfaceKey === 'chalk') return gameChalkOrder.map(i => CHALK_PALETTE[i]);
+  if (surfaceKey === 'chalk') return gameChalkPalette;
   if (surfaceKey === 'paint') return gamePaintPalette.accents.map(a => a.hex);
-  return gamePaperOrder.map(i => PAPER_PALETTE[i]);
-}
-function shuffleArrayInPlace(arr, rng) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
+  return gamePaperPalette;
 }
 
 // ── Committed-strokes layer + stroke commit — brief 24 Task 4 splits what
@@ -2472,12 +2728,15 @@ let gameStrokeIndex = 0;
 // two different ways at two points in its life, rally or reveal. (Brief 23's
 // taperOpts param is gone — brief 24 Task 3 removed the taper entirely;
 // see drawPaintRibbon's own comment.)
-function renderGameStrokeAs(ctx, surfaceKey, pts, wt, op, index) {
+// Brief 34 Task 4b — paintAlpha threaded through, defaulting to the LIVE
+// strength so every existing call site (live rally, incremental commit)
+// is unchanged unless it explicitly passes the finished one.
+function renderGameStrokeAs(ctx, surfaceKey, pts, wt, op, index, paintAlpha = PAINT_LIVE_ALPHA) {
   const col = gameColourFor(surfaceKey, index);
   if (surfaceKey === 'chalk') {
     renderChalkStroke(ctx, pts, col, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
   } else if (surfaceKey === 'paint') {
-    drawPaintRibbon(ctx, pts, wt * GAME_PAINT_WIDTH_BASE, col);
+    drawPaintRibbon(ctx, pts, wt * GAME_PAINT_WIDTH_BASE, col, paintAlpha);
   } else {
     renderStroke(ctx, pts, col, wt, op, DEFAULT_STROKE_PARAMS);
   }
@@ -2528,23 +2787,20 @@ let gameLastEndedStrokes = null; // handoff for brief 26 (results/reveal) — {s
 // are structurally always on the boundary. stepGame gates this to frames
 // with NO hit event and NO miss this frame — see the call site.
 // Brief 31 Task 2a — cooldown 40 -> 24, target count 3-8 -> 10-18/game.
+// Brief 34 Task 4a — cooldown 24 -> 16, target 10-18 -> 18-28/game.
 // GAME_SPLATTER_CAP is doing real, frequent work here, not acting as a rare
 // safety net the way the old CAP=10 mostly did against a 3-8 target — a
 // game's total splatter count scales with its own rally length, which
 // varies enormously game to game (measured, briefs 29/30: several-thousand-
 // step spread between a short and a long game), so a per-frame probability
 // alone cannot hold a tight band without a real ceiling. CAP is set to the
-// target's own upper bound (18) for exactly that reason. BASE_P tuned
-// against 20 real headless games at these settings: 19/20 landed in
-// [10,18] (10 of those 19 at the 18 cap — long games routinely reach it),
-// one short game landed at 9, one below the floor — accepted rather than
-// pushed higher, since raising BASE_P further to close that one gap would
-// mean most games hit the cap and read as a fixed count rather than
-// organic variation. Mean 16.1 across the sample.
-const GAME_SPLATTER_COOLDOWN_FRAMES = 24; // was 40
-const GAME_SPLATTER_CAP = 18; // was 10 — the target's own upper bound, not "target + headroom" (see above)
+// target's own upper bound for exactly that reason — 18 through brief 31,
+// now 28. BASE_P retuned against 20 real headless games at these settings
+// — see the session report for the measured distribution shipped.
+const GAME_SPLATTER_COOLDOWN_FRAMES = 16; // was 24 (brief 31: was 40)
+const GAME_SPLATTER_CAP = 28; // was 18 (brief 31: was 10) — the target's own upper bound, not "target + headroom" (see above)
 const GAME_SPLATTER_SPIN_REF = 0.15; // |ball.spin| normalisation — see physics.js's sweptHit/finishWallBounce for typical magnitudes
-const GAME_SPLATTER_BASE_P = 0.017; // was 0.016 — see the measurement note above
+const GAME_SPLATTER_BASE_P = 0.115; // brief 34 Task 4a — retuned from 0.017: at the new cooldown (16) and target (18-28), the old value measured mean 3.4/game against a realistic mouse-driven test harness (was 0.017, brief 31's own tuning for the old 10-18 target). Measured at 0.115 across 20 real headless paint games (synthetic sine-wave mouse movement, since spin comes from paddle VELOCITY transfer on hit and a stationary mouse artificially suppresses it to near-zero): mean 20.6, 13/20 landed in [18,28], 7/20 hit the 28 cap (doing real work here, same pattern brief 31 measured at its own cap). Some low outliers (min 5) on short rallies — accepted per brief 31's own precedent rather than pushed higher, which would mean most games simply hit the cap.
 // ~60/40 drops:flung baseline, spin-skewed same as before, but no longer
 // THE ONLY source of variation in the mix — see buildLiveSplatterMark's own
 // jitter term, added so two games with similar spin don't converge on the
@@ -2669,7 +2925,6 @@ const gameCanvas = document.getElementById('game-canvas');
 const gameFrameEl = document.getElementById('game-frame');
 const gamePaddleLEl = document.getElementById('game-paddle-left');
 const gamePaddleREl = document.getElementById('game-paddle-right');
-const serveDotEl = document.getElementById('serve-dot');
 const scorePEl = document.getElementById('pg-score-p');
 const scoreAEl = document.getElementById('pg-score-a');
 const pgPalPillEl = document.getElementById('pg-pal-pill');
@@ -2776,7 +3031,6 @@ function spawnGameBall() {
   gameBall = mkBall(gamePhysRng, gameLv, null, [1.0, 2.4], [0.50, 0.68]);
   gamePaintTracker.startTrail(gameBall, gameBall.x, gameBall.y);
   gameServing = false;
-  serveDotEl.hidden = true;
 }
 
 function startGame() {
@@ -2802,11 +3056,11 @@ function startGame() {
   gameSplatterMarks = [];
   gameStrokesAlpha = GAME_COMMITTED_ALPHA; // Task 4 — reset dim, snaps to 1.0 at this game's own end
 
-  // Palette: paper/chalk start in identity order (re-shuffled only via
-  // Task 5's shuffle control — PAINT-MODE.md §2 is LOCKED, never generate
-  // a colour); paint draws a real scheme via the curated hue library.
-  gamePaperOrder = PAPER_PALETTE.map((_, i) => i); // brief 25 Task 3 — 3, not DEFAULT_PALETTE's full 5
-  gameChalkOrder = CHALK_PALETTE.map((_, i) => i);
+  // Palette: paper/chalk open on the fixed approved triad (a COPY, brief
+  // 34 Task 3b — re-generated, not re-ordered, only via Task 5's shuffle
+  // control below); paint draws a real scheme via the curated hue library.
+  gamePaperPalette = PAPER_PALETTE.slice();
+  gameChalkPalette = CHALK_PALETTE.slice();
   // groundHex pinned to Cream (GROUND_LIBRARY[0]) — brief 26 Task 3: the
   // reveal's ground is "the approved default from brief 21 / PAINT-MODE.md
   // §3," which is only true if the game's palette actually uses it. Through
@@ -2814,13 +3068,22 @@ function startGame() {
   // shuffle handler already pinned it post-hoc, but the FIRST roll at game
   // start was never fixed) — invisible while paint played on the neutral
   // substrate, but it would have made Task 3's premise false the moment the
-  // reveal made the ground visible. Mirrors the doodle's own brief-21 fix
-  // (paintPalette above, same groundHex). Brief 31 Task 1c: scheme/
-  // baseIndex pinned too, same reasoning as the doodle's own call — a
-  // fresh game's opening palette is the approved reference, not a draw.
-  gamePaintPalette = buildPalette(makeRng((gameSeed ^ 0x6A2F1C9E) >>> 0), {
-    scheme: PAINT_DEFAULT_SCHEME, baseIndex: PAINT_DEFAULT_BASE_INDEX, groundHex: GROUND_LIBRARY[0].hex,
-  });
+  // reveal made the ground visible. Still pinned — untouched by Task 4c.
+  //
+  // Brief 34 Task 4c REVERSES brief 31 Task 1c's scheme/baseIndex pinning
+  // here — every fresh game now generates its own accents via
+  // generatePaintPalette (below) instead of opening on the same fixed
+  // reference every time. baseIndex is left to buildPalette's own draw
+  // (omitted). SHUFFLE_SCHEMES itself is single-valued now (see its own
+  // comment — 'triadic' turned out to be structurally unreachable via
+  // generation, an engine-level finding, not something fixable here), so
+  // this no longer varies the SCHEME the way Task 4c originally asked —
+  // it does still stop every game opening on the identical hue rotation,
+  // which was the other half of the same skew. The doodle's OWN
+  // fixed-seed default (paintPalette, above) is explicitly exempted by
+  // Task 4c's own text ("the reference") and stays pinned.
+  const gamePaintPaletteRng = makeRng((gameSeed ^ 0x6A2F1C9E) >>> 0);
+  gamePaintPalette = generatePaintPalette(gamePaintPaletteRng, GROUND_LIBRARY[0].hex);
   gamePaintArray = weightedPaletteArray(gamePaintPalette, (gameSeed ^ 0x6A2F1C9E) >>> 0);
 
   Object.keys(gameGroundCache).forEach(k => delete gameGroundCache[k]);
@@ -2895,7 +3158,11 @@ function stepGame() {
     }
     if (rightMissed) gameAs++; else gamePs++;
     updateGameScoreUI();
-    sndPoint(); // brief 27 Task 2 — every point, win or not, matching root's own unconditional call site
+    // Brief 34 Task 6e — gated on !isGameEnd: the winning point used to
+    // fire sndPoint() AND sndGameOver() back to back (below), two bells
+    // clashing. Every other point is unchanged (brief 27 Task 2's own
+    // "every point, win or not" — now "every point that isn't the last").
+    if (!isGameEnd) sndPoint();
     checkGameLevel();
     flashGameFrame('canvas-glow-point', 900); // brief 27 Task 4 / brief 28 Task 5e — a point scored, either side
 
@@ -2921,7 +3188,6 @@ function stepGame() {
     }
 
     gameServing = true;
-    serveDotEl.hidden = false;
     setTimeout(() => { if (screenState === 'playing') spawnGameBall(); }, 550); // brief serve beat — a rally game, not a menu
     return; // a miss this frame — no splatter (see maybeEmitSplatter's call site below)
   }
@@ -3003,20 +3269,21 @@ pgShuffleEl.addEventListener('click', (e) => {
   const shuffleRng = makeRng(shuffleSeed);
   const t0 = performance.now();
   if (currentSurface === 'paint') {
-    // Brief 31 Task 1c — shuffle only ever lands on triadic or split-
-    // complementary now. This draw replaces the one buildPalette would
-    // have made internally for scheme when opts.scheme is omitted (same
-    // rng, same single draw), just over PAINT_SHUFFLE_SCHEMES's 2 options
-    // instead of all 4 SCHEMES — baseIndex is still left to buildPalette's
-    // own draw, so which hues land is still fully random, only the harmony
-    // RULE is constrained.
-    const shuffleScheme = PAINT_SHUFFLE_SCHEMES[Math.floor(shuffleRng() * PAINT_SHUFFLE_SCHEMES.length)];
-    gamePaintPalette = buildPalette(shuffleRng, { scheme: shuffleScheme, groundHex: gamePaintPalette.ground }); // ground fixed — not part of shuffle
+    // Brief 31 Task 1c — shuffle only ever lands on split-complementary
+    // now (label was "triadic or split-complementary"; see
+    // SHUFFLE_SCHEMES' own comment for why "triadic" turned out to be
+    // unreachable via generation at all). generatePaintPalette verifies
+    // satisfiesPaletteRule before accepting a result, not just the scheme
+    // label. Ground fixed — not part of shuffle.
+    gamePaintPalette = generatePaintPalette(shuffleRng, gamePaintPalette.ground);
     gamePaintArray = weightedPaletteArray(gamePaintPalette, shuffleSeed);
   } else if (currentSurface === 'chalk') {
-    shuffleArrayInPlace(gameChalkOrder, shuffleRng);
+    // Brief 34 Task 3b — generates a genuinely NEW scheme (was: re-order
+    // the same fixed 3 via shuffleArrayInPlace). Same guard/retry/fallback
+    // helper the idle shuffle uses (Task 3a) — one implementation, not two.
+    gameChalkPalette = generateSurfaceAccents(shuffleRng, CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE) || CHALK_PALETTE.slice();
   } else {
-    shuffleArrayInPlace(gamePaperOrder, shuffleRng);
+    gamePaperPalette = generateSurfaceAccents(shuffleRng, PAPER_GROUND_HEX, MIN_GROUND_DE) || PAPER_PALETTE.slice();
   }
   rebuildGameStrokes(); // restyle the WHOLE painting — committed strokes keep geometry, only colour changes
   updateGamePalPill();
@@ -3132,13 +3399,16 @@ function renderResultsStrokes(count) {
   let splatterIdx = 0;
   function flushSplatterUpTo(n) {
     while (splatterIdx < resultsData.splatterMarks.length && resultsData.splatterMarks[splatterIdx].afterStrokes <= n) {
-      renderSplatterMarkPaint(resultsStrokesCx, resultsData.splatterMarks[splatterIdx].mark);
+      renderSplatterMarkPaint(resultsStrokesCx, resultsData.splatterMarks[splatterIdx].mark, PAINT_FINISHED_ALPHA * 100);
       splatterIdx++;
     }
   }
   flushSplatterUpTo(0); // marks that fired before the first stroke ever committed
   resultsData.strokes.slice(0, count).forEach((st, i) => {
-    renderGameStrokeAs(resultsStrokesCx, resultsData.surface, st.pts, st.wt, st.op, st.index);
+    // Brief 34 Task 4b — this IS "the finished artwork": PAINT_FINISHED_ALPHA,
+    // not the live-rally default. Paper/chalk ignore the param entirely
+    // (renderGameStrokeAs only forwards it to the paint branch).
+    renderGameStrokeAs(resultsStrokesCx, resultsData.surface, st.pts, st.wt, st.op, st.index, PAINT_FINISHED_ALPHA);
     flushSplatterUpTo(i + 1);
   });
 }
@@ -3481,14 +3751,46 @@ function makeByteReader(view) {
   };
 }
 
+// Brief 34 Task 3b support — paper/chalk's resolved accents can no longer
+// be assumed to be members of the fixed PAPER_PALETTE/CHALK_PALETTE
+// arrays (shuffle now generates real new hexes, see generateSurfaceAccents
+// above), so the share format can no longer index into those arrays to
+// encode them (see SHARE_FORMAT_VERSION's own comment, below). Raw RGB
+// bytes instead — correct regardless of which family a hex came from.
+function hexToRgbBytes(hex) {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
+function rgbBytesToHex(r, g, b) {
+  // Uppercase — matches PAPER_PALETTE/CHALK_PALETTE's own convention
+  // elsewhere in this file. toString(16) is lowercase by default; the
+  // canvas/CSS colour parsers themselves don't care about case (confirmed
+  // a round-tripped decode renders identically either way), but a shared
+  // link's decoded resolvedPalette should read the same as a live game's,
+  // not silently switch case.
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0').toUpperCase()).join('');
+}
+
 // ── Task 1 — encode. Builds the RAW (uncompressed) byte payload from a
 // gameLastEndedStrokes-shaped handoff. Format:
-//   [flags:1][surface:1][seed:4][palette: 1 or 4][strokeCount:2]
+//   [flags:1][surface:1][seed:4][palette: 9 (paper/chalk) or 4 (paint)][strokeCount:2]
 //   per stroke: [colourIdx:1][wt:1][op:1][pointCount:1][points...]
 //   [splatterCount:1] per mark: [type:1][x:2][y:2][colourIdx:1][...]
 // See the surrounding functions for exactly what each block contains —
 // kept close to the reader that has to agree with it byte for byte.
-const SHARE_FORMAT_VERSION = 1;
+//
+// Brief 34 Task 3b bumped this 1 -> 2: paper/chalk's palette block changed
+// shape (see the else branch below) because shuffle can now generate
+// accents that aren't members of the fixed PAPER_PALETTE/CHALK_PALETTE
+// arrays the OLD block indexed into. decodeArtworkPayload's version check
+// is a strict equality, not a range — a link encoded by an older build
+// (version 1) now fails that check and falls through to idle, same as
+// any other malformed payload; it does not attempt to read a version-1
+// paper/chalk block with the version-2 reader and produce wrong colours.
+// Accepted deliberately (Shivang's call, brief 34 review): any paper/chalk
+// share link generated before this ships stops opening. Paint links are
+// unaffected — paint's own block shape is unchanged. Logged in
+// BACKLOG.md/PROJECT-LOG.md.
+const SHARE_FORMAT_VERSION = 2;
 function encodeArtworkPayload(h) {
   const w = makeByteWriter();
 
@@ -3522,17 +3824,18 @@ function encodeArtworkPayload(h) {
     const groundIdx = GROUND_LIBRARY.findIndex(g => g.hex === h.paintGroundHex);
     w.u8(groundIdx >= 0 ? groundIdx : 0);
   } else {
-    // paper/chalk: pack the 3-element resolved palette as indices into the
-    // FIXED 3-hex source palette (PAPER_PALETTE / CHALK_PALETTE) — this is
-    // exactly gamePaperOrder/gameChalkOrder (the shuffle state), captured
-    // via resolvedPalette rather than re-deriving anything.
-    const sourcePalette = h.surface === 'chalk' ? CHALK_PALETTE : PAPER_PALETTE;
-    let packed = 0;
-    h.resolvedPalette.forEach((hex, slot) => {
-      const idx = Math.max(0, sourcePalette.indexOf(hex));
-      packed |= (idx & 0x3) << (slot * 2);
+    // paper/chalk, format version 2 (brief 34 Task 3b) — raw RGB bytes, 3
+    // per accent, 9 total. The old version-1 scheme packed 2-bit indices
+    // into the FIXED 3-hex source palette (PAPER_PALETTE/CHALK_PALETTE),
+    // which only worked because shuffle used to just re-order those same
+    // 3 fixed hexes. Now that shuffle GENERATES new accents (Task 3b),
+    // they are not necessarily members of any fixed array to index into —
+    // raw bytes are correct regardless of which family (fixed opening or
+    // generated) a hex came from.
+    h.resolvedPalette.forEach(hex => {
+      const [r, g, b] = hexToRgbBytes(hex);
+      w.u8(r); w.u8(g); w.u8(b);
     });
-    w.u8(packed);
   }
 
   w.u16(h.strokes.length);
@@ -3583,7 +3886,7 @@ function encodeArtworkPayload(h) {
   // probability check, so unlike the ground/blotches it is NOT
   // reproducible from the seed alone (Task 1's own "come free" list
   // explicitly does not include it). Sent explicitly; there are only ever
-  // up to GAME_SPLATTER_CAP (10) of them.
+  // up to GAME_SPLATTER_CAP (28, brief 34 Task 4a) of them.
   w.u8(h.splatterMarks.length);
   h.splatterMarks.forEach(({ mark }) => {
     w.u8(mark.type === 'flung' ? 1 : 0);
@@ -3653,10 +3956,11 @@ function decodeArtworkPayload(bytes) {
       if (groundIdx >= GROUND_LIBRARY.length) return null;
       paintGroundHex = GROUND_LIBRARY[groundIdx].hex;
     } else {
-      if (r.remaining < 1) return null;
-      const packed = r.u8();
-      const sourcePalette = surface === 'chalk' ? CHALK_PALETTE : PAPER_PALETTE;
-      resolvedPalette = [0, 1, 2].map(slot => sourcePalette[(packed >> (slot * 2)) & 0x3] || sourcePalette[0]);
+      // paper/chalk, format version 2 — mirrors the encoder above: 3 raw
+      // RGB bytes per accent, 9 total. See encodeArtworkPayload's own
+      // comment for why this replaced the version-1 packed-index scheme.
+      if (r.remaining < 9) return null;
+      resolvedPalette = [0, 1, 2].map(() => rgbBytesToHex(r.u8(), r.u8(), r.u8()));
     }
 
     if (r.remaining < 2) return null;
@@ -3897,11 +4201,15 @@ let shareDecoded = null; // last successfully rendered payload — read by DOWNL
 // three branches, same underlying draw primitives (renderChalkStroke /
 // drawPaintRibbon / renderStroke) as every other stroke renderer in this
 // file — a stroke is never drawn a fourth, share-only way.
+// Brief 34 Task 4b — always PAINT_FINISHED_ALPHA, not threaded as a param:
+// this function has exactly one call site (renderSharePage) and a shared/
+// downloaded artwork is always "the finished piece" — there is no live-
+// rally case here to default to.
 function renderStrokeWithColor(ctx, surfaceKey, pts, wt, op, colorHex) {
   if (surfaceKey === 'chalk') {
     renderChalkStroke(ctx, pts, colorHex, wt, op, CHALK_DEFAULT_WIDTH_MULT, 0);
   } else if (surfaceKey === 'paint') {
-    drawPaintRibbon(ctx, pts, wt * GAME_PAINT_WIDTH_BASE, colorHex);
+    drawPaintRibbon(ctx, pts, wt * GAME_PAINT_WIDTH_BASE, colorHex, PAINT_FINISHED_ALPHA);
   } else {
     renderStroke(ctx, pts, colorHex, wt, op, DEFAULT_STROKE_PARAMS);
   }
@@ -3950,7 +4258,7 @@ function renderSharePage(decoded) {
   // bar Task 1 sets is "visually indistinguishable", not pixel-identical
   // (the recipient never saw the original to compare against), and not
   // transmitting `afterStrokes` saves a byte per mark.
-  decoded.splatterMarks.forEach(mark => renderSplatterMarkPaint(shareStrokesCxFull, mark));
+  decoded.splatterMarks.forEach(mark => renderSplatterMarkPaint(shareStrokesCxFull, mark, PAINT_FINISHED_ALPHA * 100));
 
   // Blit down to the fixed 0.8x preview (Task 2). Border/radius are CSS on
   // #share-stage/.frame and are NOT scaled down with it — untouched here.
@@ -4220,6 +4528,20 @@ gateCopyBtn.addEventListener('click', () => {
       gateHintEl.textContent = GATE_HINT_DEFAULT;
     }, 3200);
   });
+});
+
+// Brief 34 Task 5b — "go back to artwork". Shown once at load (arrivedViaShare
+// never changes, no need to re-evaluate on screen change) only for a
+// visitor who actually arrived via a share link — a cold gate visit has
+// nothing to go back to. shareDecoded already holds the last-rendered
+// payload (set inside renderSharePage, brief 29/32) — no re-decoding
+// needed, matching the brief's own "keep the decoded payload in memory".
+const gateBackLinkEl = document.getElementById('gate-back-link');
+if (arrivedViaShare) gateBackLinkEl.hidden = false;
+gateBackLinkEl.addEventListener('click', () => {
+  if (!shareDecoded) return; // defensive — should be unreachable whenever arrivedViaShare is true
+  setScreen('share');
+  renderSharePage(shareDecoded);
 });
 
 /* ════════════════════════════════════════════════════════════════════
@@ -4595,8 +4917,9 @@ function beginGame() {
 
 // Brief 28 Tasks 2/3 — shared destination for the playing screen's new
 // home button and results' PLAY AGAIN: idle, ALREADY armed (surface
-// selector showing, CSS's zp-slide-up plays automatically the instant
-// data-idle-step starts matching "armed" — same mechanism armIdle() uses,
+// selector + pal-pill showing, CSS's zp-slide-down (brief 34 Task 2)
+// plays automatically the instant data-idle-step starts matching "armed"
+// — same mechanism armIdle() uses,
 // just entered directly instead of via a gesture). Deliberately does NOT
 // call armIdle() itself — armIdle() early-returns once already armed, but
 // more importantly its startBGM() call restarts Oolong.mp3 from t=0 with

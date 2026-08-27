@@ -194,6 +194,48 @@ triaging this whole list, not before.
   is proven; the gate's own button (different callback, same core) and a
   real device weren't separately click-tested this session.
   *Surfaced: brief 31 verification, 2026-08-26.*
+- **`palette.js`'s `SCHEMES.triadic` never produces a real triad against
+  `HUE_LIBRARY`.** `SCHEMES.triadic = [0,4,8]` assumes the 12 hues in
+  `HUE_LIBRARY` are evenly spaced 30° apart; they're a curated, uneven
+  set (a 65° real gap sits next to an 8° one). Measured directly: 0
+  genuine "triadic" results (checked against this same file's own
+  `satisfiesPaletteRule`) across 1200 generation trials — every one of
+  the 12 possible base rotations, both `SCHEMES` keys, 50 seeds. Only
+  `split-complementary` is ever actually reachable via generation
+  (~17%). Brief 34's `SHUFFLE_SCHEMES` was narrowed to that one real
+  option rather than ship a fake 50-50 draw. Real fix belongs in
+  `palette.js`'s own `SCHEMES`/`HUE_LIBRARY` relationship — either
+  redefine `SCHEMES.triadic`'s offsets to land closer to true 120°
+  spacing for this specific library, or accept split-complementary as
+  the only generative pattern and drop the pretense. Blocks a genuine
+  50-50 palette-generation experience until fixed.
+  *Surfaced: brief 34 verification, 2026-08-28.*
+- **Chalk's shuffle is wired but non-functional — its own ground-
+  contrast floor is unreachable via generation.** Brief 31's
+  `MIN_CHALK_GROUND_DE` (0.55, guarding against chalk going invisible
+  on the board — a failure this surface had already hit twice) is
+  *also* structurally unreachable from `HUE_LIBRARY` against chalk's
+  near-black ground: measured best-ever `minGroundDE` 0.452 across 500
+  generation trials, never once clearing 0.55. Chalk's shuffle handler
+  is correct — click it and it genuinely tries to generate — but every
+  attempt exhausts its 30-try retry budget and falls back to the fixed
+  `CHALK_PALETTE`, confirmed live (10/10 "shuffled" results
+  byte-identical to the untouched default). The 0.55 guard was kept
+  intact rather than weakened, since reintroducing the invisible-chalk
+  failure this surface has hit twice already is worse than a shuffle
+  button that currently does nothing. Needs a real product decision:
+  soften the floor (real risk, chalk has failed this exact way before),
+  accept "chalk never shuffles" as permanent, or fix `HUE_LIBRARY` to
+  include hues bright enough to clear 0.55 against near-black.
+  *Surfaced: brief 34 verification, 2026-08-28.*
+- **BGM playback unverifiable in this sandbox — traced to `data:` URI
+  serving, not the code.** `Oolong.mp3`'s loading mechanism is provably
+  unchanged (brief 34), but real playback couldn't be confirmed: local
+  files outside this sandbox's project root are served as inlined
+  `data:` URIs (`location.protocol` confirmed `"data:"`), which breaks
+  relative-path resolution for the audio element regardless of what the
+  code does. Needs one real click-through in an ordinary browser.
+  *Surfaced: brief 34 verification, 2026-08-28.*
 
 ## Engine-wide / Product
 

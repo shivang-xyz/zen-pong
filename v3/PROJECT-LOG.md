@@ -5,6 +5,113 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-28 — Brief 34 built on `feature/v3-music-polish`. Music, palette behaviour, mobile & in-game polish.
+
+New branch off `main` (33 merged, ship live). Not merged this session;
+same review rhythm as before.
+
+**Task 1 — music + credit.** `Oolong.mp3` swapped for the licensed
+160kbps encode; no loader code changes needed (path is unchanged,
+confirmed by grep against both `v3/app/index.html` and `build.js`'s own
+rewrite). Quiet standing credit line added to the idle screen, shows in
+both attract and armed. Real in-browser playback could not be verified
+this session — traced all the way down to `location.protocol` reporting
+`data:` for local files served outside this sandbox's project root,
+which breaks relative-path resolution regardless of the code; the file
+itself is a valid MP3 (`file` command) and the mechanism is unchanged
+from what's already shipping. Worth one real click-through before trust.
+
+**Task 2 — idle reveal.** Both the surface selector and colour pill now
+fully hidden in attract (not faded), sliding down together from under
+the card on arming, 600ms, wrapped in reduced-motion. Kept the colour
+pill in its existing position rather than relocating it next to the
+card, per explicit direction.
+
+**Task 3/4c — the real palette-shuffle work, and where it hit a wall.**
+Wired the idle shuffle (previously dead) and rebuilt paper/chalk's
+in-game shuffle to generate genuinely new schemes instead of reordering
+the same 3 fixed hexes — on paper, this works exactly as intended.
+
+Two things don't, and can't be fixed without touching `v3/engine/`,
+which this brief's scope keeps off-limits:
+
+- `SCHEMES.triadic`'s index offsets (`palette.js`) assume
+  `HUE_LIBRARY`'s 12 hues are evenly spaced; they're a curated, uneven
+  set. Measured directly: 0 genuine "triadic" results across 1200
+  generation trials (every base rotation, both schemes, 50 seeds) — only
+  split-complementary is ever actually reachable. Shipped
+  `SHUFFLE_SCHEMES` narrowed to that one real option rather than
+  pretend a coin flip that can't land both ways.
+- Chalk's own stricter ground-contrast floor (0.55 — brief 31's guard
+  against the exact "invisible on the board" failure this surface has
+  now hit **three** times if you count this) is *also* unreachable via
+  generation against chalk's near-black ground — measured best-ever
+  0.452 across 500 trials. Chalk's shuffle is correctly wired and does
+  attempt to regenerate, but every attempt exhausts its retry budget and
+  falls back to the untouched fixed palette — confirmed live, 10/10
+  "shuffled" results byte-identical to the default. The guard stayed
+  intact rather than being weakened to make the button look like it's
+  doing something. This is a real, product-visible gap: **chalk shuffle
+  does not currently produce a different chalk palette.**
+
+Both are `HUE_LIBRARY`/`SCHEMES` data-shape problems in `palette.js`
+itself, not app-level bugs — worth a real look before this is called
+finished for chalk.
+
+**Task 4a/4b — paint tuning.** Splatter cooldown 24→16, cap 18→28,
+`BASE_P` retuned 0.017→0.115 (measured against 20 real headless games
+with simulated paddle movement — a static mouse imparts near-zero spin,
+artificially crushing the count; the OLD value only managed a mean of
+3.4 under a realistic test). Shipped: mean 20.6, 13/20 in range, 7/20 at
+the cap.
+
+Finished-paint opacity: the brief named `gameStrokesAlpha=1.0` as the
+cause of "too dark," but that variable only drives the *playing
+screen's* own live-frame compositor — never read by results or share,
+which render paint independently via `drawPaintRibbon`'s own hardcoded
+alpha. Fixed the mechanism that actually reaches results, the exported
+PNG, and the share view/download instead — both strokes AND splatter
+(shipped together at 0.88 in brief 31, so both needed the same
+treatment). Target ~0.80 per review (not the brief's own suggested
+0.86 — read as too subtle to see); confirmed via real pixel sampling on
+a results canvas, dominant alpha exactly 204/255 = 0.800. Before/after
+screenshots sent for review.
+
+**Risk 1, approved — share format bump.** Paper/chalk's share encoding
+moved from 1-byte packed indices into the fixed palette arrays (broken
+the moment shuffle can generate hexes outside them) to 9 raw RGB bytes.
+`SHARE_FORMAT_VERSION` 1→2 — any paper/chalk link from before this ships
+now quietly falls through to idle instead of showing wrong colours;
+paint links unaffected. Verified live: a real paper game's encode→
+fragment→decode round-trip preserves the exact palette and stroke count.
+
+**Task 5 — mobile.** Outer padding split so only the top tightened
+(24→16, both screens measured at exactly 16px). New `arrivedViaShare`
+flag (distinct from, and never cleared unlike, brief 33's
+`landingWithSharePayload`) drives a quiet "go back to artwork" link on
+the gate. The link's own mechanism verified directly (transitions to the
+share screen showing the kept payload) — a true cold-load-with-a-real-
+fragment test could not run this session: local file navigation drops
+URL fragments entirely when this sandbox converts them to the `data:`
+URIs it serves them as (confirmed via `location.href`), same limitation
+noted in brief 33.
+
+**Task 6 — five small, all verified live.** Serve-dot gone entirely.
+Point/gameover glow now pure diffused blur, no hard ring. Timeline's
+stray focus outline killed. Both share CTAs static "play zen pong," the
+now-dead word-swap CSS removed with them. Winning point fires only the
+game-over bell — traced via real call-count logging through a full game
+(4 "point", then 1 "gameover", no double-fire).
+
+`node v3/build.js` run twice, byte-identical. `git diff --stat main --
+v3/engine/ v3/labs/` empty throughout.
+
+### Next
+Review `feature/v3-music-polish`, merge when approved. Chalk's shuffle
+limitation needs a real decision — soften the 0.55 guard, accept
+chalk-never-shuffles, or fix `palette.js`'s `SCHEMES`/`HUE_LIBRARY`
+mismatch properly. Brief 35 (QA sweep + backlog triage) is next.
+
 ## 2026-08-27 — Brief 33 built on `feature/v3-polish`. CTA states, icons, share/surface fixes, mobile repair.
 
 Fifth brief on `feature/v3-polish`, sitting on top of 31/32. Not merged this

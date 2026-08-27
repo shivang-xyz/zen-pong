@@ -195,10 +195,16 @@ the animation over a static-paddle doodle would be worse than the CSS
 placeholder, and a CSS renderer would be a second, worse renderer to maintain
 forever.
 
-### Brief 34 — Background music
-Replacing `Oolong.mp3`, which is not licensed for commercial use. Direction to
-be decided — see the log entry; the standing recommendation is generative Web
-Audio rather than licensed tracks.
+### Brief 34 — Music, palette behaviour, mobile & in-game polish
+Shipped as `34-music-and-polish.md`, broader than the "Background music" scope
+this entry originally named. `Oolong.mp3` swapped for a licensed 160kbps encode
+(the direction below — generative Web Audio — was not taken; a licensed track
+was secured instead). Folded in alongside it: idle reveal timing, real
+palette-shuffle generation on all three surfaces (with two real engine-level
+limits found and documented — see the log entry), splatter/paint-opacity
+retuning, the mobile gate's "go back to artwork" link, and five in-game
+polish fixes (serve-dot removal, diffused point/gameover glow, timeline
+outline, static share CTA, single bell on the winning point).
 
 ### Brief 35 — QA sweep + backlog triage
 The checkpoint `BACKLOG.md` names for itself: "once every current surface is

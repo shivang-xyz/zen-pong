@@ -35,8 +35,19 @@ const APP_PATH = path.join(__dirname, 'app', 'index.html');
 const ENGINE_DIR = path.join(__dirname, 'engine');
 const OUT_PATH = path.join(ROOT_DIR, 'index.html');
 
-const OOLONG_DEV_PATH = '../../Oolong.mp3';
-const OOLONG_SHIP_PATH = 'Oolong.mp3';
+// Brief 35 Task 3 — generalised from a single hardcoded Oolong.mp3 string
+// rewrite (brief 30) to any dev-relative audio-asset reference: BGM is now
+// a playlist (v3/app/index.html's BGM_TRACKS), and each track is loaded
+// via a template literal (`../../${filename}`), not a literal path string,
+// so a per-filename rewrite list would need editing every time a track is
+// added — exactly the "adding a third track... not re-plumbing" extension
+// point brief 35 asks the player code itself to have. Root index.html
+// lives NEXT TO the .mp3 files (repo root), while v3/app/index.html lives
+// two levels below (v3/app/) — the `../../` dev prefix is only correct
+// there, and has to become the ship-relative equivalent (nothing, since
+// the files are siblings) for every current and future track.
+const BGM_ASSET_DEV_PREFIX = '../../${'; // the literal template-literal prefix `../../${`, minus the opening backtick (matched as a plain substring)
+const BGM_ASSET_SHIP_PREFIX = '${';
 
 const GENERATED_HEADER =
   '<!-- GENERATED FILE — do not edit. Source: v3/app/index.html + v3/engine/. Rebuild with: node v3/build.js -->\n';
@@ -192,10 +203,10 @@ function main() {
     .join('\n');
 
   let appBody = appScript.replace(IMPORT_RE, '').trim();
-  if (!appBody.includes(OOLONG_DEV_PATH)) {
-    throw new Error(`v3/build.js: expected to find '${OOLONG_DEV_PATH}' in the app script to rewrite — path or count changed, update this script`);
+  if (!appBody.includes(BGM_ASSET_DEV_PREFIX)) {
+    throw new Error(`v3/build.js: expected to find '${BGM_ASSET_DEV_PREFIX}' in the app script to rewrite — path or count changed, update this script`);
   }
-  appBody = appBody.split(OOLONG_DEV_PATH).join(OOLONG_SHIP_PATH);
+  appBody = appBody.split(BGM_ASSET_DEV_PREFIX).join(BGM_ASSET_SHIP_PREFIX);
 
   const finalScript = [
     'const __engine = {};',

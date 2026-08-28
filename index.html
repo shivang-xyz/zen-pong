@@ -189,12 +189,18 @@
      for a moment rather than sitting under a resting pointer. Amber stays
      rgba(255,215,140,·) at both strengths, gameover kept larger (bigger
      spread/blur, slightly higher opacity) and longer (1400ms vs 900ms,
-     unchanged — see flashGameFrame's own duration param) than point. */
+     unchanged — see flashGameFrame's own duration param) than point.
+     Brief 35 Task 5 — brief 34's point glow read "a little too loud";
+     both spread and opacity pulled down a notch (blur/spread ~18-20%,
+     opacity ~15%) while keeping the same soft-diffused, no-hard-ring
+     character. Gameover's own values are scaled down by the SAME ratios
+     it already held over point (not re-tuned independently), so it stays
+     proportionally the stronger of the two exactly as before. */
   #game-frame.canvas-glow-point {
-    box-shadow: 0 0 44px 10px rgba(255,215,140,0.5), 0 0 90px 28px rgba(255,215,140,0.3) !important;
+    box-shadow: 0 0 36px 8px rgba(255,215,140,0.42), 0 0 74px 22px rgba(255,215,140,0.24) !important;
   }
   #game-frame.canvas-glow-gameover {
-    box-shadow: 0 0 56px 14px rgba(255,215,140,0.55), 0 0 110px 34px rgba(255,215,140,0.35) !important;
+    box-shadow: 0 0 46px 11px rgba(255,215,140,0.46), 0 0 90px 27px rgba(255,215,140,0.28) !important;
   }
 
   /* ── Paddles · DESIGN.md §7/§8 — DOM divs, never canvas ── */
@@ -373,15 +379,27 @@
      old rule had no such scoping, so it would have kept the shuffle
      turning white on a touch device's "stuck" post-tap hover. */
 
-  /* ── Idle music credit · brief 34 Task 1 ──
+  /* ── Idle music credit · brief 34 Task 1, repositioned brief 35 Task 4 ──
      Reuses the mobile gate's own .hint token values (11px Space Mono,
      natural case, --color-disabled) rather than the shoutier uppercase
-     .mono utility — "Music by Omni Gardens — Oolong" is a name/title, not
-     a label, and the brief's own "quiet, present not shouting" calls for
-     natural case. A standing credit, not part of Task 2's reveal — sits
-     outside anything gated by [data-idle-step], so it shows in both. */
+     .mono utility — a name/title, not a label, and "quiet, present not
+     shouting" calls for natural case. A standing credit, not part of
+     Task 2's reveal — sits outside anything gated by [data-idle-step], so
+     it shows in both attract and armed.
+     Brief 35 Task 4 — was `margin-top` inside the centred flex column,
+     which collided with the palette pill once armed: #screen-idle isn't
+     stretched to viewport height (body's own justify-content:center
+     centres the WHOLE idle cluster as one block, same reason Task 4's
+     idle-credit note applies to #screen-mobile-gate/share too), so a
+     flex-flow margin can't reliably reach "the very bottom of the fold" —
+     it just follows however tall the content above it happens to be.
+     position:fixed takes it out of that flow entirely and pins it to the
+     actual viewport bottom regardless of content height; #screen-idle's
+     own [hidden] -> display:none still hides it correctly since display:
+     none on an ancestor suppresses a fixed-position descendant too. */
   .idle-credit {
-    display: block; margin-top: var(--space-m);
+    position: fixed; left: 50%; bottom: var(--space-m);
+    transform: translateX(-50%);
     font-family: 'Space Mono', monospace; font-style: normal;
     font-size: 11px; letter-spacing: 0.06em;
     color: var(--color-disabled);
@@ -593,6 +611,21 @@
      the way brief 30's translucent-card-over-idle approach required. */
   html.mobile-gate-active .screen,
   html.mobile-share-active .screen { display: none !important; }
+  /* Brief 35 Task 6 — body's own base padding (var(--space-l)/32px, meant
+     for the DESKTOP .screen sections) was stacking on top of these
+     screens' own padding-top. body's padding is un-overridden except for
+     the playing/results data-screen rules above, and data-screen stays
+     whatever the underlying screenState actually is ('idle' or 'share')
+     even while a mobile screen is the one visibly showing — so idle's
+     32px body padding was adding a second, invisible top gap on top of
+     the 16px measured directly on #screen-mobile-gate/share, landing the
+     REAL gap at 48px despite every value on the mobile screen itself
+     already reading well under this brief's 40px cap. Confirmed live
+     (getBoundingClientRect on the logo) before and after this fix.
+     Zeroed here, scoped to exactly when a mobile screen is the one
+     actually on screen. */
+  html.mobile-gate-active body,
+  html.mobile-share-active body { padding: 0; }
 
   #screen-mobile-gate, #screen-mobile-share {
     display: none;
@@ -603,20 +636,20 @@
        URL bar shows/hides. */
     min-height: 100dvh;
     flex-direction: column;
-    /* `safe center`: on real content overflow (a short landscape viewport,
-       an unusually tall accumulated font-size, etc.) plain `center` can
-       push the START of the content past the reachable scroll region in
-       some engines — "unsafe" centering, the CSS box-alignment spec's own
-       term for it. `safe center` keeps every child reachable by scroll
-       instead. Declared as a fallback pair, not a replacement: browsers
-       that don't understand the second value ignore that whole
-       declaration and keep the first (plain `center`, today's behaviour);
-       browsers that do understand it upgrade to the safer one. Applied
-       up front here rather than only if clipping were observed, since a
-       real iOS viewport is exactly the case this sandbox cannot
-       reproduce to confirm either way. */
-    justify-content: center;
-    justify-content: safe center;
+    /* Brief 35 Task 6 — was `center`/`safe center` (brief 32-34). Measured
+       live at 375x667: the logo sat 75px below the top, NOT because of
+       padding-top (16px, already well under this brief's 40px cap) but
+       because centering a content block SHORTER than the viewport splits
+       the leftover space above AND below it — 32px of pure centering
+       slack was stacking on top of the 16px padding before the logo even
+       started. Capping padding alone can't fix slack that padding didn't
+       create. flex-start removes the slack above entirely (same fix
+       body[data-screen="results"] already uses for the same reason, see
+       its own comment above) — the fold-fit guarantee (verified at both
+       375x667 and 430x932) and the overflow-y:auto fallback below are
+       unaffected either way; the leftover space just moves below the
+       content instead of splitting around it. */
+    justify-content: flex-start;
     /* Brief 33 Task 5b — single-fold stays the TARGET, but must degrade to
        a scroll, never to unreachable content. The hard overflow:hidden
        lock that used to sit on html/body for this case is gone (see
@@ -625,10 +658,11 @@
     overflow-y: auto;
     background: var(--color-bg);
     color: var(--color-lightest-grey);
-    /* Brief 34 Task 5a — top padding only, tightened --space-m(24)
-       -> --space-xm(16); bottom stays --space-m, the brief names only the
-       gap above the logo. Split into two declarations (was one shorthand)
-       so only the top value changes. */
+    /* Brief 34 Task 5a tightened this --space-m(24) -> --space-xm(16);
+       brief 35 Task 6's actual fix was the justify-content change above
+       (this value was already under the 40px cap on its own) — left as
+       Task 5a set it. Bottom stays --space-m. Split into two declarations
+       (was one shorthand) so only the top value changes independently. */
     padding-top: calc(var(--space-xm) + env(safe-area-inset-top));
     padding-bottom: calc(var(--space-m) + env(safe-area-inset-bottom));
   }
@@ -1192,9 +1226,12 @@
     <!-- Brief 34 Task 1 — standing credit, not part of Task 2's reveal:
          placed as a direct child of #screen-idle (a sibling of .stage and
          #pal-pill, not gated by [data-idle-step]), so it shows in both
-         attract and armed. Bandcamp URL is the brief's own placeholder —
-         Shivang to confirm the real one. -->
-    <a class="idle-credit" href="https://omnigardens.bandcamp.com/album/moss-king" target="_blank" rel="noopener">Music by Omni Gardens — Oolong</a>
+         attract and armed — position:fixed (Task 4, brief 35) means DOM
+         position here no longer determines its visual placement, only
+         which screen's [hidden] toggle controls it. Text shortened to
+         drop the track name (brief 35 Task 4 — there are two tracks now);
+         Bandcamp URL confirmed by Shivang, brief 35. -->
+    <a class="idle-credit" href="https://omnigardens.bandcamp.com/album/moss-king-2" target="_blank" rel="noopener">Music by Omni Gardens</a>
   </section>
 
   <!-- ══════════════════════════ PLAYING SCREEN ══════════════════════════ -->
@@ -3017,394 +3054,22 @@ function simulateGame({
   return { DEFAULT_PALETTE, simulateGame };
 })();
 
-__engine.splatter = (() => {
-  const { computeLineDensity, findDenseKnots } = __engine.density;
-  const { weightedPick, weightedSampleWithoutReplacement } = __engine.rng;
-  const { blendOklab } = __engine.palette;
-  const { traceClosedCR } = __engine.strokes;
-/* Splatter — brief 13 tasks 1-2. Pure placement/geometry (buildSplatter) +
-   a render function confined to canvas access (renderSplatterMark), same
-   carve-out as paint.js's own build/render split.
-
-   Placement is density-weighted, not event-triggered: brief 02's hit-
-   triggered ink bloom pinned every mark to the canvas edges (paddle/wall
-   hit points are always on the boundary), which is exactly the mistake
-   this avoids. Splatter lands where the ball's own path crossed itself
-   most — computeLineDensity + findDenseKnots (density.js) find those
-   knots; which ones actually get a mark is a separate, seeded weighted
-   draw (weightedSampleWithoutReplacement, rng.js) so two similarly-busy
-   rallies don't produce identical splatter structure. */
-
-
-
-
-
-
-const DENSITY_CELL = 28;
-const DENSITY_FLOOR = 0.15;
-const MIN_SPACING = DENSITY_CELL * 2.5;
-// PROVISIONAL — brief 15 task 2 raised this again: still near-invisible
-// specks at brief 14's sizes. Target ~40% splatter / 60% stroke by visual
-// mass, so size moved first (a fat stroke section can now reach ~24px wide
-// at widthVariation 1.0 — PAINT_WIDTH_BASE 6.0 x WIDTH_VAR_MAX 4.0 — so
-// DROP_R_MAX approaches that), count moved second.
-const COUNT_MIN = 32, COUNT_MAX = 64;
-const FLUNG_RATIO = 0.4;                // ~60/40 drops:flung, PROVISIONAL per brief
-
-const DROP_R_MIN = 4.0, DROP_R_MAX = 20.0;    // was 1.0-9.0 — small end now legible at 312px
-const DROP_SIZE_POWER = 3.5; // heavy-tailed, slightly less extreme than before (min is already not tiny)
-
-const FLUNG_LEN_MIN = 26, FLUNG_LEN_MAX = 60;      // was 14-34
-const FLUNG_HEAD_R_MIN = 7, FLUNG_HEAD_R_MAX = 15; // was 3-7
-const SATELLITE_COUNT_MIN = 2, SATELLITE_COUNT_MAX = 5;
-
-const INK_WEIGHT = 0.15; // ink sits alongside the 3 accents as a 4th, minor-tier colour option
-
-function splatterColorWeights(palette) {
-  return [
-    { value: palette.ink, weight: INK_WEIGHT },
-    ...palette.accents.map(a => ({ value: a.hex, weight: a.weight })),
-  ];
-}
-
-/* Nearest-segment direction: which way was the ball travelling as it passed
-   closest to (x,y)? Used to orient a flung mark's tail. Strided scan would
-   save cycles but knot counts (≤60) × stroke segment counts are cheap
-   enough for a lab tool without it. */
-function nearestDirection(strokes, x, y) {
-  let bestDistSq = Infinity;
-  let dir = { x: 1, y: 0 };
-  for (const s of strokes) {
-    const pts = s.pts;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      const abx = b.x - a.x, aby = b.y - a.y;
-      const len2 = abx * abx + aby * aby || 1;
-      let t = ((x - a.x) * abx + (y - a.y) * aby) / len2;
-      t = Math.max(0, Math.min(1, t));
-      const px = a.x + abx * t, py = a.y + aby * t;
-      const dx = x - px, dy = y - py;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < bestDistSq) {
-        bestDistSq = d2;
-        const l = Math.hypot(abx, aby) || 1;
-        dir = { x: abx / l, y: aby / l };
-      }
-    }
-  }
-  return dir;
-}
-
-/* buildSplatter(strokes, palette, rng, w, h, opts) → mark descriptors.
-   Pure: no DOM. Each mark is either
-     { type:'drop', x, y, r, irregularity, seedAngle, colorHex }
-   or
-     { type:'flung', x, y, dx, dy, headR, length, colorHex, satellites }
-   Deterministic given the same strokes/palette/rng sequence. */
-function buildSplatter(strokes, palette, rng, w, h, opts = {}) {
-  const { countRange = [COUNT_MIN, COUNT_MAX], flungRatio = FLUNG_RATIO } = opts;
-
-  const field = computeLineDensity(strokes, w, h, DENSITY_CELL);
-  const knots = findDenseKnots(field, {
-    densityFloor: DENSITY_FLOOR, minSpacing: MIN_SPACING, maxCandidates: 60,
-  });
-  if (knots.length === 0) return [];
-
-  const count = Math.min(
-    knots.length,
-    countRange[0] + Math.floor(rng() * (countRange[1] - countRange[0] + 1)),
-  );
-  const chosen = weightedSampleWithoutReplacement(
-    rng, knots.map(k => ({ value: k, weight: k.density })), count,
-  );
-
-  const colorWeights = splatterColorWeights(palette);
-
-  return chosen.map(k => {
-    const colorHex = weightedPick(rng, colorWeights);
-
-    if (rng() < flungRatio) {
-      const dir = nearestDirection(strokes, k.x, k.y);
-      const sign = rng() < 0.5 ? 1 : -1; // fling either way along the local line
-      const dx = dir.x * sign, dy = dir.y * sign;
-      const nx = -dy, ny = dx;
-      const headR = FLUNG_HEAD_R_MIN + rng() * (FLUNG_HEAD_R_MAX - FLUNG_HEAD_R_MIN);
-      const length = FLUNG_LEN_MIN + rng() * (FLUNG_LEN_MAX - FLUNG_LEN_MIN);
-      const satelliteCount = SATELLITE_COUNT_MIN
-        + Math.floor(rng() * (SATELLITE_COUNT_MAX - SATELLITE_COUNT_MIN + 1));
-      const satellites = [];
-      for (let i = 0; i < satelliteCount; i++) {
-        const t = 1.1 + i * 0.35 + rng() * 0.25;
-        const perp = (rng() - 0.5) * headR * (1.2 + i * 0.6);
-        satellites.push({
-          x: k.x + dx * length * t + nx * perp,
-          y: k.y + dy * length * t + ny * perp,
-          r: Math.max(0.6, headR * (0.4 - i * 0.05) * (0.7 + rng() * 0.5)),
-        });
-      }
-      return { type: 'flung', x: k.x, y: k.y, dx, dy, headR, length, colorHex, satellites };
-    }
-
-    const rNorm = Math.pow(rng(), DROP_SIZE_POWER); // heavy-tailed toward small
-    const r = DROP_R_MIN + (DROP_R_MAX - DROP_R_MIN) * rNorm;
-    const irregularity = 0.12 + rng() * 0.13;
-    const seedAngle = rng() * Math.PI * 2;
-    return { type: 'drop', x: k.x, y: k.y, r, irregularity, seedAngle, colorHex };
-  });
-}
-
-/* ── intersection blotches — brief 14 task 4, reworked brief 15 task 4 ────
-   Reads brief 02's failure first: hit-triggered ink bloom put every mark on
-   the canvas edge, because paddle/wall hits — the only events that fired
-   it — are structurally always on the boundary. Cut for exactly that
-   reason (PROJECT-LOG.md 2026-07-09). Brief 12/13 quietly reintroduced the
-   same shape of bug via stroke pooling; brief 14 reduced it, brief 15
-   removed it outright (paint.js). This module is what actually carries
-   "marks where the rally was busy" now.
-
-   Reuses brief 13's density machinery rather than a fresh intersection
-   detector — findDenseKnots' candidates already ARE the high-crossing
-   points (that's what "dense" means for overlapping line segments). What
-   density alone can't answer is WHICH two strokes cross at a given point —
-   contributingStrokes answers that by re-checking proximity.
-
-   Brief 15: a single smooth ellipse per knot didn't read as pooled paint.
-   Fewer locations (2-4, only the genuinely busiest — a much higher density
-   floor than splatter's, plus wide spacing, rather than splatter's "spread
-   across the whole composition" pool), each now a CLUSTER: one irregular
-   main mass, 3-6 smaller satellites crowded around and overlapping it, a
-   few droplets flung outward. Every element is its own closed Catmull-Rom
-   silhouette (traceClosedCR) — smooth curve, still a hard opaque edge, no
-   gradient. Colour: main mass blends toward the seeded true mix; satellites
-   and droplets are each independently biased toward one parent colour or
-   the other (never the same flat blend repeated), which is what actually
-   sells "two wet colours meeting" rather than "a third colour painted on
-   top." */
-const BLOTCH_COUNT_MIN = 2, BLOTCH_COUNT_MAX = 4;       // "top few," not a dozen scattered points
-const BLOTCH_DENSITY_FLOOR = 0.5;    // much higher than splatter's 0.15 — only true hot spots qualify
-const BLOTCH_MIN_SPACING = DENSITY_CELL * 6;            // keep the few clusters well separated
-const BLOTCH_PROX_RADIUS = 22;       // px — how close two strokes must both pass to "cross" here
-const BLOTCH_R_MIN = 12, BLOTCH_R_MAX = 46;             // main-mass radius before density/width scaling
-const BLOTCH_SATELLITE_MIN = 3, BLOTCH_SATELLITE_MAX = 6;
-const BLOTCH_DROPLET_MIN = 2, BLOTCH_DROPLET_MAX = 4;
-
-/* Every stroke with a segment within `radius` of (x,y), one entry each
-   (nearest distance kept if a stroke weaves past the point more than
-   once). Not just the nearest stroke (nearestDirection's job) — this is
-   "who's here", plural, since a blotch needs to know how many/which
-   strokes actually converge at the knot. */
-function contributingStrokes(strokes, x, y, radius) {
-  const r2 = radius * radius;
-  const found = [];
-  for (const s of strokes) {
-    let best = Infinity;
-    const pts = s.pts;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      const abx = b.x - a.x, aby = b.y - a.y;
-      const len2 = abx * abx + aby * aby || 1;
-      let t = ((x - a.x) * abx + (y - a.y) * aby) / len2;
-      t = Math.max(0, Math.min(1, t));
-      const px = a.x + abx * t, py = a.y + aby * t;
-      const dx = x - px, dy = y - py;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < best) best = d2;
-    }
-    if (best <= r2) found.push({ colorHex: s.col, wt: s.wt });
-  }
-  return found;
-}
-
-/* Wobbly closed-silhouette vertices around (cx,cy) — same 2-harmonic radius
-   wobble idea as paint.js's patch shapes, but sourced from the passed rng
-   (a blotch cluster is built once, at build time, unlike renderPaintStroke
-   which avoids threading rng through a per-frame renderer) rather than a
-   coordinate hash. Simpler to just draw the randomness from the stream
-   that's already there. */
-function wobblyBlobPoints(rng, cx, cy, baseR, elongation) {
-  const verts = 10 + Math.floor(rng() * 6); // 10-15
-  const lobeStrength = 0.15 + rng() * 0.2;
-  const angle = rng() * Math.PI * 2;
-  const phase1 = rng() * Math.PI * 2, phase2 = rng() * Math.PI * 2;
-  const pts = [];
-  for (let i = 0; i < verts; i++) {
-    const a = (i / verts) * Math.PI * 2;
-    const wobble = 1 + lobeStrength * (Math.sin(a * 2 + phase1) * 0.6 + Math.sin(a * 3 + phase2) * 0.3);
-    const lx = Math.cos(a) * baseR * elongation * wobble;
-    const ly = (Math.sin(a) * baseR / elongation) * wobble;
-    pts.push({
-      x: cx + lx * Math.cos(angle) - ly * Math.sin(angle),
-      y: cy + lx * Math.sin(angle) + ly * Math.cos(angle),
-    });
-  }
-  return pts;
-}
-
-/* Bias toward one parent colour or the other (never the cluster's own
-   centre blend) — 0-0.35 or 0.65-1.0, picked with equal probability. */
-function skewedBias(rng) {
-  return rng() < 0.5 ? rng() * 0.35 : 0.65 + rng() * 0.35;
-}
-
-/* buildIntersectionBlotches(strokes, palette, rng, w, h, opts) → cluster
-   descriptors: { type:'blotchCluster', blobs:[{points,colorHex}...],
-   droplets:[{x,y,r,colorHex}...] }. Pure: no DOM. `opts.sizeMult` is the
-   lab's relabelled "Blotch size" control (was Pooling Strength — brief 15
-   task 1 repurposed the slider, pooling itself is gone). Skips any
-   candidate knot where fewer than 2 strokes actually converge (nothing
-   there to mix); at this much higher a density floor that should be rare. */
-function buildIntersectionBlotches(strokes, palette, rng, w, h, opts = {}) {
-  const { countRange = [BLOTCH_COUNT_MIN, BLOTCH_COUNT_MAX], sizeMult = 1.0 } = opts;
-
-  const field = computeLineDensity(strokes, w, h, DENSITY_CELL);
-  const knots = findDenseKnots(field, {
-    densityFloor: BLOTCH_DENSITY_FLOOR, minSpacing: BLOTCH_MIN_SPACING, maxCandidates: 10,
-  });
-  if (knots.length === 0) return [];
-
-  const count = Math.min(
-    knots.length,
-    countRange[0] + Math.floor(rng() * (countRange[1] - countRange[0] + 1)),
-  );
-  const chosen = weightedSampleWithoutReplacement(
-    rng, knots.map(k => ({ value: k, weight: k.density })), count,
-  );
-
-  const clusters = [];
-  chosen.forEach(k => {
-    const contributors = contributingStrokes(strokes, k.x, k.y, BLOTCH_PROX_RADIUS);
-    if (contributors.length < 2) return; // no actual crossing here, skip
-    contributors.sort((a, b) => b.wt - a.wt);
-    const [c1, c2] = contributors; // two widest, per brief: never average 3+ down to mud
-
-    // Size scales with local density and the crossing strokes' combined width.
-    const sizeScale = sizeMult * (0.6 + 0.5 * k.density) * (0.6 + (c1.wt + c2.wt) / 16);
-    const mainR = Math.max(6, (BLOTCH_R_MIN + rng() * (BLOTCH_R_MAX - BLOTCH_R_MIN)) * sizeScale);
-
-    const blobs = [];
-    const mainBias = 0.35 + rng() * 0.3; // 0.35-0.65 — near the "true" seeded mix, still never flat 50/50
-    blobs.push({
-      points: wobblyBlobPoints(rng, k.x, k.y, mainR, 0.75 + rng() * 0.6),
-      colorHex: blendOklab(c1.colorHex, c2.colorHex, mainBias),
-    });
-
-    const satCount = BLOTCH_SATELLITE_MIN
-      + Math.floor(rng() * (BLOTCH_SATELLITE_MAX - BLOTCH_SATELLITE_MIN + 1));
-    for (let i = 0; i < satCount; i++) {
-      const a = rng() * Math.PI * 2;
-      const dist = mainR * (0.35 + rng() * 0.65); // crowded/overlapping, not orbiting free
-      const sx = k.x + Math.cos(a) * dist, sy = k.y + Math.sin(a) * dist;
-      const satR = mainR * (0.25 + rng() * 0.35);
-      blobs.push({
-        points: wobblyBlobPoints(rng, sx, sy, satR, 0.7 + rng() * 0.7),
-        colorHex: blendOklab(c1.colorHex, c2.colorHex, skewedBias(rng)),
-      });
-    }
-
-    const dropletCount = BLOTCH_DROPLET_MIN
-      + Math.floor(rng() * (BLOTCH_DROPLET_MAX - BLOTCH_DROPLET_MIN + 1));
-    const droplets = [];
-    for (let i = 0; i < dropletCount; i++) {
-      const a = rng() * Math.PI * 2;
-      const dist = mainR * (1.1 + rng() * 0.9 + i * 0.3); // escaping outward, further with each one
-      droplets.push({
-        x: k.x + Math.cos(a) * dist, y: k.y + Math.sin(a) * dist,
-        r: Math.max(1.5, mainR * (0.14 - i * 0.015) * (0.6 + rng() * 0.6)),
-        colorHex: blendOklab(c1.colorHex, c2.colorHex, skewedBias(rng)),
-      });
-    }
-
-    clusters.push({ type: 'blotchCluster', blobs, droplets });
-  });
-
-  return clusters;
-}
-
-/* renderBlotchCluster(ctx, cluster) — every blob a smooth closed curve
-   (traceClosedCR), fully opaque flat fill, droplets simple filled circles.
-   No gradient, no blur, same "clean fills only" discipline as everything
-   else in paint mode. */
-function renderBlotchCluster(ctx, cluster) {
-  ctx.save();
-  ctx.globalAlpha = 1.0;
-  cluster.blobs.forEach(b => {
-    ctx.fillStyle = b.colorHex;
-    traceClosedCR(ctx, b.points);
-    ctx.fill();
-  });
-  cluster.droplets.forEach(d => {
-    ctx.fillStyle = d.colorHex;
-    ctx.beginPath();
-    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  ctx.restore();
-}
-
-function drawIrregularBlob(ctx, x, y, r, irregularity, seedAngle) {
-  const verts = 9;
-  ctx.beginPath();
-  for (let i = 0; i <= verts; i++) {
-    const a = seedAngle + (Math.PI * 2 * i) / verts;
-    // Deterministic wobble from the vertex angle + the blob's own position
-    // (same coordinate-hash idiom paint.js's stroke renderer uses) — no
-    // extra rng threading needed to make one blob's edge irregular.
-    const wobble = 1 + Math.sin(a * 3.7 + x * 0.13 + y * 0.17) * irregularity;
-    const rr = r * wobble;
-    const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
-    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-}
-
-function drawTeardrop(ctx, x, y, dx, dy, headR, length) {
-  const backAngle = Math.atan2(-dy, -dx);
-  const segs = 10;
-  ctx.beginPath();
-  for (let i = 0; i <= segs; i++) {
-    const a = backAngle - Math.PI / 2 + (Math.PI * i) / segs;
-    ctx.lineTo(x + Math.cos(a) * headR, y + Math.sin(a) * headR);
-  }
-  ctx.lineTo(x + dx * length, y + dy * length); // taper to the tip
-  ctx.closePath(); // back to the first back-circle point — the other taper edge
-}
-
-/* renderSplatterMark(ctx, mark) — fully opaque, flat fill, no gradient, no
-   blur. Same "clean fills only" discipline as renderPaintStroke. */
-function renderSplatterMark(ctx, mark) {
-  ctx.save();
-  ctx.globalAlpha = 1.0;
-  ctx.fillStyle = mark.colorHex;
-
-  if (mark.type === 'drop') {
-    drawIrregularBlob(ctx, mark.x, mark.y, mark.r, mark.irregularity, mark.seedAngle);
-    ctx.fill();
-  } else {
-    drawTeardrop(ctx, mark.x, mark.y, mark.dx, mark.dy, mark.headR, mark.length);
-    ctx.fill();
-    mark.satellites.forEach(s => {
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
-
-  ctx.restore();
-}
-  return { buildSplatter, buildIntersectionBlotches, renderBlotchCluster, renderSplatterMark };
-})();
-
 const { makeRng, weightedPick } = __engine.rng;
 const { W, H, BR, PH, PAD_MIN, PAD_MAX, WIN, BASE_SPD, MAX_SPD, mkBall, advanceBall, ballBall, levelUp, pickTargetY, updatePaddleAI } = __engine.physics;
 const { jitterPath, renderStroke, DEFAULT_STROKE_PARAMS } = __engine.strokes;
 const { buildSurface } = __engine.surface;
 const { buildChalkboardSurface, renderChalkStroke, CHALK_DEFAULT_WIDTH_MULT } = __engine.chalkboard;
 const { buildPaintSurface, PAINT_DEFAULT_WIDTH_VARIATION } = __engine.paint;
-const { buildPalette, GROUND_LIBRARY, INK_HEX, HUE_LIBRARY, hexToOklab } = __engine.palette;
+const { buildPalette, GROUND_LIBRARY, INK_HEX, HUE_LIBRARY, hexToOklab, oklabToHex } = __engine.palette;
 const { DEFAULT_PALETTE } = __engine.simulate;
-const { renderSplatterMark } = __engine.splatter;
 
-// brief 31 Task 2a — buildIntersectionBlotches/renderBlotchCluster no longer called anywhere in this file
+// splatter.js itself is no longer imported at all — brief 31 Task 2a
+// already dropped buildIntersectionBlotches/renderBlotchCluster; brief 35
+// Task 2 drops the last import, renderSplatterMark, replacing it with
+// this file's own paintBlobPath/paintTeardropPath (see
+// renderSplatterMarkPaint) for real per-mark shape variety. splatter.js
+// itself is untouched — nothing in it was edited, it simply has no
+// remaining caller in this file.
 
 // Brief 29 Task 3 — "landing with a fragment: decode and go straight to
 // Screen 4. Do not flash the idle screen first." Checked and acted on as
@@ -3757,21 +3422,72 @@ const PAPER_GROUND_HEX = '#FFF5E5'; // DESIGN.md --color-canvas, "the play area"
 // out of this brief's edit scope (v3/engine/ stays byte-identical to
 // main) — logged in BACKLOG.md as a real, separate fix needed there.
 //
-// Consequence, applied here: SHUFFLE_SCHEMES no longer varies. Keeping a
-// draw between two options where one can never win would have shipped
-// chalk's shuffle as a silent no-op — CHALK_PALETTE's own hues are
-// genuinely triadic, generation can't reach that pattern, so every
-// shuffle would exhaust its retry budget and fall back to the identical
-// fixed default every time (confirmed live: 10/10 "shuffled" chalk
-// results were byte-identical to the untouched CHALK_PALETTE). Every
-// generated palette (paint's per-game default, paint/paper/chalk shuffle,
-// idle shuffle) now targets the one pattern buildPalette can actually
-// deliver, so shuffle stays genuinely functional on every surface. The
-// FIXED opening defaults (paper/chalk's approved triads, the doodle's
-// pinned paint reference) are hand-picked, not generated, and stay
-// genuinely triadic exactly as before — a real play session still shows
-// both patterns, just not literally 50-50 within the shuffles alone.
-const SHUFFLE_SCHEMES = ['split-complementary'];
+// Brief 35 Task 1 — the REAL fix, not a workaround. Brief 34's
+// SHUFFLE_SCHEMES=['split-complementary'] above was a workaround for the
+// actual defect: SCHEMES' index OFFSETS (palette.js) only land at real
+// angular spacing if HUE_LIBRARY's 12 hues were evenly spaced 30° apart —
+// they are a genuinely uneven, curated set, so no offset-based scheme can
+// ever fix this from inside HUE_LIBRARY's index space. The fix is to stop
+// going through that index space for GENERATED palettes entirely: place
+// accents directly in OKLCh by real degrees (generateOklchAccents, below)
+// instead of picking library entries by offset. Both schemes are now
+// genuinely reachable, so the 50-50 draw this brief asks for is restored.
+// The FIXED opening defaults (PAPER_PALETTE/CHALK_PALETTE above, the
+// doodle's pinned paint reference below) are hand-picked, not generated,
+// and are untouched — still genuinely triadic exactly as approved.
+const SHUFFLE_SCHEMES = ['triadic', 'split-complementary'];
+
+// Dominant/secondary/minor weighting — mirrors palette.js's own private
+// WEIGHTS ([0.55, 0.30, 0.15]), same "mirror the private engine constant"
+// precedent as deltaE/oklabDeltaE above (this file's scope can't export a
+// new engine name to reuse it directly).
+const OKLCH_WEIGHTS = [0.55, 0.30, 0.15];
+function shuffleInPlace(arr, rng) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// generateOklchAccents(rng, scheme, lRange, cRange) — one base hue, one L,
+// one C for the WHOLE triad (brief 31's "matched L/C" rule, preserved —
+// the brief's own phrasing is singular: "a random L and random C"), placed
+// at the scheme's real angular spacing: triadic 120/120/120°,
+// split-complementary base/base+150/base+210° (sorted gaps 150/60/150 —
+// matches satisfiesPaletteRule's own check). oklabToHex clamps
+// out-of-gamut linear-RGB channels internally (palette.js's own
+// linearToSrgb), which can drift the REALISED hue slightly at extreme L/C
+// combos — that is exactly why the caller (generateSurfaceAccents/
+// generatePaintPalette, below) still verifies satisfiesPaletteRule + both
+// ΔE floors on the actual resulting hexes rather than trusting this
+// construction by faith, same discipline as before.
+function generateOklchAccents(rng, scheme, lRange, cRange) {
+  const baseHue = rng() * 360;
+  const L = lRange[0] + rng() * (lRange[1] - lRange[0]);
+  const C = cRange[0] + rng() * (cRange[1] - cRange[0]);
+  const offsets = scheme === 'triadic' ? [0, 120, 240] : [0, 150, 210];
+  const weights = shuffleInPlace(OKLCH_WEIGHTS.slice(), rng);
+  return offsets.map((o, i) => {
+    const rad = (baseHue + o) * Math.PI / 180;
+    return { hex: oklabToHex({ L, a: C * Math.cos(rad), b: C * Math.sin(rad) }), weight: weights[i] };
+  });
+}
+
+// Per-surface pleasant L/C ranges — grounded in the MEASURED OKLCh of the
+// existing approved constants (hexToOklab against PAPER_PALETTE/
+// CHALK_PALETTE/HUE_LIBRARY — computed directly, not guessed): paper's
+// approved triad sits at L 0.700/C≈0.16, chalk's at L≈0.80/C≈0.15,
+// paint's old HUE_LIBRARY spans L 0.48-0.84/C 0.15-0.21. Each range is
+// centred on/around that measured default, widened enough that shuffles
+// genuinely produce lighter AND darker sets (this brief's own
+// requirement). Chalk's skews deliberately HIGH — this range choice IS
+// the fix for the 0.55 ground-contrast floor that free generation from
+// HUE_LIBRARY could never clear (BACKLOG.md) — real L freedom reaches
+// well past HUE_LIBRARY's brightest-ever member (Yellow, L 0.842).
+const PAPER_L_RANGE = [0.60, 0.80], PAPER_C_RANGE = [0.13, 0.19];
+const CHALK_L_RANGE = [0.72, 0.92], CHALK_C_RANGE = [0.12, 0.20];
+const PAINT_L_RANGE = [0.45, 0.85], PAINT_C_RANGE = [0.14, 0.22];
 
 // Verification, printed once at load per Task 1's own instruction ("print
 // the measured numbers in the session output") — console.assert (not a
@@ -3793,38 +3509,24 @@ const SHUFFLE_SCHEMES = ['split-complementary'];
   report('chalk', CHALK_PALETTE, CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE);
 })();
 
-// Brief 34 Task 3b/4c — shared generator behind every paper/chalk shuffle
-// (idle and in-game), drawing from SHUFFLE_SCHEMES (see its own comment —
-// single-valued, not the 50-50 draw Task 4c originally asked for; 'triadic'
-// turned out to be unreachable via generation). buildPalette's own
-// internal retry loop (palette.js, MAX_ATTEMPTS=12) already guards its
-// OWN MIN_GROUND_DE
-// (0.16) / MIN_ACCENT_DE (0.15) — but chalk's floor here is the stricter
-// 0.55 (MIN_CHALK_GROUND_DE), which buildPalette has no way to know about,
-// and if buildPalette's own loop exhausts it falls back to "best attempt
-// seen" — not guaranteed to clear ANY floor. So this wraps buildPalette in
-// its OWN outer retry loop, checking real ΔE numbers against the caller's
-// actual floor, never trusting the return value on faith.
-//
-// Corrected during verification: passing `scheme` was assumed to satisfy
-// the triadic/split-complementary rule by construction (SCHEMES[scheme]
-// being the hue-OFFSET structure, in HUE_LIBRARY's 12-slot INDEX space) —
-// wrong. HUE_LIBRARY's own 12 hues are a curated, UNEVENLY spaced set
-// (e.g. a 65° real gap Chartreuse->Green, an 8° gap Amber->Yellow), so
-// picking indices 4 apart does not reliably land ~120° apart in actual
-// degrees. Caught live: a real generated paper triad measured hues
-// 347.6/149.1/90.4 (gaps 58.7/102.9/161.5) — neither rule, well outside
-// tolerance. satisfiesPaletteRule is now checked explicitly, same as the
-// fixed arrays above needed after being hand-picked.
-// baseIndex is left to buildPalette's own draw (opts.baseIndex omitted) —
-// Task 3b's "random base hue". Returns null on exhaustion; every caller
-// falls back to the fixed approved triad, never ships a bad set.
+// Brief 34 Task 3b/4c, rebuilt brief 35 Task 1 — shared generator behind
+// every paper/chalk shuffle (idle and in-game). Now calls
+// generateOklchAccents (real degrees) instead of buildPalette (HUE_LIBRARY
+// indices) — the outer retry loop's JOB is unchanged (verify real ΔE
+// numbers and satisfiesPaletteRule against the caller's actual floor,
+// never trust the generator on faith), but what it's retrying is now a
+// generator that can actually reach both schemes and a real light/dark
+// range, so fallback should be rare instead of near-constant.
+// lRange/cRange let each surface pick its own pleasant range (see the
+// constants above) — paper and chalk need different L especially (chalk
+// must skew light to hold on near-black). Returns null on exhaustion;
+// every caller falls back to the fixed approved triad, never ships a bad
+// set.
 const SURFACE_ACCENT_MAX_TRIES = 30;
-function generateSurfaceAccents(rng, groundHex, minGroundDE) {
+function generateSurfaceAccents(rng, groundHex, minGroundDE, lRange, cRange) {
   for (let i = 0; i < SURFACE_ACCENT_MAX_TRIES; i++) {
     const scheme = SHUFFLE_SCHEMES[Math.floor(rng() * SHUFFLE_SCHEMES.length)];
-    const built = buildPalette(rng, { scheme, groundHex });
-    const hexes = built.accents.map(a => a.hex);
+    const hexes = generateOklchAccents(rng, scheme, lRange, cRange).map(a => a.hex);
     const groundDEs = hexes.map(h => deltaE(h, groundHex));
     const accentDEs = [deltaE(hexes[0], hexes[1]), deltaE(hexes[1], hexes[2]), deltaE(hexes[0], hexes[2])];
     if (Math.min(...groundDEs) >= minGroundDE && Math.min(...accentDEs) >= MIN_ACCENT_DE && satisfiesPaletteRule(hexes).ok) {
@@ -3834,30 +3536,65 @@ function generateSurfaceAccents(rng, groundHex, minGroundDE) {
   return null;
 }
 
-// Brief 34 — paint's own equivalent, discovered necessary during
-// verification: paint's shuffle (brief 31) and Task 4c's new game-opening
-// draw both call buildPalette with an explicit `scheme` and trust it to
-// satisfy the triadic/split-complementary rule by construction, the exact
-// assumption generateSurfaceAccents' own comment above already documents
-// as wrong. Measured directly: only 14% of 200 buildPalette({scheme})
-// calls actually passed satisfiesPaletteRule. Since Task 3b explicitly
-// keeps this guard and Task 4c's whole premise is a genuine 50-50 split,
-// leaving paint unchecked would mean both tasks' own stated guarantees
-// are false ~86% of the time despite the scheme LABEL alternating
-// correctly. Wraps buildPalette the same way, returns the FULL built
-// object (paint's downstream code needs ground/ink/scheme/baseIndex, not
-// just accent hexes). Falls back to the approved pinned reference
-// (PAINT_DEFAULT_SCHEME/BASE_INDEX) on exhaustion, mirroring paper/
-// chalk's own fixed-triad fallback.
+// Brief 34, rebuilt brief 35 Task 1 — paint's own equivalent. Now calls
+// generateOklchAccents directly rather than buildPalette, so generated
+// paint accents are free OKLCh hexes, not necessarily members of
+// HUE_LIBRARY (see the share-encoding fix in encodeArtworkPayload below —
+// this is exactly why that had to change too). Explicitly checks both ΔE
+// floors here (buildPalette used to do this internally when it was still
+// the generator; generateOklchAccents doesn't, so this loop now owns that
+// check directly, same as generateSurfaceAccents above). Returns the FULL
+// palette object shape (paint's downstream code reads .ground/.accents;
+// .ink/.scheme/.baseIndex are carried for shape-compatibility with the
+// fixed pinned reference but are not read anywhere downstream — confirmed
+// by grep). Falls back to the approved pinned reference
+// (PAINT_DEFAULT_SCHEME/BASE_INDEX, still drawn from HUE_LIBRARY via
+// buildPalette) on exhaustion, mirroring paper/chalk's own fixed-triad
+// fallback.
 function generatePaintPalette(rng, groundHex) {
   for (let i = 0; i < SURFACE_ACCENT_MAX_TRIES; i++) {
     const scheme = SHUFFLE_SCHEMES[Math.floor(rng() * SHUFFLE_SCHEMES.length)];
-    const built = buildPalette(rng, { scheme, groundHex });
-    const hexes = built.accents.map(a => a.hex);
-    if (satisfiesPaletteRule(hexes).ok) return built;
+    const accents = generateOklchAccents(rng, scheme, PAINT_L_RANGE, PAINT_C_RANGE);
+    const hexes = accents.map(a => a.hex);
+    const groundDEs = hexes.map(h => deltaE(h, groundHex));
+    const accentDEs = [deltaE(hexes[0], hexes[1]), deltaE(hexes[1], hexes[2]), deltaE(hexes[0], hexes[2])];
+    if (Math.min(...groundDEs) >= MIN_GROUND_DE && Math.min(...accentDEs) >= MIN_ACCENT_DE && satisfiesPaletteRule(hexes).ok) {
+      return { ground: groundHex, ink: INK_HEX, accents, scheme, baseIndex: null };
+    }
   }
   return buildPalette(rng, { scheme: PAINT_DEFAULT_SCHEME, baseIndex: PAINT_DEFAULT_BASE_INDEX, groundHex });
 }
+
+// Brief 35 Task 1 — verification, printed once at load per the brief's own
+// instruction ("shuffle each surface 20×... print the measured pass-rate
+// and a sample of generated hexes"). Runs each generator 20× with a fixed
+// test seed (not the live doodle/game rng — this must not perturb actual
+// gameplay randomness) and reports pass rate, scheme split, and a hex
+// sample per surface. Purely diagnostic — never throws, never blocks
+// startup.
+(function verifyGeneratedPalettes() {
+  function sample(label, groundHex, minGroundDE, lRange, cRange, isPaint) {
+    const rng = makeRng(0xB61EF35 >>> 0);
+    let passes = 0, triadic = 0, splitComp = 0;
+    const hexSamples = [];
+    for (let i = 0; i < 20; i++) {
+      const result = isPaint ? generatePaintPalette(rng, groundHex) : generateSurfaceAccents(rng, groundHex, minGroundDE, lRange, cRange);
+      const hexes = isPaint ? result.accents.map(a => a.hex) : result;
+      const isFallback = isPaint ? (result.baseIndex !== null) : (hexes === null);
+      if (!isFallback) {
+        passes++;
+        const rule = satisfiesPaletteRule(hexes);
+        if (rule.rule === 'triadic') triadic++; else if (rule.rule === 'split-complementary') splitComp++;
+      }
+      if (i < 5) hexSamples.push((hexes || PAPER_PALETTE).join('/'));
+    }
+    console.log(`[palette-gen] ${label}: ${passes}/20 generated (not fallback) — triadic ${triadic}, split-comp ${splitComp}`);
+    console.log(`[palette-gen] ${label}: sample hexes — ${hexSamples.join('  ')}`);
+  }
+  sample('paper', PAPER_GROUND_HEX, MIN_GROUND_DE, PAPER_L_RANGE, PAPER_C_RANGE, false);
+  sample('chalk', CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE, CHALK_L_RANGE, CHALK_C_RANGE, false);
+  sample('paint', GROUND_LIBRARY[0].hex, MIN_GROUND_DE, PAINT_L_RANGE, PAINT_C_RANGE, true);
+})();
 
 // Per-surface colour cycle. Chalk is tri-colour (brief 19 Task 3) —
 // CHALK_PALETTE, matching how chalk was approved in the lab — not the
@@ -4051,9 +3788,9 @@ document.getElementById('idle-shuffle').addEventListener('click', (e) => {
     paintPalette = generatePaintPalette(shuffleRng, paintPalette.ground);
     PALETTE_ARRAYS.paint = weightedPaletteArray(paintPalette, shuffleSeed);
   } else if (currentSurface === 'chalk') {
-    PALETTE_ARRAYS.chalk = generateSurfaceAccents(shuffleRng, CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE) || CHALK_PALETTE.slice();
+    PALETTE_ARRAYS.chalk = generateSurfaceAccents(shuffleRng, CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE, CHALK_L_RANGE, CHALK_C_RANGE) || CHALK_PALETTE.slice();
   } else {
-    PALETTE_ARRAYS.paper = generateSurfaceAccents(shuffleRng, PAPER_GROUND_HEX, MIN_GROUND_DE) || PAPER_PALETTE.slice();
+    PALETTE_ARRAYS.paper = generateSurfaceAccents(shuffleRng, PAPER_GROUND_HEX, MIN_GROUND_DE, PAPER_L_RANGE, PAPER_C_RANGE) || PAPER_PALETTE.slice();
   }
   rebuildPersist(currentSurface); // restyle the WHOLE accumulated doodle, not just strokes from here on — same principle as rebuildGameStrokes()
   updateIdlePalPill();
@@ -4306,26 +4043,117 @@ function drawPaintRibbon(ctx, pts, wt, col, alpha = PAINT_LIVE_ALPHA) {
   ctx.restore();
 }
 
-// Brief 31 Task 2b — splatter's own opacity, matching drawPaintRibbon's
-// 0.88 above. renderSplatterMark (splatter.js) explicitly force-sets
-// ctx.globalAlpha = 1.0 right after its own save(), before every fill() —
-// so a caller-set globalAlpha has no effect on it at all, confirmed by
-// reading the engine source rather than assuming. It never touches
-// ctx.filter anywhere, though, so a filter set by the CALLER before the
-// call stays in effect through those same fill() calls — filter is a real
-// paint-time effect, not something the function overrides. One shared
-// wrapper rather than repeating the set/call/reset sequence at all three
-// call sites (live rally, results replay, share) — same principle as this
-// file's other "one function draws a mark" renderers.
+// Brief 35 Task 2 — app-side mark geometry, replacing the call to the
+// engine's renderSplatterMark entirely (splatter.js itself is untouched,
+// per the brief's scope — its buildSplatter/buildIntersectionBlotches/
+// renderSplatterMark exports are simply no longer called from this file).
+// The engine's own drawIrregularBlob/drawTeardrop are fixed-formula: one
+// wobble frequency hashed only off position, and a perfect semicircle
+// head — every mark of similar size reads as the same shape rotated,
+// which is the brief's own complaint ("a teardrop with a neat line of
+// satellites," repeated). Every new parameter below is a DETERMINISTIC
+// hash off fields the mark descriptor already carries (position, radius,
+// irregularity, direction) — never a fresh rng draw — so a live-drawn mark
+// and its later results/share replay from the same stored descriptor are
+// always pixel-identical, same discipline as everywhere else in this file.
+// No new share-format bytes needed for 'drop' or 'flung' because of this;
+// only the new 'streak' type below adds fields (see the encode/decode
+// block).
+function markHash(seed, n) {
+  const s = Math.sin(seed * n) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+// Two-harmonic wobble + elongation + rotation — replaces the engine's
+// single-frequency drawIrregularBlob. Same idea as splatter.js's own
+// PRIVATE wobblyBlobPoints (used today only by the dead
+// buildIntersectionBlotches path), reimplemented app-side rather than
+// exported — same "mirror the private engine helper" precedent as
+// deltaE/oklabDeltaE above.
+function paintBlobPath(ctx, cx, cy, r, irregularity, rotation) {
+  const seed = cx * 0.131 + cy * 0.177 + r * 0.319;
+  const verts = 8 + Math.floor(markHash(seed, 12.9898) * 7); // 8-14, was a fixed 9
+  const freqA = 2 + Math.floor(markHash(seed, 78.233) * 2);  // 2-3
+  const freqB = 5 + Math.floor(markHash(seed, 39.346) * 3);  // 5-7
+  const phaseA = markHash(seed, 4.567) * Math.PI * 2, phaseB = markHash(seed, 91.13) * Math.PI * 2;
+  const elongation = 0.72 + markHash(seed, 23.14) * 0.56; // 0.72-1.28
+  const lobeA = irregularity * (0.55 + markHash(seed, 67.89) * 0.55);
+  const lobeB = irregularity * (0.30 + markHash(seed, 15.73) * 0.50);
+  const cosR = Math.cos(rotation), sinR = Math.sin(rotation);
+  ctx.beginPath();
+  for (let i = 0; i <= verts; i++) {
+    const a = (Math.PI * 2 * i) / verts;
+    const wobble = 1 + lobeA * Math.sin(a * freqA + phaseA) + lobeB * Math.sin(a * freqB + phaseB);
+    const lx = Math.cos(a) * r * elongation * wobble;
+    const ly = Math.sin(a) * (r / elongation) * wobble;
+    const px = cx + lx * cosR - ly * sinR, py = cy + lx * sinR + ly * cosR;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+// Replaces the engine's perfect-semicircle drawTeardrop: the head arc now
+// wobbles per-angle (asymmetric, never a clean half-circle) and carries a
+// small extra rotation independent of the fling direction itself, both
+// hashed off the mark's own position/headR — the fling trajectory
+// (dx/dy/length, still literally where the mark points) is untouched.
+function paintTeardropPath(ctx, x, y, dx, dy, headR, length) {
+  const backAngle = Math.atan2(-dy, -dx);
+  const seed = x * 0.113 + y * 0.191 + headR * 0.271;
+  const rotJitter = (markHash(seed, 7.91) - 0.5) * 0.7; // extra head rotation, up to ~+/-20deg
+  const asymm = 0.15 + markHash(seed, 31.7) * 0.25;
+  const asymmPhase = markHash(seed, 52.3) * Math.PI * 2;
+  const segs = 10;
+  ctx.beginPath();
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    const a = backAngle - Math.PI / 2 + Math.PI * t + rotJitter;
+    const wobble = 1 + asymm * Math.sin(a * 2 + asymmPhase);
+    ctx.lineTo(x + Math.cos(a) * headR * wobble, y + Math.sin(a) * headR * wobble);
+  }
+  ctx.lineTo(x + dx * length, y + dy * length);
+  ctx.closePath();
+}
+
 // Brief 34 Task 4b — alphaPct threaded through, same live/finished split
 // as drawPaintRibbon: splatter is part of the finished piece exactly like
 // strokes are (both introduced at the same 0.88 together, brief 31 Task
 // 2b), so "the finished artwork is too dark" applies to it too. Default
 // stays the LIVE 88 (unchanged for the live-rally call site); the
-// results/share call sites now pass the finished 80 explicitly.
+// results/share call sites pass the finished 80 explicitly. filter is set
+// OUTSIDE the save/restore pair (matching the engine renderSplatterMark's
+// own contract this replaces — a caller-set filter isn't touched by an
+// inner save/restore) so it stays in effect through every fill() below.
 function renderSplatterMarkPaint(ctx, mark, alphaPct = 88) {
   ctx.filter = `opacity(${alphaPct}%)`;
-  renderSplatterMark(ctx, mark);
+  ctx.save();
+  ctx.globalAlpha = 1.0;
+  ctx.fillStyle = mark.colorHex;
+  if (mark.type === 'drop') {
+    paintBlobPath(ctx, mark.x, mark.y, mark.r, mark.irregularity, mark.seedAngle);
+    ctx.fill();
+  } else if (mark.type === 'streak') {
+    // Brief 35 Task 2 — occasional third silhouette ("consider a short
+    // streak / multi-lobe") so the vocabulary isn't just two shapes: 3
+    // overlapping blobs along a short randomly-rotated axis, reusing
+    // paintBlobPath's own wobble rather than a new drawing primitive.
+    [0, 0.5, 1].forEach((t, i) => {
+      const lx = mark.x + mark.dx * mark.length * t, ly = mark.y + mark.dy * mark.length * t;
+      const lr = mark.r * (1 - i * 0.22);
+      const rot = Math.atan2(mark.dy, mark.dx) + (i - 1) * 0.3;
+      paintBlobPath(ctx, lx, ly, lr, 0.20, rot);
+      ctx.fill();
+    });
+  } else {
+    paintTeardropPath(ctx, mark.x, mark.y, mark.dx, mark.dy, mark.headR, mark.length);
+    ctx.fill();
+    mark.satellites.forEach(s => {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  ctx.restore();
   ctx.filter = 'none';
 }
 
@@ -4818,6 +4646,13 @@ const GAME_SPLATTER_FLUNG_LEN_MIN = 10, GAME_SPLATTER_FLUNG_LEN_MAX = 45; // was
 const GAME_SPLATTER_HEAD_R_MIN = 3, GAME_SPLATTER_HEAD_R_MAX = 12; // was 4-9
 const GAME_SPLATTER_SATELLITE_COUNT_MIN = 2, GAME_SPLATTER_SATELLITE_COUNT_MAX = 5; // a count, not a size — unscaled
 
+// Brief 35 Task 2 — the occasional third silhouette. ~12% of non-flung
+// marks (so ~7% of all marks overall, given the ~60/40 drop/flung split) —
+// "occasional," per the brief, not a third co-equal category.
+const GAME_SPLATTER_STREAK_RATIO = 0.12;
+const GAME_SPLATTER_STREAK_LEN_MIN = 14, GAME_SPLATTER_STREAK_LEN_MAX = 34;
+const GAME_SPLATTER_STREAK_R_MIN = 2.5, GAME_SPLATTER_STREAK_R_MAX = 7;
+
 let gameSplatterRng; // own stream, salted off the per-game seed like every other — see startGame()
 let gameSplatterCooldown = 0;
 let gameSplatterMarks = []; // { mark, afterStrokes } — see maybeEmitSplatter's brief-26 comment
@@ -4868,17 +4703,38 @@ function buildLiveSplatterMark(ball, palette, rng) {
     const length = GAME_SPLATTER_FLUNG_LEN_MIN + rng() * (GAME_SPLATTER_FLUNG_LEN_MAX - GAME_SPLATTER_FLUNG_LEN_MIN);
     const satelliteCount = GAME_SPLATTER_SATELLITE_COUNT_MIN
       + Math.floor(rng() * (GAME_SPLATTER_SATELLITE_COUNT_MAX - GAME_SPLATTER_SATELLITE_COUNT_MIN + 1));
+    // Brief 35 Task 2 — was a near-fixed step (t = 1.1 + i*0.35), reading
+    // as "a neat line of satellites" per the brief's own complaint.
+    // Irregular spacing along the fling axis (tAcc) AND a jitter along
+    // the travel axis itself (along), not just perpendicular to it, so
+    // satellites scatter in two dimensions instead of hanging off one
+    // straight line.
     const satellites = [];
+    let tAcc = 0.9 + rng() * 0.3;
     for (let i = 0; i < satelliteCount; i++) {
-      const t = 1.1 + i * 0.35 + rng() * 0.25;
-      const perp = (rng() - 0.5) * headR * (1.2 + i * 0.6); // scatter along the ORIGINAL travel axis, off the fling line
+      tAcc += 0.28 + rng() * 0.42;
+      const perpSpread = headR * (1.0 + i * 0.55) * (0.6 + rng() * 0.9);
+      const perp = (rng() - 0.5) * 2 * perpSpread;
+      const along = (rng() - 0.5) * headR * 0.6;
       satellites.push({
-        x: mx + dx * length * t + tx * perp,
-        y: my + dy * length * t + ty * perp,
-        r: Math.max(0.5, headR * (0.4 - i * 0.05) * (0.7 + rng() * 0.5)),
+        x: mx + dx * length * tAcc + tx * perp + dx * along,
+        y: my + dy * length * tAcc + ty * perp + dy * along,
+        r: Math.max(0.5, headR * (0.45 - i * 0.045) * (0.55 + rng() * 0.75)),
       });
     }
     return { type: 'flung', x: mx, y: my, dx, dy, headR, length, colorHex, satellites };
+  }
+
+  // Brief 35 Task 2 — occasional third silhouette (see
+  // GAME_SPLATTER_STREAK_RATIO's own comment). Independent of travel
+  // direction on purpose — a genuinely separate silhouette from 'flung',
+  // not just a short version of it.
+  if (rng() < GAME_SPLATTER_STREAK_RATIO) {
+    const streakAngle = rng() * Math.PI * 2;
+    const sdx = Math.cos(streakAngle), sdy = Math.sin(streakAngle);
+    const length = GAME_SPLATTER_STREAK_LEN_MIN + rng() * (GAME_SPLATTER_STREAK_LEN_MAX - GAME_SPLATTER_STREAK_LEN_MIN);
+    const r = GAME_SPLATTER_STREAK_R_MIN + rng() * (GAME_SPLATTER_STREAK_R_MAX - GAME_SPLATTER_STREAK_R_MIN);
+    return { type: 'streak', x: mx, y: my, dx: sdx, dy: sdy, length, r, colorHex };
   }
 
   const rNorm = Math.pow(rng(), GAME_SPLATTER_DROP_SIZE_POWER); // heavy-tailed toward small
@@ -5277,9 +5133,9 @@ pgShuffleEl.addEventListener('click', (e) => {
     // Brief 34 Task 3b — generates a genuinely NEW scheme (was: re-order
     // the same fixed 3 via shuffleArrayInPlace). Same guard/retry/fallback
     // helper the idle shuffle uses (Task 3a) — one implementation, not two.
-    gameChalkPalette = generateSurfaceAccents(shuffleRng, CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE) || CHALK_PALETTE.slice();
+    gameChalkPalette = generateSurfaceAccents(shuffleRng, CHALK_GROUND_HEX, MIN_CHALK_GROUND_DE, CHALK_L_RANGE, CHALK_C_RANGE) || CHALK_PALETTE.slice();
   } else {
-    gamePaperPalette = generateSurfaceAccents(shuffleRng, PAPER_GROUND_HEX, MIN_GROUND_DE) || PAPER_PALETTE.slice();
+    gamePaperPalette = generateSurfaceAccents(shuffleRng, PAPER_GROUND_HEX, MIN_GROUND_DE, PAPER_L_RANGE, PAPER_C_RANGE) || PAPER_PALETTE.slice();
   }
   rebuildGameStrokes(); // restyle the WHOLE painting — committed strokes keep geometry, only colour changes
   updateGamePalPill();
@@ -5768,25 +5624,34 @@ function rgbBytesToHex(r, g, b) {
 
 // ── Task 1 — encode. Builds the RAW (uncompressed) byte payload from a
 // gameLastEndedStrokes-shaped handoff. Format:
-//   [flags:1][surface:1][seed:4][palette: 9 (paper/chalk) or 4 (paint)][strokeCount:2]
+//   [flags:1][surface:1][seed:4][palette: 9 (paper/chalk) or 10 (paint)][strokeCount:2]
 //   per stroke: [colourIdx:1][wt:1][op:1][pointCount:1][points...]
 //   [splatterCount:1] per mark: [type:1][x:2][y:2][colourIdx:1][...]
 // See the surrounding functions for exactly what each block contains —
 // kept close to the reader that has to agree with it byte for byte.
 //
 // Brief 34 Task 3b bumped this 1 -> 2: paper/chalk's palette block changed
-// shape (see the else branch below) because shuffle can now generate
-// accents that aren't members of the fixed PAPER_PALETTE/CHALK_PALETTE
-// arrays the OLD block indexed into. decodeArtworkPayload's version check
-// is a strict equality, not a range — a link encoded by an older build
-// (version 1) now fails that check and falls through to idle, same as
-// any other malformed payload; it does not attempt to read a version-1
-// paper/chalk block with the version-2 reader and produce wrong colours.
-// Accepted deliberately (Shivang's call, brief 34 review): any paper/chalk
-// share link generated before this ships stops opening. Paint links are
-// unaffected — paint's own block shape is unchanged. Logged in
-// BACKLOG.md/PROJECT-LOG.md.
-const SHARE_FORMAT_VERSION = 2;
+// shape because shuffle could generate accents outside the fixed
+// PAPER_PALETTE/CHALK_PALETTE arrays the OLD block indexed into.
+//
+// Brief 35 Task 1 bumps this 2 -> 3: the SAME bug, now for paint. Paint's
+// generated accents used to always be members of HUE_LIBRARY (buildPalette
+// only ever picked library entries by index), so encoding them as a
+// HUE_LIBRARY index was safe. Brief 35 switches paint's GENERATOR to real
+// OKLCh hue rotation (generateOklchAccents) — generated accents are free
+// hexes now, not necessarily any HUE_LIBRARY member, so
+// `HUE_LIBRARY.findIndex` would silently return -1 and the old encoder
+// wrote index 0 (Crimson) for every accent regardless of the real colour —
+// a real, silent share-link corruption bug, caught before shipping. Paint
+// now uses the same raw-RGB-bytes scheme paper/chalk already use (ground
+// stays index-based — it's still always Cream, never generated).
+// decodeArtworkPayload's version check is a strict equality, not a range —
+// a link encoded by an older build (version 1 or 2) now fails that check
+// and falls through to idle, same as any other malformed payload, rather
+// than reading a stale-shape block and showing wrong colours. Accepted
+// deliberately (Shivang's call, brief 35 review): any share link generated
+// before this ships stops opening. Logged in BACKLOG.md/PROJECT-LOG.md.
+const SHARE_FORMAT_VERSION = 3;
 function encodeArtworkPayload(h) {
   const w = makeByteWriter();
 
@@ -5795,43 +5660,25 @@ function encodeArtworkPayload(h) {
   w.u8(surfaceIdx);
   w.u16(h.seed & 0xFFFF); w.u16((h.seed >>> 16) & 0xFFFF); // uint32 as two u16s — u16() is already LE
 
-  // Palette — brief 29 Task 1 names "scheme index, base index, ground
-  // index" (3 bytes) for paint. Deliberately NOT what's encoded here: the
-  // resolved ACCENT hexes are re-run through buildPalette's own seeded
-  // retry loop (the accent-quality guard, MIN_ACCENT_DE) on a fresh rng,
-  // and if the original run needed even one retry to pass that guard
-  // (~8% of base indices do, per palette.js's own comment), replaying
-  // scheme+baseIndex+seed alone reproduces a DIFFERENT accent permutation
-  // than the one actually shown — the rng draws consumed by the failed
-  // attempt(s) never happened in the replay. That is not "not pixel-
-  // identical", it is a different dominant colour. Transmitting the 3
-  // resolved accents directly (as HUE_LIBRARY indices, always valid since
-  // every accent hex is drawn from that fixed 12-colour library) costs one
-  // extra byte and is immune to it by construction — no rng replay at all.
-  // Ground is included for robustness even though it is currently always
-  // Cream (brief 26 Task 3 pins it, and shuffle never changes it) — cheap
-  // insurance against that ever becoming a real control (BACKLOG.md).
+  // Palette — brief 35 Task 1: all three surfaces now encode their 3
+  // resolved accent hexes as raw RGB bytes (9 bytes), not a library index —
+  // none of the three can be assumed to be members of a fixed array once
+  // shuffle/per-game generation can produce free OKLCh hexes. Immune to
+  // the rng-replay mismatch the original brief-29 comment warned about (a
+  // generator retry consumes rng draws a naive replay wouldn't reproduce)
+  // by construction — no rng replay at all, the actual shown hex is
+  // transmitted directly. Paint's ground is still index-based (1 byte,
+  // GROUND_LIBRARY) since it is currently always Cream and never
+  // generated (brief 26 Task 3 pins it) — cheap insurance kept from the
+  // original design, per BACKLOG.md, against that ever becoming a real
+  // control.
+  h.resolvedPalette.forEach(hex => {
+    const [r, g, b] = hexToRgbBytes(hex);
+    w.u8(r); w.u8(g); w.u8(b);
+  });
   if (h.surface === 'paint') {
-    const accentHexes = h.resolvedPalette; // 3 hexes, A/B/C order — see gamePalPillHexesFor
-    accentHexes.forEach(hex => {
-      const idx = HUE_LIBRARY.findIndex(hue => hue.hex === hex);
-      w.u8(idx >= 0 ? idx : 0);
-    });
     const groundIdx = GROUND_LIBRARY.findIndex(g => g.hex === h.paintGroundHex);
     w.u8(groundIdx >= 0 ? groundIdx : 0);
-  } else {
-    // paper/chalk, format version 2 (brief 34 Task 3b) — raw RGB bytes, 3
-    // per accent, 9 total. The old version-1 scheme packed 2-bit indices
-    // into the FIXED 3-hex source palette (PAPER_PALETTE/CHALK_PALETTE),
-    // which only worked because shuffle used to just re-order those same
-    // 3 fixed hexes. Now that shuffle GENERATES new accents (Task 3b),
-    // they are not necessarily members of any fixed array to index into —
-    // raw bytes are correct regardless of which family (fixed opening or
-    // generated) a hex came from.
-    h.resolvedPalette.forEach(hex => {
-      const [r, g, b] = hexToRgbBytes(hex);
-      w.u8(r); w.u8(g); w.u8(b);
-    });
   }
 
   w.u16(h.strokes.length);
@@ -5885,7 +5732,12 @@ function encodeArtworkPayload(h) {
   // up to GAME_SPLATTER_CAP (28, brief 34 Task 4a) of them.
   w.u8(h.splatterMarks.length);
   h.splatterMarks.forEach(({ mark }) => {
-    w.u8(mark.type === 'flung' ? 1 : 0);
+    // Brief 35 Task 2 — type byte gains a third value, 2='streak' (was
+    // just 0/1). decodeArtworkPayload's SHARE_FORMAT_VERSION gate (bumped
+    // to 3 this same brief for the paint fix above) already means an
+    // older-build reader never sees this byte at all, so no separate
+    // migration concern for the new value itself.
+    w.u8(mark.type === 'flung' ? 1 : mark.type === 'streak' ? 2 : 0);
     w.u16(Math.max(0, Math.min(65535, Math.round(mark.x))));
     w.u16(Math.max(0, Math.min(65535, Math.round(mark.y))));
     // colour: 0=ink, 1/2/3=accent A/B/C — splatter's own colour weighting
@@ -5904,6 +5756,11 @@ function encodeArtworkPayload(h) {
         w.i8(quantSignedByte(s.y - mark.y, SHARE_SAT_OFFSET_RANGE));
         w.u8(quantByte(s.r, 0, SHARE_SAT_R_MAX));
       });
+    } else if (mark.type === 'streak') {
+      w.u8(quantByte(mark.dx, -1, 1));
+      w.u8(quantByte(mark.dy, -1, 1));
+      w.u8(quantByte(mark.length, GAME_SPLATTER_STREAK_LEN_MIN, GAME_SPLATTER_STREAK_LEN_MAX));
+      w.u8(quantByte(mark.r, GAME_SPLATTER_STREAK_R_MIN, GAME_SPLATTER_STREAK_R_MAX));
     } else {
       w.u8(quantByte(mark.r, GAME_SPLATTER_DROP_R_MIN, GAME_SPLATTER_DROP_R_MAX));
       w.u8(quantByte(mark.irregularity, SHARE_IRREG_MIN, SHARE_IRREG_MAX));
@@ -5942,21 +5799,19 @@ function decodeArtworkPayload(bytes) {
     const seedLo = r.u16(), seedHi = r.u16();
     const seed = (seedLo | (seedHi << 16)) >>> 0;
 
+    // Brief 35 Task 1 — mirrors the encoder above: all three surfaces read
+    // 3 raw RGB bytes per accent (9 total), format version 3. See
+    // encodeArtworkPayload's own comment for why paint moved off
+    // HUE_LIBRARY indices (the same silent-corruption bug paper/chalk had
+    // in version 1, now fixed for paint too).
     let resolvedPalette, paintGroundHex = null;
+    if (r.remaining < 9) return null;
+    resolvedPalette = [0, 1, 2].map(() => rgbBytesToHex(r.u8(), r.u8(), r.u8()));
     if (surface === 'paint') {
-      if (r.remaining < 4) return null;
-      const accentIdx = [r.u8(), r.u8(), r.u8()];
-      if (accentIdx.some(i => i >= HUE_LIBRARY.length)) return null;
-      resolvedPalette = accentIdx.map(i => HUE_LIBRARY[i].hex);
+      if (r.remaining < 1) return null;
       const groundIdx = r.u8();
       if (groundIdx >= GROUND_LIBRARY.length) return null;
       paintGroundHex = GROUND_LIBRARY[groundIdx].hex;
-    } else {
-      // paper/chalk, format version 2 — mirrors the encoder above: 3 raw
-      // RGB bytes per accent, 9 total. See encodeArtworkPayload's own
-      // comment for why this replaced the version-1 packed-index scheme.
-      if (r.remaining < 9) return null;
-      resolvedPalette = [0, 1, 2].map(() => rgbBytesToHex(r.u8(), r.u8(), r.u8()));
     }
 
     if (r.remaining < 2) return null;
@@ -6009,7 +5864,9 @@ function decodeArtworkPayload(bytes) {
     const splatterMarks = [];
     for (let mi = 0; mi < splatterCount; mi++) {
       if (r.remaining < 6) return null;
-      const type = r.u8() ? 'flung' : 'drop';
+      // Brief 35 Task 2 — third type value, 2='streak'.
+      const typeByte = r.u8();
+      const type = typeByte === 1 ? 'flung' : typeByte === 2 ? 'streak' : 'drop';
       const x = r.u16(), y = r.u16();
       const colourIdx = r.u8();
       const colorHex = paletteWithInk[colourIdx] || paletteWithInk[0];
@@ -6028,6 +5885,12 @@ function decodeArtworkPayload(bytes) {
           const relY = dequantSignedByte(r.i8(), SHARE_SAT_OFFSET_RANGE);
           mark.satellites.push({ x: x + relX, y: y + relY, r: dequantByte(r.u8(), 0, SHARE_SAT_R_MAX) });
         }
+      } else if (type === 'streak') {
+        if (r.remaining < 4) return null;
+        mark.dx = dequantByte(r.u8(), -1, 1);
+        mark.dy = dequantByte(r.u8(), -1, 1);
+        mark.length = dequantByte(r.u8(), GAME_SPLATTER_STREAK_LEN_MIN, GAME_SPLATTER_STREAK_LEN_MAX);
+        mark.r = dequantByte(r.u8(), GAME_SPLATTER_STREAK_R_MIN, GAME_SPLATTER_STREAK_R_MAX);
       } else {
         if (r.remaining < 3) return null;
         mark.r = dequantByte(r.u8(), GAME_SPLATTER_DROP_R_MIN, GAME_SPLATTER_DROP_R_MAX);
@@ -6562,36 +6425,106 @@ document.querySelectorAll('#surface-chip .tile').forEach(tile => {
    (idle -> playing, per DESIGN.md §5's state table).
    ════════════════════════════════════════════════════════════════════ */
 
-// ── BGM — Oolong.mp3, root CLAUDE.md §4's protected pattern verbatim.
-// new Audio() + createMediaElementSource(), never fetch/decodeAudioData.
+// ── BGM — brief 35 Task 3: two tracks, root CLAUDE.md §4's protected
+// pattern verbatim PER TRACK (new Audio() + createMediaElementSource(),
+// never fetch/decodeAudioData). Was one Audio/Gain pair doing double duty
+// (per-track fade AND the idle/ducked level combined into one gain node);
+// split into a shared bus gain (bgmBusGain — what setBGMLevel/stopBGM now
+// target, carrying the exact same idle/ducked/mute behaviour as before,
+// untouched values) plus one gain PER TRACK feeding into it, so a
+// crossfade is just ramping two track gains in opposite directions while
+// the bus level stays wherever it already was.
 let actx = null, muted = false;
 updateMuteButton(); // brief 25 Task 2 — sync icon/aria to the actual default state
-let ooAudio = null, ooGain = null, ooSrc = null;
 
-function initOolong() {
-  if (ooAudio) return;
-  ooAudio = new Audio('Oolong.mp3');
-  ooAudio.loop = true;
-  ooAudio.crossOrigin = 'anonymous';
-  ooSrc = actx.createMediaElementSource(ooAudio);
-  ooGain = actx.createGain();
-  ooGain.gain.value = 0;
-  ooSrc.connect(ooGain);
-  ooGain.connect(actx.destination);
+// Add a third track later by appending its filename here only — nothing
+// else in this section needs to change (brief's own "built to extend").
+const BGM_TRACKS = ['GoldenPothos.mp3', 'Oolong.mp3'];
+const BGM_CROSSFADE_SEC = 4; // "a few seconds," per the brief — no silent gap between tracks
+let bgmBusGain = null;   // shared idle/ducked/mute level, -> actx.destination
+let bgmSlots = [];       // [{audio, gain, src}] per BGM_TRACKS entry, lazily built
+let bgmActiveIdx = -1;   // which playlist index is the current "front" track; -1 = never started
+let bgmCrossfading = false;
+let bgmCrossfadeTimer = null;
+
+function initBGMBus() {
+  if (bgmBusGain) return;
+  bgmBusGain = actx.createGain();
+  bgmBusGain.gain.value = 0;
+  bgmBusGain.connect(actx.destination);
+}
+
+function initBGMSlot(i) {
+  if (bgmSlots[i]) return bgmSlots[i];
+  // Dev-relative path (v3/app/index.html lives two levels below the repo
+  // root, where the .mp3 files sit). Template-literal form, not string
+  // concatenation, on purpose — v3/build.js rewrites the literal
+  // `${` prefix to `${` for the shipped root index.html (which
+  // lives NEXT TO the .mp3 files), and needs a literal substring to find;
+  // see its own comment for why this generalises the old single-track
+  // Oolong-specific string rewrite.
+  const audio = new Audio(`${BGM_TRACKS[i]}`);
+  audio.loop = false; // the SET loops via alternation (below), not each file individually
+  audio.crossOrigin = 'anonymous';
+  const src = actx.createMediaElementSource(audio);
+  const gain = actx.createGain();
+  gain.gain.value = 0;
+  src.connect(gain);
+  gain.connect(bgmBusGain);
+  const slot = { audio, gain, src };
+  bgmSlots[i] = slot;
+  audio.addEventListener('timeupdate', () => onBGMTimeUpdate(i));
+  return slot;
+}
+
+// Watches the ACTIVE track's own playback position; once within
+// BGM_CROSSFADE_SEC of its end, starts the crossfade to the next track in
+// the playlist. Ignored for any slot that isn't the current front track
+// (a track fading OUT after crossfadeToNext already started still fires
+// timeupdate events for a couple frames — bgmCrossfading/bgmActiveIdx
+// together gate against double-triggering).
+function onBGMTimeUpdate(i) {
+  if (i !== bgmActiveIdx || bgmCrossfading) return;
+  const a = bgmSlots[i].audio;
+  if (!a.duration || !isFinite(a.duration)) return;
+  if (a.duration - a.currentTime <= BGM_CROSSFADE_SEC) crossfadeToNext();
+}
+
+function crossfadeToNext() {
+  bgmCrossfading = true;
+  const fromIdx = bgmActiveIdx;
+  const toIdx = (fromIdx + 1) % BGM_TRACKS.length;
+  const toSlot = initBGMSlot(toIdx);
+  toSlot.audio.currentTime = 0;
+  toSlot.audio.play().catch(() => {});
+  const t = actx.currentTime;
+  const fromGain = bgmSlots[fromIdx].gain.gain, toGain = toSlot.gain.gain;
+  fromGain.cancelScheduledValues(t); fromGain.setValueAtTime(fromGain.value, t);
+  fromGain.linearRampToValueAtTime(0, t + BGM_CROSSFADE_SEC);
+  toGain.cancelScheduledValues(t); toGain.setValueAtTime(0, t);
+  toGain.linearRampToValueAtTime(1, t + BGM_CROSSFADE_SEC);
+  bgmCrossfadeTimer = setTimeout(() => {
+    bgmSlots[fromIdx].audio.pause();
+    bgmActiveIdx = toIdx;
+    bgmCrossfading = false;
+    bgmCrossfadeTimer = null;
+  }, BGM_CROSSFADE_SEC * 1000 + 100);
 }
 
 // Brief 28 Task 5b — 0.72 at rest (idle); ducked 20% while the player is in
 // the game AND held through results (sndGameOver needs the room) so it
 // never swells back up while the bell is still ringing. Restored only on
-// an explicit return to idle (goToIdleArmed, Task 2/3).
+// an explicit return to idle (goToIdleArmed, Task 2/3). Values/behaviour
+// UNCHANGED by the two-track split above — this now targets the shared
+// bus, which is exactly the node that used to carry this level alone.
 const BGM_LEVEL_IDLE = 0.72;
 const BGM_LEVEL_DUCKED = 0.58;
 function setBGMLevel(level, rampMs = 600) {
-  if (!ooGain || !actx) return;
+  if (!bgmBusGain || !actx) return;
   const t = actx.currentTime;
-  ooGain.gain.cancelScheduledValues(t);
-  ooGain.gain.setValueAtTime(ooGain.gain.value, t);
-  ooGain.gain.linearRampToValueAtTime(level, t + rampMs / 1000); // ~600ms — a step reads as a glitch
+  bgmBusGain.gain.cancelScheduledValues(t);
+  bgmBusGain.gain.setValueAtTime(bgmBusGain.gain.value, t);
+  bgmBusGain.gain.linearRampToValueAtTime(level, t + rampMs / 1000); // ~600ms — a step reads as a glitch
 }
 
 async function startBGM() {
@@ -6599,21 +6532,38 @@ async function startBGM() {
   if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
   initSfxBus(); // brief 28 Task 5a — created alongside actx, the only place actx itself is created
   await actx.resume();
-  initOolong();
-  ooAudio.currentTime = 0;
-  ooAudio.play().catch(() => {});
-  ooGain.gain.cancelScheduledValues(actx.currentTime);
-  ooGain.gain.setValueAtTime(0, actx.currentTime);
-  ooGain.gain.linearRampToValueAtTime(BGM_LEVEL_IDLE, actx.currentTime + 2.5); // root CLAUDE.md §4's own fade-in timing — unrelated to the 600ms duck ramps above, untouched
+  initBGMBus();
+  // Brief 35 Task 3 — coin flip, but only on the FIRST ever call: this is
+  // the one real call site (armIdle(), Task 3/idle two-step below) that
+  // fires once per page load. A later startBGM() call (unmuting mid-game,
+  // pgMuteBtn's handler) resumes whichever track was already active — same
+  // restart-from-0 behaviour this function already had before the split,
+  // not a second coin flip; "then they alternate" (the brief's own words)
+  // describes the crossfade rotation, not re-randomising on every unmute.
+  if (bgmActiveIdx === -1) bgmActiveIdx = Math.random() < 0.5 ? 0 : 1; // "must not always be Oolong"
+  const slot = initBGMSlot(bgmActiveIdx);
+  slot.audio.currentTime = 0;
+  slot.audio.play().catch(() => {});
+  slot.gain.gain.cancelScheduledValues(actx.currentTime);
+  slot.gain.gain.setValueAtTime(1, actx.currentTime); // per-track gain is just on/off — the bus carries the actual fade
+  bgmBusGain.gain.cancelScheduledValues(actx.currentTime);
+  bgmBusGain.gain.setValueAtTime(0, actx.currentTime);
+  bgmBusGain.gain.linearRampToValueAtTime(BGM_LEVEL_IDLE, actx.currentTime + 2.5); // root CLAUDE.md §4's own fade-in timing — unrelated to the 600ms duck ramps above, untouched
 }
 
 function stopBGM() {
-  if (!ooGain || !ooAudio || !actx) return;
+  if (!bgmBusGain || !actx) return;
   const t = actx.currentTime;
-  ooGain.gain.cancelScheduledValues(t);
-  ooGain.gain.setValueAtTime(ooGain.gain.value, t);
-  ooGain.gain.linearRampToValueAtTime(0, t + 2.5);
-  setTimeout(() => { ooAudio.pause(); }, 2600);
+  bgmBusGain.gain.cancelScheduledValues(t);
+  bgmBusGain.gain.setValueAtTime(bgmBusGain.gain.value, t);
+  bgmBusGain.gain.linearRampToValueAtTime(0, t + 2.5);
+  // A crossfade mid-flight when stop is called never gets to actually
+  // finish swapping the active track — cancel its finalisation so it
+  // doesn't pause the wrong slot or clear bgmActiveIdx out from under a
+  // later unmute; bgmActiveIdx simply stays on whichever track was still
+  // the "from" side, which is exactly where playback actually was.
+  if (bgmCrossfadeTimer) { clearTimeout(bgmCrossfadeTimer); bgmCrossfadeTimer = null; bgmCrossfading = false; }
+  setTimeout(() => { bgmSlots.forEach(s => { if (s) s.audio.pause(); }); }, 2600);
 }
 
 /* ════════════════════════════════════════════════════════════════════════

@@ -206,7 +206,20 @@ retuning, the mobile gate's "go back to artwork" link, and five in-game
 polish fixes (serve-dot removal, diffused point/gameover glow, timeline
 outline, static share CTA, single bell on the winning point).
 
-### Brief 35 — QA sweep + backlog triage
+### Brief 35 — Real palette generation, splatter variety, two-track music, polish
+Shipped as `35-palette-fix-music-polish.md`, not the "QA sweep + backlog
+triage" this entry originally named (moved to brief 36 below). Fixed the
+palette-generation root cause brief 34 had worked around (real OKLCh hue
+rotation, off `HUE_LIBRARY`'s index space entirely, for every generated
+palette) rather than another patch — both engine-level limits brief 34's
+log flagged are now resolved, not just documented. Also: app-side splatter
+shape variety (replacing the engine's fixed-formula mark geometry, engine
+untouched), `GoldenPothos.mp3` as a genuine second BGM track with a
+crossfade (not just a swap), the idle credit repositioned to fix a real
+layout collision, a glow rollback, and two real mobile-padding bugs found
+by measuring rather than assuming a fix worked.
+
+### Brief 36 — QA sweep + backlog triage
 The checkpoint `BACKLOG.md` names for itself: "once every current surface is
 built and the game is fitted together." Everything deferred during the port,
 plus the small polish Shivang has been holding back, triaged in one pass.

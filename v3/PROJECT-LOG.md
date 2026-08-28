@@ -5,6 +5,137 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-28 — Brief 35 built on `feature/v3-palette-music`. Real palette generation (root cause, not a workaround), splatter variety, two-track music, polish.
+
+New branch off `main` (34 merged). Not merged this session.
+
+**Task 1 — the real palette fix.** Brief 34's `SHUFFLE_SCHEMES` lock to
+`['split-complementary']` was a workaround for the actual defect:
+`SCHEMES`' index OFFSETS (`palette.js`) only land at real angular spacing
+if `HUE_LIBRARY`'s 12 hues were evenly spaced 30° apart — they are a
+genuinely uneven, curated set. Fixed at the root this time, entirely
+app-side (`v3/engine/` untouched, per this brief's scope): a new
+`generateOklchAccents(rng, scheme, lRange, cRange)` places accents
+directly in OKLCh by real degrees (triadic 120/120/120°,
+split-complementary 150/60/150°) instead of picking `HUE_LIBRARY` entries
+by offset. `SHUFFLE_SCHEMES` restored to `['triadic',
+'split-complementary']`, 50-50. Per-surface L/C ranges grounded in the
+*measured* OKLCh of the existing approved constants (computed via
+`hexToOklab`, not guessed): paper L 0.60-0.80/C 0.13-0.19 (approved
+default L0.70/C≈0.16), chalk L 0.72-0.92/C 0.12-0.20 (skewed high on
+purpose — this range choice IS the fix for the 0.55 ground-contrast floor
+that was unreachable via `HUE_LIBRARY`), paint L 0.45-0.85/C 0.14-0.22
+(was `HUE_LIBRARY`'s own L 0.48-0.84/C 0.15-0.21 range).
+
+Verified live, 20 generations per surface (fixed test seed, printed on
+every load): **paper 20/20 generated (0 fallback) — 12 triadic/8
+split-comp. Chalk 20/20 generated (0 fallback) — 17/3. Paint 20/20
+generated (0 fallback) — 13/7.** Compare to brief 34: chalk was 0/10
+generated, 10/10 identical to the fixed default, every single shuffle.
+The three surfaces now genuinely produce different, legible palettes
+across the real hue circle and a real light/dark range — the brief's own
+"done looks like."
+
+**Real bug caught and fixed in the same task:** paint's share-link
+encoding stored accents as `HUE_LIBRARY` indices — safe only because
+`buildPalette` always drew from that fixed 12-hue set. Free OKLCh
+generation breaks that invariant; `HUE_LIBRARY.findIndex` would return -1
+for a generated hex and the old encoder silently wrote index 0 (Crimson)
+for every accent, corrupting every shared paint link's colours the moment
+a shuffled/generated palette was involved. This is the exact bug class
+brief 34 already fixed for paper/chalk (see that entry) — fixed the same
+way: raw RGB bytes for all three surfaces now. `SHARE_FORMAT_VERSION`
+bumped 2→3 (old links stop decoding — accepted, pre-launch, same
+tradeoff Shivang approved for brief 34's bump). Folded brief 35 Task 2's
+new "streak" splatter mark type into the same version bump rather than a
+second one.
+
+**Task 2 — splatter shape variety.** The engine's own `drawIrregularBlob`/
+`drawTeardrop` (`splatter.js`) are fixed-formula: one wobble frequency
+hashed only off position, a perfect semicircle head — every mark of
+similar size read as the same shape rotated. Replaced entirely at the app
+layer (`splatter.js` itself untouched — it simply has no remaining
+caller in this file): `paintBlobPath` (two-harmonic wobble + elongation +
+rotation, same idea as `splatter.js`'s own *private*, currently-unused
+`wobblyBlobPoints`, reimplemented app-side rather than exported — same
+"mirror the private engine helper" precedent as `deltaE`/`oklabDeltaE`)
+and `paintTeardropPath` (per-angle head wobble + independent rotation,
+replacing the perfect semicircle). Every new parameter is a deterministic
+hash off fields the mark descriptor already stores — no new share-format
+bytes needed for drop or flung marks. Satellite scatter widened
+(irregular two-axis jitter, was a near-linear line) — the share format
+already stored arbitrary per-satellite offsets, so this needed only a
+build-time formula change. Added an occasional third silhouette
+("streak," ~12% of non-flung marks, ~7% overall) — 3 overlapping blobs
+along a short randomly-rotated axis, reusing `paintBlobPath`'s own
+wobble. Verified live: a full headless paint game (28 marks, hit the
+cap) produced 6 drop/3 streak/19 flung — screenshot sent in the session
+report, no two marks read as siblings.
+
+**Task 3 — two-track music.** `GoldenPothos.mp3` added alongside
+`Oolong.mp3`. The single `ooGain` node did double duty (per-track fade
+AND the idle/ducked level combined) — split into a shared `bgmBusGain`
+(exactly what `setBGMLevel`/`stopBGM` target now, same 0.72/0.58/2.5s/
+600ms values, untouched) plus one gain per track feeding into it. A
+`timeupdate` listener on the active track triggers a 4s crossfade once
+within `BGM_CROSSFADE_SEC` of the track ending — ramps both per-track
+gains in opposite directions, no silent gap. Starting track is a coin
+flip on the one real call site (`armIdle()`, fires once per page load,
+confirmed both tracks observed as the starting pick across repeated
+loads — "must not always be Oolong"). `v3/build.js`'s single hardcoded
+`Oolong.mp3` path rewrite generalised to match any dev-relative
+template-literal audio reference, so a third track is genuinely just an
+append to `BGM_TRACKS` — the one `v3/build.js` touch this brief needed
+(`v3/engine/`/`v3/labs/` themselves untouched). Real crossfade/playback
+timing could not be verified in this sandbox — same `data:` URI
+limitation already disclosed for brief 34's single-track player, which
+breaks audio duration/currentTime regardless of the code. The
+bus/per-track gain architecture, coin flip, and start/stop/duck code
+paths were all verified directly: no exceptions, correct gain values,
+`bgmActiveIdx` genuinely randomized across runs (observed both 0 and 1).
+
+**Task 4 — credit.** Text shortened to "Music by Omni Gardens" (dropped
+the track name — two tracks now). Repositioned via `position:fixed`
+pinned to the actual viewport bottom: `#screen-idle` isn't stretched to
+viewport height (`body` centres the whole idle cluster as one block), so
+the old `margin-top` approach just followed however tall the content
+above happened to be — which is why it collided with the palette pill
+once armed. Bandcamp URL confirmed by Shivang (`moss-king-2`).
+
+**Task 5 — point glow rollback.** Spread/opacity reduced a notch
+(blur/spread ~18-20%, opacity ~15%); gameover scaled down by the exact
+same ratio it already held over point, so it stays proportionally the
+stronger of the two, unchanged in relationship.
+
+**Task 6 — mobile top padding, two real bugs found by measuring, not
+guessing.** The gap above the logo was NOT primarily `padding-top` (16px,
+already under the 40px cap) — measured live at 375×667 via
+`getBoundingClientRect`: 32px of pure `justify-content: safe center`
+centering slack was stacking on top of it, because centring a content
+block *shorter* than the viewport splits the leftover space around it.
+Switched to `flex-start` (same fix `body[data-screen="results"]` already
+uses for the identical reason). Second bug found by re-measuring after
+that fix instead of assuming it was done: **body's own base 32px padding
+was ALSO stacking on top** — `data-screen` stays whatever the underlying
+`screenState` actually is (`'idle'`/`'share'`) even while a mobile screen
+is the one visibly showing, so idle's un-overridden body padding applied
+right alongside the mobile screen's own. Real total was 48px, not the 16
+either fix alone would suggest. Fixed by zeroing body padding specifically
+while `html.mobile-gate-active`/`mobile-share-active`. Verified live at
+both 375×667 and 430×932: 16px gap, no scroll, both screens, both sizes.
+
+Desktop regression: multiple full games (paper, paint with realistic
+simulated paddle movement) reach results cleanly, zero console errors
+throughout every rebuild and every live test. `node v3/build.js` twice,
+byte-identical. `git diff --stat main -- v3/engine/ v3/labs/` empty
+throughout.
+
+### Next
+Brief 36+: decide whether to merge `feature/v3-palette-music`. QA sweep +
+backlog triage still pending from brief 35's own predecessor note.
+
+---
+
 ## 2026-08-28 — Brief 34 built on `feature/v3-music-polish`. Music, palette behaviour, mobile & in-game polish.
 
 New branch off `main` (33 merged, ship live). Not merged this session;

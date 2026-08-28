@@ -194,48 +194,63 @@ triaging this whole list, not before.
   is proven; the gate's own button (different callback, same core) and a
   real device weren't separately click-tested this session.
   *Surfaced: brief 31 verification, 2026-08-26.*
-- **`palette.js`'s `SCHEMES.triadic` never produces a real triad against
-  `HUE_LIBRARY`.** `SCHEMES.triadic = [0,4,8]` assumes the 12 hues in
-  `HUE_LIBRARY` are evenly spaced 30° apart; they're a curated, uneven
-  set (a 65° real gap sits next to an 8° one). Measured directly: 0
-  genuine "triadic" results (checked against this same file's own
-  `satisfiesPaletteRule`) across 1200 generation trials — every one of
-  the 12 possible base rotations, both `SCHEMES` keys, 50 seeds. Only
-  `split-complementary` is ever actually reachable via generation
-  (~17%). Brief 34's `SHUFFLE_SCHEMES` was narrowed to that one real
-  option rather than ship a fake 50-50 draw. Real fix belongs in
-  `palette.js`'s own `SCHEMES`/`HUE_LIBRARY` relationship — either
-  redefine `SCHEMES.triadic`'s offsets to land closer to true 120°
-  spacing for this specific library, or accept split-complementary as
-  the only generative pattern and drop the pretense. Blocks a genuine
-  50-50 palette-generation experience until fixed.
-  *Surfaced: brief 34 verification, 2026-08-28.*
-- **Chalk's shuffle is wired but non-functional — its own ground-
-  contrast floor is unreachable via generation.** Brief 31's
-  `MIN_CHALK_GROUND_DE` (0.55, guarding against chalk going invisible
-  on the board — a failure this surface had already hit twice) is
-  *also* structurally unreachable from `HUE_LIBRARY` against chalk's
-  near-black ground: measured best-ever `minGroundDE` 0.452 across 500
-  generation trials, never once clearing 0.55. Chalk's shuffle handler
-  is correct — click it and it genuinely tries to generate — but every
-  attempt exhausts its 30-try retry budget and falls back to the fixed
-  `CHALK_PALETTE`, confirmed live (10/10 "shuffled" results
-  byte-identical to the untouched default). The 0.55 guard was kept
-  intact rather than weakened, since reintroducing the invisible-chalk
-  failure this surface has hit twice already is worse than a shuffle
-  button that currently does nothing. Needs a real product decision:
-  soften the floor (real risk, chalk has failed this exact way before),
-  accept "chalk never shuffles" as permanent, or fix `HUE_LIBRARY` to
-  include hues bright enough to clear 0.55 against near-black.
-  *Surfaced: brief 34 verification, 2026-08-28.*
-- **BGM playback unverifiable in this sandbox — traced to `data:` URI
-  serving, not the code.** `Oolong.mp3`'s loading mechanism is provably
-  unchanged (brief 34), but real playback couldn't be confirmed: local
-  files outside this sandbox's project root are served as inlined
-  `data:` URIs (`location.protocol` confirmed `"data:"`), which breaks
-  relative-path resolution for the audio element regardless of what the
-  code does. Needs one real click-through in an ordinary browser.
-  *Surfaced: brief 34 verification, 2026-08-28.*
+- ~~**`palette.js`'s `SCHEMES.triadic` never produces a real triad against
+  `HUE_LIBRARY`.**~~ **Resolved, brief 35** (2026-08-28): fixed at the
+  root rather than continuing to route around it — generation moved off
+  `HUE_LIBRARY`'s index space entirely (`generateOklchAccents`, app-side,
+  real OKLCh degrees) for every generated palette, so this specific
+  index/offset mismatch no longer applies to anything the app draws from.
+  `palette.js`'s own `SCHEMES.triadic` offsets are UNCHANGED and still
+  latently mismatched against `HUE_LIBRARY` (left as-is per this brief's
+  scope — `v3/engine/` untouched) — only relevant now to the lab or any
+  future code path that still calls `buildPalette({scheme:'triadic'})`
+  directly. `SHUFFLE_SCHEMES` restored to a genuine 50-50
+  triadic/split-complementary draw; verified live, both patterns roughly
+  balanced across 20 generations per surface.
+  *Surfaced: brief 34 verification, 2026-08-28. Resolved: brief 35,
+  2026-08-28.*
+- ~~**Chalk's shuffle is wired but non-functional — its own ground-
+  contrast floor is unreachable via generation.**~~ **Resolved, brief 35**
+  (2026-08-28): the 0.55 `MIN_CHALK_GROUND_DE` floor (kept intact,
+  unweakened — this was never the problem) is now easily clearable
+  because chalk's generated L range moved to 0.72-0.92, well past
+  `HUE_LIBRARY`'s brightest-ever member (Yellow, L 0.842) — free OKLCh
+  generation was never limited to the library's fixed L values.
+  Verified live: 20/20 shuffles generated a genuinely new palette (0
+  fallback to the fixed default), versus brief 34's measured 0/10.
+  *Surfaced: brief 34 verification, 2026-08-28. Resolved: brief 35,
+  2026-08-28.*
+- **BGM playback (and now crossfade timing) unverifiable in this
+  sandbox — traced to `data:` URI serving, not the code.** Unchanged
+  limitation from brief 34, now also covering brief 35's two-track
+  crossfade: local files outside this sandbox's project root are served
+  as inlined `data:` URIs (`location.protocol` confirmed `"data:"`),
+  which breaks relative-path resolution AND audio `duration`/
+  `currentTime` regardless of what the code does — a crossfade trigger
+  keyed on `duration - currentTime` can never fire in this sandbox no
+  matter how correct the code is. The bus/per-track gain architecture,
+  coin-flip start, and start/stop/duck code paths were all verified
+  directly instead (no exceptions, correct gain values, `bgmActiveIdx`
+  genuinely randomized). Needs one real click-through + a full track
+  listen-to-crossfade in an ordinary browser.
+  *Surfaced: brief 34 verification, 2026-08-28. Extended: brief 35
+  verification, 2026-08-28.*
+- **Paint's share-link palette encoding had the same silent-corruption
+  bug paper/chalk had in share format v1 — found and fixed before it
+  ever shipped.** Paint's accents were encoded as indices into
+  `HUE_LIBRARY`, safe only while `buildPalette` always drew from that
+  fixed 12-hue set (index always valid by construction). Brief 35 Task 1
+  switched paint's GENERATION to free OKLCh hexes, which broke that
+  invariant: `HUE_LIBRARY.findIndex` returns -1 for a generated hex, and
+  the old encoder silently wrote index 0 (Crimson) for every accent
+  regardless of the real colour. Fixed the same way brief 34 fixed the
+  identical bug class for paper/chalk: raw RGB bytes for all three
+  surfaces now (`SHARE_FORMAT_VERSION` 2→3). Any share link encoded by a
+  pre-brief-35 build stops decoding rather than showing wrong colours —
+  accepted, pre-launch, same tradeoff as brief 34's bump. No further
+  action needed; logged per Shivang's standing "log the format break"
+  instruction from brief 34.
+  *Surfaced & resolved: brief 35 verification, 2026-08-28.*
 
 ## Engine-wide / Product
 

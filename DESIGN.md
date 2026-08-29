@@ -22,8 +22,16 @@ Zen Pong is calm, minimal, and art-forward. The trail lines are the product — 
 - Clear trail lines between frames — trails persist the entire session
 - Use Space Grotesk or any geometric sans-serif for body copy
 - Apply neumorphic shadows (outer offset + inset offset double combo) anywhere except `.ctrl-chip`
-- Add neon glows or coloured drop shadows to game elements
+- Add a NEW glow or coloured drop shadow to any game element beyond the one
+  named exception below — this is not a blanket licence to add more
 - Make buttons bright or prominent — all controls are dark and understated
+
+**One deliberate, approved exception (brief 27, reconfirmed brief 34/35):**
+`#game-frame` gets a soft amber `box-shadow` flash (`rgba(255,215,140,·)`,
+diffused/layered blur, no hard ring) on a point and at game over — ported
+back from the live v2 build on Shivang's explicit request. Scoped to
+`#game-frame` only; no other element gets this treatment. See §6 for the
+exact values.
 
 ---
 
@@ -65,11 +73,11 @@ only covers the paper ground. New tokens below.
 
 ```css
 /* ── v3 Surface Grounds ── */
---color-canvas-chalk:      UNRESOLVED   /* chalkboard ground — see note below */
+--color-canvas-chalk:      #1A1A1E;     /* chalkboard ground — RESOLVED, brief 31 */
 --color-canvas-paint-base: #FFF5E5;     /* paint ground before reveal = paper (--color-canvas) */
 
 /* ── v3 Control State ── */
---color-chip-selected:     #383838;     /* proposed — see note below */
+--color-chip-selected:     #383838;     /* RESOLVED — shipped as proposed, v3/app/index.html:53 */
 
 /* ── v3 Primary CTA ── */
 --gradient-primary: linear-gradient(90deg, #FF68AE, #689AFF, #8CFFB4, #FFAE68, #68D7FF, #FF68AE);
@@ -79,25 +87,47 @@ accent order (pink, blue, green, orange, cyan), wrapped back to pink so the
 loop is seamless. Used as a 1px hairline only — see `.rbtn-primary`, §10 —
 never as a fill.
 
-**UNRESOLVED — chalkboard ground.** A v3 mockup borrows `#383838`, which is
-the page background, so the canvas loses its edge against the page and only
-the grey frame ring separates them. Needs its own value, darker or warmer
-than the page. Blocking: chalkboard cannot ship without this.
+All three items previously marked UNRESOLVED here have shipped and are now
+correct as written above (corrected brief 36, several briefs of doc drift
+behind the live code): chalkboard ground shipped at `#1A1A1E` (brief 31),
+the selected-chip colour shipped exactly as proposed, and the paint
+reveal ground is covered in the next subsection.
 
-**UNRESOLVED — paint reveal ground.** The paint surface composites a
-coloured ground at game end. The engine lab exposes a ground set (cream and
-others, see `v3/engine/palette.js`) that was never tokenised here. A mockup
-stands in `--color-card-bg`'s `rgba(245,205,142,0.24)` (now parked — see §10)
-over cream. Needs: the
-plain-ground palette as tokens, plus a spec for the seeded random-patch
-variant (patch count, size range, whether patches use the accent palette or
-their own).
+### v3 — surface stroke palettes (paper/chalk fixed defaults, paint generated)
 
-**UNRESOLVED — selected-chip colour.** No control in this doc has a
-persistent-selection colour today (§10 gives hover only — opacity, dot
-scale). `--color-chip-selected` is proposed for the v3 surface selector's
-selected tile and, for consistency, the colour-picker's active dot, which
-currently has no selected state either.
+Paper and chalk each open on a fixed, hand-picked, genuinely triadic
+default; every surface's shuffle (idle and in-game) now **generates** a
+fresh palette directly in OKLCh — real angular hue spacing (triadic
+120°/120°/120° or split-complementary 150°/60°/150°), not a pick from a
+fixed set (brief 35 Task 1, replacing brief 31's original fixed-array-only
+design). The values below are the fixed opening defaults only; a shuffled
+palette is different every time by design and has no single "correct" hex
+to document.
+
+```css
+/* ── Paper — fixed opening triad (brief 31), red/green/blue ── */
+--paper-accent-a: #F2716A;
+--paper-accent-b: #54B85B;
+--paper-accent-c: #6D9AFF;
+/* ground: --color-canvas, #FFF5E5 */
+
+/* ── Chalk — fixed opening triad (brief 31), gold/cyan/pink ── */
+--chalk-accent-a: #E6B816;
+--chalk-accent-b: #00D8F6;
+--chalk-accent-c: #F695EE;
+/* ground: --color-canvas-chalk, #1A1A1E */
+
+/* ── Paint — ground only; accents always generated, never fixed ── */
+/* ground: Cream, #F4EBD4 (v3/engine/palette.js GROUND_LIBRARY[0] —
+   a distinct constant from --color-canvas/#FFF5E5, coincidentally close) */
+```
+
+Shuffle range per surface (paper/chalk/paint each have their own pleasant
+L/C window, chosen so chalk stays light enough to read on its near-black
+ground and paper/paint can go both lighter and darker than their fixed
+default) — see `v3/app/index.html`'s `PAPER_L_RANGE`/`CHALK_L_RANGE`/
+`PAINT_L_RANGE` and their `_C_RANGE` counterparts for the exact numbers;
+not duplicated here since they're tuning values, not design tokens.
 
 ---
 
@@ -248,7 +278,20 @@ box-shadow: 0 4px 24px rgba(0,0,0,0.28);
 box-shadow: 0 4px 24px rgba(0,0,0,0.16), inset 0 0 5px rgba(0,0,0,0.32);
 ```
 
-No other elements receive shadows or blur. No neumorphic double-shadow pattern (outer offset + inset offset) except where specified above.
+### `#game-frame` point/game-over glow — the one named exception to §1
+Diffused, layered amber bloom, no hard ring — flashed on `#game-frame` only,
+900ms on a point / 1400ms at game over (`flashGameFrame`, brief 27, values
+retuned brief 34 Task 6b then rolled back a notch brief 35 Task 5):
+```css
+#game-frame.canvas-glow-point {
+  box-shadow: 0 0 36px 8px rgba(255,215,140,0.42), 0 0 74px 22px rgba(255,215,140,0.24);
+}
+#game-frame.canvas-glow-gameover {
+  box-shadow: 0 0 46px 11px rgba(255,215,140,0.46), 0 0 90px 27px rgba(255,215,140,0.28);
+}
+```
+
+No other elements receive shadows or blur beyond what's specified above. No neumorphic double-shadow pattern (outer offset + inset offset) except where specified above.
 
 ---
 
@@ -629,7 +672,12 @@ When "SAVE ARTWORK" is pressed, a PNG is generated at 2× resolution:
 Background:   #383838
 Canvas area:  PAD=32px margin, border-radius:96px (48×2), cream fill + artwork
 Haiku text:   DM Serif italic, 14px@2×, #C5C5C5, centred below canvas
-Logo text:    "| ZEN • PONG |", Space Mono 700 11px@2×, rgba(245,240,230,0.35)
+Logo:         the inline Zen Pong SVG mark (preloaded once, drawn via
+              buildArtworkExportCanvas), NEVER text — corrected here brief
+              36; this section previously specced a text string
+              ("| ZEN • PONG |", Space Mono), which the live implementation
+              (brief 26 onward) never actually did, per §1's standing
+              "logo is always the inline SVG, never text" rule
               positioned 60px below canvas bottom (after haiku)
 ```
 
@@ -648,7 +696,11 @@ Logo text:    "| ZEN • PONG |", Space Mono 700 11px@2×, rgba(245,240,230,0.35
 9. Spacing always on 4pt grid — no arbitrary pixel values
 10. Paper grain texture always present on canvas — never removed as "optimisation"
 11. All controls use `.ctrl-chip` class — **every new control added to the game must use this class**. Never define custom elevation on individual controls. The class provides height:48px, radius:12px, #464646, and the exact shadow. If a control needs different sizing it can override only the dimension, never the shadow or colour.
-12. Oolong.mp3 BGM — always present, always loaded via `fetch()` + `decodeAudioData()`
+12. BGM — a two-track crossfading player (`GoldenPothos.mp3` + `Oolong.mp3`,
+    brief 35), always present, always loaded via `new Audio()` +
+    `createMediaElementSource()` per track — **never** `fetch()` +
+    `decodeAudioData()` (corrected brief 36; this rule previously named the
+    exact method that's explicitly banned — see root `CLAUDE.md` §4)
 13. All 7 SFX functions — always present, never removed or merged
 14. No neumorphic double-shadow on anything except `.ctrl-chip` (which uses inset intentionally)
 

@@ -42,56 +42,31 @@ Never make changes based on assumptions — if something is unclear, ask.
 
 ## 4. Audio System — Two Components, Both Protected
 
-### BGM — Oolong.mp3
+### BGM — two-track crossfading player (GoldenPothos.mp3 + Oolong.mp3)
 
-**Loading method: `new Audio()` + `createMediaElementSource()` — NOT fetch/decodeAudioData.**
+**Loading method: `new Audio()` + `createMediaElementSource()`, PER TRACK — NOT fetch/decodeAudioData.**
 
-This was changed deliberately. The previous `fetch()` + `decodeAudioData()` approach was
+This was changed deliberately. The original `fetch()` + `decodeAudioData()` approach was
 broken by browser extension interference (confirmed via console on GitHub Pages). The
 `new Audio()` route is resilient to this and works correctly on HTTPS.
 
-The correct BGM implementation pattern:
+**Updated brief 35 (2026-08-28) — corrected here, brief 36:** this section
+described a single-track player (`ooAudio`/`ooGain`/`initOolong()`) until
+brief 35 replaced it with a genuine two-track player: `GoldenPothos.mp3`
+and `Oolong.mp3` alternate with a 4-second crossfade, coin-flip start
+(never always Oolong), no silent gap. The **protected rules below are
+unchanged and still binding** — only the concrete implementation shape
+changed, from one `Audio`/`Gain` pair to one pair PER TRACK feeding a
+shared bus gain. Full implementation lives in `v3/app/index.html`
+(`initBGMBus`/`initBGMSlot`/`crossfadeToNext`/`startBGM`/`stopBGM`/
+`setBGMLevel`) — not re-pasted here so this doc can't drift from the real
+code a second time; read it directly rather than trusting a second copy.
 
-```javascript
-let ooAudio = null, ooGain = null, ooSrc = null;
-
-function initOolong() {
-  if (ooAudio) return;
-  ooAudio = new Audio('Oolong.mp3');
-  ooAudio.loop = true;
-  ooAudio.crossOrigin = 'anonymous';
-  ooSrc = actx.createMediaElementSource(ooAudio);
-  ooGain = actx.createGain();
-  ooGain.gain.value = 0;
-  ooSrc.connect(ooGain);
-  ooGain.connect(actx.destination);
-}
-
-async function startBGM() {
-  if (muted) return;
-  await actx.resume();   // must await — not fire-and-forget
-  initOolong();
-  ooAudio.currentTime = 0;
-  ooAudio.play().catch(() => {});
-  ooGain.gain.cancelScheduledValues(actx.currentTime);
-  ooGain.gain.setValueAtTime(0, actx.currentTime);
-  ooGain.gain.linearRampToValueAtTime(0.72, actx.currentTime + 2.5);
-}
-
-function stopBGM() {
-  if (!ooGain || !ooAudio) return;
-  const t = actx.currentTime;
-  ooGain.gain.cancelScheduledValues(t);
-  ooGain.gain.setValueAtTime(ooGain.gain.value, t);
-  ooGain.gain.linearRampToValueAtTime(0, t + 2.5);
-  setTimeout(() => { ooAudio.pause(); }, 2600);
-}
-```
-
-Key rules:
-- `startBGM()` must be `async` and must `await actx.resume()` before calling `initOolong()`
-- `initOolong()` must guard with `if(ooAudio)return` — only initialise once
-- Fades in on game start, fades out on game end
+Protected rules, unchanged by the two-track rework:
+- `startBGM()` must be `async` and must `await actx.resume()` before touching any track
+- Each track's own init function must guard against re-creating an already-live `Audio`/`Gain` pair
+- Fades in on game start (2.5s), fades out on game end (2.5s) — the SHARED bus level, not a per-track gain
+- Per-track `Audio.loop` is `false` — the two-track SET loops via the crossfade alternation, not each file individually
 - Respects the mute toggle
 - **Never revert to fetch/decodeAudioData**
 
@@ -157,7 +132,13 @@ Never remove, simplify, or rewrite these without explicit instruction:
 
 **Paper texture system**
 `buildPaper()` generates a static off-screen canvas (`paperCv`) with grain noise, vignette gradients, and a faint centre-line dashed mark. It is the base layer drawn on `drawCv` at game start. Preserve `buildPaper()`, `paperCv`, and all references to them.
-The two `getImageData` loops in `buildPaper()` must be merged into one loop (performance) — but the visual output must be identical.
+**Resolved, corrected brief 36:** the two `getImageData` loops this line
+used to ask for as an open TODO are already merged — confirmed against
+`v3/engine/surface.js` (the v3 port of `buildPaper()`), whose own comment
+states there is "nothing left to merge, ported as-is": grain/wave is a
+single pixel loop, vignette/centre-line are gradient fills, never a second
+pixel loop. No further action needed; this line previously read as a
+standing TODO for work that was already done.
 
 **Persistent drawing canvas**
 Trail lines are drawn to an off-screen canvas (`drawCv`) and composited each frame. Never cleared mid-game. Only cleared at new game start via `initDraw()`, which redraws `paperCv` as the base.
@@ -181,11 +162,15 @@ All 7 functions listed in Section 4 — keep intact.
 The ball should feel intentional but never predictable. Two rules enforce this:
 
 ### Spawn angle
+**Corrected brief 36** — this formula didn't match the live engine and was
+caught by `BACKLOG.md`'s own doc-drift note (found brief 10, 2026-07-20,
+never fixed until now). All physics randomness is seeded via an injected
+`rng()` (see `v3/engine/rng.js`), never bare `Math.random()` — v3's own
+immutable rule (`v3/CLAUDE.md`). Real formula, `v3/engine/physics.js`
+`mkBall()`:
 ```javascript
-// CORRECT — wider angle range for compositional variety
-const a = Math.random() * 0.85 + 0.28;  // ~16° to ~49° from horizontal
-// WRONG — old narrow range, produces parallel-line artworks
-// const a = Math.random() * 0.5 + 0.2;
+// Four-edge spawn (left/right/top/bottom chosen by rng()); on each edge:
+const a = rng() * 0.55 + 0.18;  // ~10° to ~42° from horizontal
 ```
 
 ### Minimum angle enforcement
@@ -217,8 +202,8 @@ the clean reflection. This is what creates zen unpredictability — like a stone
 skipping on water, not a billiard ball.
 
 ```javascript
-// Inside wallHit(), after reflecting vy:
-const nudge = (Math.random() - 0.5) * 0.28;  // ±8° in radians
+// Inside wallHit(), after reflecting vy: (rng(), not Math.random() — corrected brief 36, same seeded-randomness note as spawn angle above)
+const nudge = (rng() - 0.5) * 0.28;  // ±8° in radians
 const spd = Math.hypot(b.vx, b.vy);
 const ang = Math.atan2(b.vy, b.vx) + nudge;
 b.vx = Math.cos(ang) * spd;

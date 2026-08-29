@@ -103,20 +103,20 @@ triaging this whole list, not before.
   `PAINT_DEFAULT_GROUND_MODE` is `'plain'` and a second ground path doubles the
   review surface. Available whenever it's wanted.
   *Surfaced: brief 26 spec, 2026-08-24.*
-- **Doc drift — `DESIGN.md` §11 draws the logo as text.** The save-artwork PNG
-  spec (and root `index.html`'s implementation) render the string
-  `| ZEN • PONG |` in Space Mono. The standing project rule is that the logo is
-  never text, always the inline SVG. Brief 26 renders the SVG and deviates from
-  §11; §11 should be corrected.
-  *Surfaced: brief 26 spec, 2026-08-24.*
+- ~~**Doc drift — `DESIGN.md` §11 draws the logo as text.**~~ **Resolved,
+  brief 36** (2026-08-29): §11 now correctly states the exported PNG draws
+  the inline SVG mark (`buildArtworkExportCanvas`/`preloadLogoImage`),
+  never text — confirmed against the actual export code before writing
+  the correction.
+  *Surfaced: brief 26 spec, 2026-08-24. Resolved: brief 36, 2026-08-29.*
 
-- **Doc drift — `DESIGN.md` bans the glow the game actually uses.** §1 says
-  never add "neon glows or coloured drop shadows to game elements"; §6 says no
-  element but `.ctrl-chip` gets a shadow. The live v2 build has used
-  `#frame.canvas-glow` (amber, 700ms, on a point and at game over) since it
-  shipped, and brief 27 ports it back on Shivang's explicit request. Live code
-  wins; `DESIGN.md` needs to absorb the exception rather than the effect being
-  softened to fit the doc. *Surfaced: brief 27 spec, 2026-08-24.*
+- ~~**Doc drift — `DESIGN.md` bans the glow the game actually uses.**~~
+  **Resolved, brief 36** (2026-08-29): §1 now names the `#game-frame`
+  point/game-over glow as one deliberate, scoped exception rather than
+  banning it outright; §6 carries the real, current box-shadow values
+  (brief 35's rolled-back numbers, not brief 34's original ones — the doc
+  is caught up to the LATEST live values, not just any past value).
+  *Surfaced: brief 27 spec, 2026-08-24. Resolved: brief 36, 2026-08-29.*
 - **`swoosh.mp3` is referenced by nothing.** Sits in the repo root, unused by
   root `index.html` and by the v3 app. Either it has a use nobody has specced,
   or it is dead weight brief 29's self-contained build must not bundle.
@@ -176,14 +176,14 @@ triaging this whole list, not before.
   resolved copy-link item above), which the gate and mobile share's own
   copy buttons share — but the Web Share download path and a real device
   pass are still open. *Surfaced: brief 32 verification, 2026-08-26.*
-- **Doc drift — `DESIGN.md` doesn't carry paper/chalk's new stroke hexes.**
-  Brief 31 shipped paper as `#F2716A`/`#54B85B`/`#6D9AFF` and chalk as
-  `#E6B816`/`#00D8F6`/`#F695EE` (both in `v3/app/index.html`, verified
-  in-code against the triadic/split-complementary + ΔE rule) — `DESIGN.md`
-  §2's colour tables, wherever they still list the old three per surface,
-  are now stale. Live code wins per the standing rule; the doc needs a
-  sweep to absorb the new values, not the other way round.
-  *Surfaced: brief 31 spec, 2026-08-26.*
+- ~~**Doc drift — `DESIGN.md` doesn't carry paper/chalk's new stroke
+  hexes.**~~ **Resolved, brief 36** (2026-08-29): §2 now has a real "v3
+  surface stroke palettes" subsection with paper's/chalk's actual fixed
+  opening triads and resolves the three old UNRESOLVED ground/selected-
+  chip notes (all three had already shipped, unnoticed). Also notes that
+  a SHUFFLED palette is generated in real OKLCh (brief 35), not drawn
+  from a fixed set, so it has no single hex worth documenting.
+  *Surfaced: brief 31 spec, 2026-08-26. Resolved: brief 36, 2026-08-29.*
 - ~~**Copy link's real-clipboard success path is unverified.**~~ **Resolved,
   brief 33** (2026-08-27): a real trusted click (not a JS-dispatched one)
   on the results screen's share button produced an actual OS clipboard
@@ -257,26 +257,46 @@ triaging this whole list, not before.
 Carried forward from `PROJECT-LOG.md`'s 2026-07-10/11 entries — status not
 re-verified, check before picking up:
 
-- Stale `feature/art-lab` branch never deleted (merged long ago). Simple
-  housekeeping.
-- Doc drift, several spots — fix in one pass, not one-off:
-  - `DESIGN.md` §12 rule 12 says BGM loads via fetch+decodeAudioData —
-    wrong, live code uses `new Audio()` + `createMediaElementSource()`.
-  - Root `CLAUDE.md` §7 spawn-angle formula doesn't match live
-    `index.html` (live is `Math.random()*0.55+0.18`).
-  - Root `CLAUDE.md`'s "merge the two getImageData loops" note is stale —
-    already true of live code.
-  - `v3/CLAUDE.md`'s reference map mentions a `#gc` scaled container that
-    doesn't exist in the current live build — canvas is `#wrap`, fixed
-    1000×630, no scale transform. *(Found: brief 10, 2026-07-20.)*
+- ~~Stale `feature/art-lab` branch never deleted (merged long ago).~~
+  **Resolved, brief 36** (2026-08-29): branch no longer exists — already
+  deleted at some point before this cleanup pass, confirmed via `git
+  branch -a`. No action needed.
+- ~~Doc drift, several spots — fix in one pass, not one-off.~~ **Resolved,
+  brief 36** (2026-08-29), all four:
+  - ~~`DESIGN.md` §12 rule 12 says BGM loads via fetch+decodeAudioData.~~
+    Corrected — rule now states the real (and protected) method,
+    `new Audio()` + `createMediaElementSource()` per track, and names
+    both tracks (brief 35's two-track player).
+  - ~~Root `CLAUDE.md` §7 spawn-angle formula doesn't match live
+    `index.html`.~~ Corrected — real formula is `rng() * 0.55 + 0.18`
+    (~10°-42° from horizontal) off the engine's seeded `rng()`, not
+    `Math.random()`; the old doc value (`0.85+0.28`) was wrong outright,
+    not just stale.
+  - ~~Root `CLAUDE.md`'s "merge the two getImageData loops" note is
+    stale.~~ Rewritten as a resolved/historical note — confirmed already
+    true of `v3/engine/surface.js`.
+  - ~~`v3/CLAUDE.md`'s reference map mentions a `#gc` scaled container
+    that doesn't exist in the current live build.~~ `v3/CLAUDE.md` no
+    longer mentions `#gc` at all — confirmed by grep, already cleaned up
+    in an earlier revision of that file. No action needed.
+    *(Found: brief 10, 2026-07-20.)*
 - Composition-aware ink bloom — bloom at dense intersection knots rather
   than paddle hits (the original hit-triggered version was cut for reading
   wrong). Reuses region-analysis machinery `fill.js` already built.
 - Spin-shape drops, swerve/loop ball physics — Shivang's ideas, logged and
   endorsed, not yet briefed.
-- Fill's rectangle-clip fix — small follow-up brief, blocks
-  `feature/fill-regions` → `main` merge. Confirm still open before
-  assuming so.
+- **Fill-regions (closed-area colour fills) — deferred; branch abandoned
+  (brief 36, 2026-08-28).** The idea: detect the closed regions the strokes
+  form and flood them with translucent colour, so the piece gains filled
+  shapes, not just lines. Built experimentally on `feature/fill-regions`,
+  never finished — blocked on a rectangle-clip bug in the region detection
+  (`fill.js`'s clip step). Branch deleted on cleanup (dangling, unmerged
+  since the early arc); the idea and the blocker live here. Pick it up as a
+  fresh brief if wanted — `fill.js`'s existing region-analysis machinery is
+  the starting point. *Originally `03-fill-regions.md`.* (Supersedes the
+  old "Fill's rectangle-clip fix" line this section used to carry — same
+  blocker, consolidated into this one entry now that the branch itself is
+  gone.)
 - Open product decisions pending Shivang: font (self-hosted Basier Circle
   vs. a Google Font), 12 palette hex values, onboarding State-1
   surface-selector sketch, share-page spec.

@@ -5,6 +5,121 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-31 — Brief 37 built on `feature/v3-launch-hygiene`. Analytics, error visibility, lazy audio, social meta.
+
+New branch off `main` (36 merged). Merged this session.
+
+**Task 1 — Cloudflare Web Analytics.** Real token (not a placeholder,
+Shivang's own — a Cloudflare Web Analytics beacon token, a public
+site-identifier by design, not a secret) added to `v3/app/index.html`'s
+`<head>`, carried through by `node v3/build.js` like everything else.
+Verified live with the URL genuinely blocked (sandbox's own `origin:
+'null'` context produces a real CORS failure on the beacon's internal XHR
+call): the game runs identically, no console noise reaches Task 2's error
+handlers (resource-load/network failures don't bubble to `window`'s
+`error` event — confirmed, not assumed).
+
+**Task 2 — Global error visibility.** `window.addEventListener('error'/
+'unhandledrejection', ...)`, placed immediately after the import block
+(the earliest a module script can run anything), each logging one tagged
+`console.error('[zenpong] ...')` with message/source/line. Verified live:
+a deliberately thrown error and a deliberately rejected promise both
+produced the tagged line. Silent instrumentation only, no UI — the game's
+existing graceful-failure paths are untouched.
+
+**Task 3 — Lazy-load audio.** Checked brief 35's actual code before
+assuming what needed to change: "no audio until gesture, only the first
+track at unlock" was ALREADY true (`bgmSlots` starts empty, only
+populated inside `startBGM()`/`crossfadeToNext()`). What was genuinely
+missing: the second track's `Audio` element was constructed AND played
+immediately inside `crossfadeToNext()`, which only fires
+`BGM_CROSSFADE_SEC` (4s) before the first track ends — a real ~3.5MB
+buffering-window risk. Added `BGM_PRELOAD_LEAD_SEC` (20s): the next
+track's slot now starts loading (`preload:'auto'`) well ahead of the
+crossfade trigger, not at it. The crossfade itself now gates on
+`readyState`/`canplaythrough` before starting playback — immediate if
+already buffered, otherwise waits with a bounded 2.5s fallback so a slow
+or non-firing event can't stall the crossfade indefinitely. `stopBGM()`
+updated to also cancel this new pending-wait state (a second, earlier
+cleanup point than the existing crossfade-finalisation cancel). Verified
+live via a temporary debug hook (removed before commit): confirmed zero
+network audio activity before first gesture, exactly one track's slot
+populated after unlock, the preload firing at the 20s mark and not
+before, and both the immediate (already-ready) and waiting
+(not-yet-ready, falls back correctly, no stall) crossfade paths.
+
+**Task 4 — Social meta.** Checked, not built: title, description, full
+OG set, Twitter card tags, theme-color, and favicon were all already
+present and correct from brief 30 — `og:image`/`og:url` are already
+absolute URLs to the live site. No changes needed; reported the tag set
+for Shivang's own paste-test (LinkedIn/X/iMessage), which can't be done
+from here.
+
+**Optional cold-arrival line** — not built, Shivang's design call per the
+brief's own framing.
+
+Desktop regression: full game runs clean, zero unexpected console errors
+(only the expected, harmless Cloudflare CORS failure when the analytics
+endpoint is blocked). `node v3/build.js` twice byte-identical. `git diff
+--stat main -- v3/engine/ v3/labs/` empty.
+
+### Next
+Real-device/cross-browser QA pass (brief 37's own verification section) —
+Shivang's to run on actual hardware, this sandbox cannot. Log whatever
+misbehaves as the next fix list.
+
+---
+
+## 2026-08-29 — Brief 36 built on `feature/v3-cleanup`. Repo cleanup and release hygiene.
+
+New branch off `main` (35 merged). Merged this session.
+
+Branch pruning: four merged feature branches deleted locally (already gone
+from `origin` — GitHub auto-deletes on PR merge). `feature/fill-regions`
+abandoned per Shivang's decision — idea and blocker captured in
+`BACKLOG.md` first, then deleted local + origin. Two more already-resolved
+`BACKLOG.md` carry-forwards found and struck while in that section (a
+stale `feature/art-lab` branch reference, a `v3/CLAUDE.md` `#gc` doc-drift
+note — both no longer true, confirmed by grep before striking).
+
+Dead files: `swoosh.mp3` removed (confirmed referenced nowhere). `.DS_Store`
+removed — turned out there were 3 more untracked stray copies beyond the
+one at root the brief named (`v3/`, `v3/design/`, `v3/briefs/`), all gone.
+`.gitignore` audited and left as-is — already correctly scoped to
+`.DS_Store` + `.claude/settings.local.json`; a blanket `.claude/` ignore
+would have incorrectly dropped the legitimately-tracked `launch.json`.
+
+`README.md` written per the brief's structure, reusing `og-image.png` as
+the screenshot (already a real finished paper-mode canvas in the current
+shipped triad, no new render needed). `LICENSE` — All Rights Reserved on
+the code, Shivang's explicit decision; artwork ownership and the music's
+separate status live in the README's three-part note, not the LICENSE
+file itself. `v3/briefs/README.md` — one-line index, briefs 18→36.
+
+Doc-drift reconciliation (on `main`, not the feature branch, alongside
+`BACKLOG.md` — the standing "docs live on main" rule applied to
+`DESIGN.md`/root `CLAUDE.md` too, both being session-start-read governance
+docs): two of the fixes were genuinely WRONG, not just stale — root
+`CLAUDE.md`'s spawn-angle formula didn't match the live engine at all
+(documented `Math.random()*0.85+0.28`; real formula is
+`rng()*0.55+0.18`), and `DESIGN.md` rule 12 had BGM backwards (named the
+BANNED `fetch()+decodeAudioData()` method as the rule, not the actually-
+mandated `new Audio()` approach). Also fixed: the glow ban (now a named,
+scoped exception), the save-PNG logo-as-text claim, stale paper/chalk
+colour tables (now real values + a note that shuffle generates in OKLCh,
+brief 35), and the two-track BGM description. Every resolved `BACKLOG.md`
+item struck with the brief number, not deleted.
+
+No player-facing behaviour change — `v3/app/index.html` untouched this
+brief, root `index.html` rebuilds byte-identical to what was already
+committed. `git diff --stat main -- v3/engine/ v3/labs/` empty.
+
+### Next
+Brief 37: launch hygiene (analytics, error visibility, lazy audio load,
+social meta check) — spec already written.
+
+---
+
 ## 2026-08-28 — Brief 35 built on `feature/v3-palette-music`. Real palette generation (root cause, not a workaround), splatter variety, two-track music, polish.
 
 New branch off `main` (34 merged). Not merged this session.

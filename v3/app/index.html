@@ -28,6 +28,17 @@
      from the committed logo rather than inventing a new symbol; legible at
      16px where the full wordmark would not be. -->
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<!-- Brief 37 Task 1 — Cloudflare Web Analytics: cookieless, no consent
+     banner needed, free tier is page-views only (see Task 2's error
+     handlers for why errors surface in the console, not this dashboard).
+     type="module" is deferred/async by nature and a failed fetch (offline,
+     file://, tracker-blocked) fires an error event on the script element
+     only — it does not reach window's bubbling-phase 'error' listener
+     (Task 2, below), confirmed live: the game runs identically with this
+     URL blocked, no console noise from the failure. Real token, not a
+     placeholder — Shivang's own, already provisioned. -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "19319b3700974cdfb2ed26cb4337c75b"}'></script>
+<!-- End Cloudflare Web Analytics -->
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   /* ── Tokens · DESIGN.md §2/§4/§5/§6 ── */
@@ -1452,6 +1463,24 @@ import { DEFAULT_PALETTE } from '../engine/simulate.js';
 // renderSplatterMarkPaint) for real per-mark shape variety. splatter.js
 // itself is untouched — nothing in it was edited, it simply has no
 // remaining caller in this file.
+
+// Brief 37 Task 2 — global error visibility, no backend. Placed as the
+// FIRST executable statements after the import block (imports must stay
+// top-of-module, so this is the earliest point any code can run) so it
+// catches everything downstream, including the flash-guard immediately
+// below. Silent instrumentation only — console.error, never a UI; the
+// game's own graceful failure paths (bad share payload -> idle, etc.) are
+// untouched and unrelated. Cloudflare's free Web Analytics tier (Task 1,
+// <head>) is page-views only — it has no custom-events API, so this is
+// where an error actually surfaces today. If an events-capable tool
+// (e.g. Umami) is ever added, firing a custom event here is a two-line
+// change, not a rediscovery.
+window.addEventListener('error', (e) => {
+  console.error(`[zenpong] ${e.message} (${e.filename}:${e.lineno}:${e.colno})`);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error(`[zenpong] unhandled rejection: ${e.reason}`);
+});
 
 // Brief 29 Task 3 — "landing with a fragment: decode and go straight to
 // Screen 4. Do not flash the idle screen first." Checked and acted on as
@@ -4823,11 +4852,22 @@ updateMuteButton(); // brief 25 Task 2 — sync icon/aria to the actual default 
 // else in this section needs to change (brief's own "built to extend").
 const BGM_TRACKS = ['GoldenPothos.mp3', 'Oolong.mp3'];
 const BGM_CROSSFADE_SEC = 4; // "a few seconds," per the brief — no silent gap between tracks
+// Brief 37 Task 3 — how far ahead of the crossfade trigger to start
+// buffering the NEXT track (not at the trigger itself, which only left a
+// ~4s window for up to ~3.5MB — a real stall risk on a slow connection).
+// 20s is comfortable for that file size on any connection that isn't
+// pathological; not tied to track length, just a lead time.
+const BGM_PRELOAD_LEAD_SEC = 20;
+// If canplaythrough hasn't fired by the time the crossfade would
+// otherwise start, wait this long past the trigger and start anyway — a
+// rough transition beats the crossfade never firing / dead air.
+const BGM_CROSSFADE_READY_FALLBACK_MS = 2500;
 let bgmBusGain = null;   // shared idle/ducked/mute level, -> actx.destination
 let bgmSlots = [];       // [{audio, gain, src}] per BGM_TRACKS entry, lazily built
 let bgmActiveIdx = -1;   // which playlist index is the current "front" track; -1 = never started
 let bgmCrossfading = false;
-let bgmCrossfadeTimer = null;
+let bgmCrossfadeTimer = null;        // post-start finalisation (swap active track, pause the old one)
+let bgmCrossfadeReadyTimer = null;   // pre-start fallback (start playback even if canplaythrough is slow)
 
 function initBGMBus() {
   if (bgmBusGain) return;
@@ -4848,6 +4888,7 @@ function initBGMSlot(i) {
   const audio = new Audio(`../../${BGM_TRACKS[i]}`);
   audio.loop = false; // the SET loops via alternation (below), not each file individually
   audio.crossOrigin = 'anonymous';
+  audio.preload = 'auto'; // brief 37 Task 3 — explicit, not left to a browser default: this function is only ever CALLED when we actually want loading to start now (first gesture for track 0, the preload-lead window for the next track), so once called, load eagerly
   const src = actx.createMediaElementSource(audio);
   const gain = actx.createGain();
   gain.gain.value = 0;
@@ -4869,14 +4910,50 @@ function onBGMTimeUpdate(i) {
   if (i !== bgmActiveIdx || bgmCrossfading) return;
   const a = bgmSlots[i].audio;
   if (!a.duration || !isFinite(a.duration)) return;
-  if (a.duration - a.currentTime <= BGM_CROSSFADE_SEC) crossfadeToNext();
+  const remaining = a.duration - a.currentTime;
+  // Brief 37 Task 3 — start buffering the NEXT track once inside the
+  // preload-lead window, well before the crossfade itself triggers below.
+  // initBGMSlot is idempotent (early-returns if the slot already exists),
+  // so calling this on every tick inside the window is harmless — it only
+  // actually constructs the Audio element once.
+  if (remaining <= BGM_PRELOAD_LEAD_SEC) {
+    initBGMSlot((i + 1) % BGM_TRACKS.length);
+  }
+  if (remaining <= BGM_CROSSFADE_SEC) crossfadeToNext();
 }
 
+// Brief 37 Task 3 — gates the actual crossfade start on the next track
+// being ready to play through, rather than assuming the preload-lead
+// window (above) was always enough. bgmCrossfading is set true here,
+// immediately — onBGMTimeUpdate's own guard means this function only
+// ever runs once per transition, whether playback starts immediately
+// below or waits first.
 function crossfadeToNext() {
   bgmCrossfading = true;
   const fromIdx = bgmActiveIdx;
   const toIdx = (fromIdx + 1) % BGM_TRACKS.length;
-  const toSlot = initBGMSlot(toIdx);
+  const toSlot = initBGMSlot(toIdx); // idempotent — already loading if the preload lead already kicked in
+
+  if (toSlot.audio.readyState >= 4) { // HAVE_ENOUGH_DATA — already good to go, no need to wait
+    beginCrossfadePlayback(fromIdx, toIdx, toSlot);
+    return;
+  }
+  // Not ready yet: wait for canplaythrough, bounded by a short fallback so
+  // a slow (or, on some browsers, never-firing) event can't delay the
+  // crossfade indefinitely — a rough transition beats dead air.
+  let started = false;
+  const start = () => {
+    if (started) return;
+    started = true;
+    toSlot.audio.removeEventListener('canplaythrough', start);
+    if (bgmCrossfadeReadyTimer) { clearTimeout(bgmCrossfadeReadyTimer); bgmCrossfadeReadyTimer = null; }
+    beginCrossfadePlayback(fromIdx, toIdx, toSlot);
+  };
+  toSlot.audio.addEventListener('canplaythrough', start, { once: true });
+  bgmCrossfadeReadyTimer = setTimeout(start, BGM_CROSSFADE_READY_FALLBACK_MS);
+}
+
+function beginCrossfadePlayback(fromIdx, toIdx, toSlot) {
   toSlot.audio.currentTime = 0;
   toSlot.audio.play().catch(() => {});
   const t = actx.currentTime;
@@ -4945,6 +5022,13 @@ function stopBGM() {
   // later unmute; bgmActiveIdx simply stays on whichever track was still
   // the "from" side, which is exactly where playback actually was.
   if (bgmCrossfadeTimer) { clearTimeout(bgmCrossfadeTimer); bgmCrossfadeTimer = null; bgmCrossfading = false; }
+  // Brief 37 Task 3 — same idea, for the EARLIER pending state: stop can
+  // land while crossfadeToNext is still waiting on canplaythrough (before
+  // beginCrossfadePlayback has run at all, so bgmCrossfadeTimer above is
+  // still null and wouldn't have caught this). Cancel the fallback timer
+  // so it doesn't fire a crossfade start after the player has been told
+  // to stop.
+  if (bgmCrossfadeReadyTimer) { clearTimeout(bgmCrossfadeReadyTimer); bgmCrossfadeReadyTimer = null; bgmCrossfading = false; }
   setTimeout(() => { bgmSlots.forEach(s => { if (s) s.audio.pause(); }); }, 2600);
 }
 

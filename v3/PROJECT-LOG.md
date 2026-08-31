@@ -5,6 +5,87 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-31 — Brief 38 built on `feature/v3-delights`. Attribution, gentle ball-speed ramp, time-gained results.
+
+New branch off `main` (37 merged). Shipped directly per the brief's own
+"no plan-review step" — self-verified against its checklist, merged this
+session.
+
+**Task 1 — attribution + contact line.** Replaces the old idle-only music
+credit with one shared line (Created by Shivang Joshi | Contact ✉ ✦ Music
+by Omni Gardens) on all 5 non-playing screens: idle, results, desktop
+share, mobile share, gate. One implementation (`buildAttributionEl()`),
+injected via JS into each screen at load rather than five hand-written
+copies. Desktop screens keep the old idle-credit's `position:fixed`
+bottom-centre approach (none of them are stretched to viewport height, so
+a flow margin can't reach the actual bottom); mobile screens get it as a
+normal last-in-column flex child instead, which for free inherits the
+column's own gap/gutter/safe-area padding — no extra mobile-specific CSS
+needed once that was recognised. Verified live on all 5 screens: all 3
+links resolve correctly (site, mailto with the exact subject line,
+Bandcamp — spelling "Gardens" checked), one line on desktop, wraps to two
+clean lines on a 375px phone without touching the buttons above it.
+
+**Task 2 — gentle ball-speed ramp.** App-side only, `v3/engine/` untouched.
+The real design decision here: "scale the ball's velocity magnitude to
+baseSpeed × factor" reads literally like "reset speed to a fixed value
+each frame," but the engine already varies the ball's speed on its own
+(level-up every 2 points via `checkGameLevel`/`levelUp`, wall-bounce
+dynamics) — forcing a flat re-derived speed every frame would have
+silently overridden that system, which the brief's own "the engine still
+handles bounces/spin; this only rescales the RESULTING speed" line rules
+out. Implemented as an INCREMENTAL correction instead:
+`gameRampAppliedFactor` tracks how much ramp is already baked into
+`gameBall.vx/vy`; each frame only the delta to the new target factor is
+applied, so whatever the engine did to speed that same frame (level-up,
+bounce) survives untouched. Hold 1.0× for 30s, linear to 1.5× by 60s,
+capped, reset on every serve (`spawnGameBall`). Verified live via a
+temporary debug hook (removed before commit): factor tracks elapsed time
+correctly (measured 1.1685 at ~40s against an expected 1.1667), caps
+cleanly at exactly 1.5, resets to 1.0 on the next serve.
+
+**Task 3 — results "time gained" redesign.** Built to
+`v3/design/3c-results-time-gained.html`, CSS lifted verbatim where it
+applies (the `.gained`/`gained-sweep` treatment, `#gained-row`/`#post-row`
+layout, 240px track). New `#gained-row` (gained claim left, haiku right,
+both flush to the 1000px canvas width) replaces the standalone haiku line;
+`#post-row` restructured (PLAY AGAIN alone left, timeline+save+share as one
+right-hand `.utils` cluster, was one `.actions` group with play-again
+mixed in). Reveal timing untouched — the existing `.reveal-haiku`/1300ms
+class was renamed `.reveal-gained-row` and retargeted to the whole row
+(one fade for the claim+haiku together, not two separate ones); `#post-row`
+still fades at 1700ms, unchanged. Duration is the WHOLE GAME's length
+(`gameFirstServeMs`, set once in `startGame()` — distinct from Task 2's
+`gameServeStartMs`, which resets every rally), formatted via
+`formatGainedDuration()`. Verified live: the exact examples from the brief
+— `formatGainedDuration(90)` → "1.5 minutes of calm, gained",
+`formatGainedDuration(45)` → "45 seconds of calm, gained" — both matched
+precisely; a real headless game reached results with the sweep genuinely
+animating (`background-clip:text`, `color:transparent`,
+`animation-name:gained-sweep`, confirmed via computed style, not just
+visual inspection); the `prefers-reduced-motion` rule is present in the
+built output (couldn't toggle the OS-level media feature in this sandbox
+to see it fire, but the rule itself — `animation:none;
+background-position:30% 50%` — was verified byte-for-byte correct).
+
+**Task 4 — Sentry, logged not built.** Backlog entry added verbatim per
+the brief.
+
+Desktop regression: multiple full games (paper, paint with simulated
+paddle movement) reach results cleanly, all 5 attribution placements
+correct, zero unexpected console errors (only the known, harmless
+Cloudflare CORS failure from brief 37 when the analytics endpoint is
+blocked in this sandbox). `node v3/build.js` twice byte-identical.
+`git diff --stat main -- v3/engine/ v3/labs/` empty.
+
+### Next
+Real-device pass (still owed from brief 37) now also covers: attribution
+link taps on a real phone, the gained-line sweep on real hardware, and a
+long real rally to feel the speed ramp rather than only verify it
+numerically.
+
+---
+
 ## 2026-08-31 — Brief 37 built on `feature/v3-launch-hygiene`. Analytics, error visibility, lazy audio, social meta.
 
 New branch off `main` (36 merged). Merged this session.

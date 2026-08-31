@@ -300,3 +300,10 @@ re-verified, check before picking up:
 - Open product decisions pending Shivang: font (self-hosted Basier Circle
   vs. a Google Font), 12 palette hex values, onboarding State-1
   surface-selector sketch, share-page spec.
+- **Remote error visibility — add Sentry (free tier).** Brief 37 added global
+  error/unhandledrejection handlers that log to the console, but nothing
+  surfaces errors remotely (Cloudflare's free Web Analytics is page-views
+  only). Sentry's free tier (~5k events/mo) gives a real dashboard with stack
+  traces + browser/device, and slots straight into the existing handlers — a
+  ~10-min add whenever error visibility is wanted before/around a wider
+  launch. *Surfaced: brief 38, 2026-08-29.*

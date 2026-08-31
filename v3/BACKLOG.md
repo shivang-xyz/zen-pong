@@ -117,10 +117,11 @@ triaging this whole list, not before.
   (brief 35's rolled-back numbers, not brief 34's original ones — the doc
   is caught up to the LATEST live values, not just any past value).
   *Surfaced: brief 27 spec, 2026-08-24. Resolved: brief 36, 2026-08-29.*
-- **`swoosh.mp3` is referenced by nothing.** Sits in the repo root, unused by
-  root `index.html` and by the v3 app. Either it has a use nobody has specced,
-  or it is dead weight brief 29's self-contained build must not bundle.
-  *Surfaced: brief 27 spec, 2026-08-24.*
+- ~~**`swoosh.mp3` is referenced by nothing.**~~ **Resolved, brief 36**
+  (2026-08-29): deleted (confirmed unused by root `index.html` and the v3
+  app before removal) — missed being struck here at the time, caught in
+  passing during brief 38's own docs pass; file confirmed still gone.
+  *Surfaced: brief 27 spec, 2026-08-24. Resolved: brief 36, 2026-08-29.*
 - **BGM ducking under the reveal.** `sndGameOver` is a 2.5s decaying tone that
   plays over the ground wipe and into the haiku. Dipping the BGM under it would
   give the reveal more air. Real idea, deliberately out of brief 27's scope.

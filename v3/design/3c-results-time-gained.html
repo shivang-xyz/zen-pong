@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zen Pong — results (time gained)</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ── Colour · DESIGN.md §2 ── */
+    --color-bg:            #383838;
+    --color-cta:           #464646;
+    --color-disabled:      #777777;
+    --color-lightest-grey: #C5C5C5;
+    --color-canvas:        #FFF5E5;
+    --color-canvas-border: #888888;
+    --color-pink:          #FF68AE;
+    --color-blue:          #689AFF;
+    --color-green:         #8CFFB4;
+    --color-orange:        #FFAE68;
+    --color-cyan:          #68D7FF;
+
+    /* NEW — DESIGN-DELTA.md §1. UNRESOLVED: chalkboard ground borrows the
+       page background, so the canvas loses its edge against the page. */
+    --color-canvas-chalk:  #383838;
+    --color-chip-selected: #383838;
+
+    /* ── Spacing · DESIGN.md §4 ── */
+    --space-xs: 4px;  --space-s: 8px;   --space-xxm: 12px; --space-xm: 16px;
+    --space-m: 24px;  --space-l: 32px;  --space-xl: 40px;  --space-xxl: 48px;
+
+    /* ── Radius · DESIGN.md §5 ── */
+    --radius:        48px;
+    --radius-small:  12px;
+    --radius-nested: 8px;   /* NEW — UNRESOLVED, third radius value */
+
+    /* ── Elevation · DESIGN.md §6 ── */
+    --shadow-chip:   0 4px 24px rgba(0,0,0,0.29), inset 0 0 5px rgba(0,0,0,0.52);
+    --shadow-canvas: 0 4px 24px rgba(0,0,0,0.28);
+    --shadow-btn:    0 4px 24px rgba(0,0,0,0.16), inset 0 0 5px rgba(0,0,0,0.32);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-bg);
+    font-family: 'DM Serif Display', serif;
+    font-style: italic;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-l) 0 var(--space-xxl);
+  }
+
+  /* ── Canvas · DESIGN.md §7 ── */
+  .stage { position: relative; width: 1000px; height: 630px; }
+  .canvas {
+    position: absolute; inset: 0;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--color-canvas);
+    box-shadow: var(--shadow-canvas);
+    transition: background 400ms linear;
+  }
+  .frame {
+    position: absolute; inset: 0;
+    border-radius: var(--radius);
+    border: 8px solid var(--color-canvas-border);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .grain, .trails { position: absolute; inset: 0; }
+  .trails polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Paddles · DESIGN.md §7 + DESIGN-DELTA.md §2b ──
+     DOM divs, never drawn on canvas. The handle is DETACHED from the
+     bar: 12px dot sitting 8px clear; label right-anchored 10px clear of the dot. */
+  .paddle { position: absolute; width: 8px; height: 64px; z-index: 3; }
+  .paddle .bar { position: absolute; inset: 0; border-radius: 4px; }
+  .paddle .dot { position: absolute; top: 26px; width: 12px; height: 12px; border-radius: 50%; }
+  .paddle-left  { left: 0; }
+  .paddle-left  .bar, .paddle-left  .dot { background: var(--color-pink); }
+  .paddle-left  .dot { left: -20px; }
+  .paddle-right { right: 0; }
+  .paddle-right .bar, .paddle-right .dot { background: var(--color-blue); }
+  .paddle-right .dot { right: -20px; }
+  /* Right-anchored, not left-offset: the 10px gap to the dot must not
+     drift with glyph width or a font fallback. */
+  .you {
+    position: absolute; right: calc(100% + 30px); top: 20px;
+    white-space: nowrap;
+    font-size: 12px; color: var(--color-pink);
+  }
+
+  /* ── Control elevation · DESIGN.md §6/§10 ── */
+  .ctrl-chip {
+    height: var(--space-xxl);
+    border-radius: var(--radius-small);
+    background: var(--color-cta);
+    box-shadow: var(--shadow-chip);
+    display: flex;
+    align-items: center;
+  }
+
+  /* ── Palette chip · DESIGN.md §10 + DESIGN-DELTA.md §4 ──
+     Dot count is per-surface and VARIABLE — never assume five. */
+  .pal-pill { padding: 0 var(--space-xm); gap: var(--space-s); }
+  .pal-pill .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .pal-pill .shuffle { margin-left: var(--space-s); cursor: pointer; }
+  .pal-pill .shuffle:hover { stroke: #FFFFFF; }
+
+  /* ── Type · DESIGN.md §3 ── */
+  .tagline { font-size: 14px; color: var(--color-lightest-grey); margin: 0; }
+  .haiku   { font-size: 14px; color: var(--color-lightest-grey); margin: 0; }
+  .mono {
+    font-family: 'Space Mono', monospace; font-style: normal;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+
+  /* ── Buttons · DESIGN.md §10 ── */
+  .rbtn {
+    background: var(--color-cta);
+    border: 0;
+    border-radius: var(--radius-small);
+    padding: var(--space-xxm) var(--space-m);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #FFFFFF;
+    box-shadow: var(--shadow-btn);
+    cursor: pointer;
+  }
+  .rbtn:hover { opacity: 0.85; }
+
+  .spacer-s { height: var(--space-s); }
+  .spacer-m { height: var(--space-m); }
+  .spacer-l { height: var(--space-l); }
+
+  /* ── The reveal · DESIGN-DELTA.md §8 ──
+     Rally ends: paddles, ball and score leave on the final frame, no fade.
+     The ground then wipes in DOWNWARD behind the marks — poured in the way
+     the paint would have been laid first. Marks never move or redraw.
+     Haiku and controls arrive only once it has settled. */
+  @keyframes reveal-ground { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
+  @keyframes fade-in       { from { opacity: 0; } to { opacity: 1; } }
+
+  .ground {
+    position: absolute; inset: 0;
+    /* UNRESOLVED — the paint reveal ground has no token; stands in as the
+       old intro-card amber over cream. See DESIGN-DELTA.md §1. */
+    background: rgba(245, 205, 142, 0.24);
+    animation: reveal-ground 900ms linear both;
+  }
+  #gained-row { animation: fade-in 400ms linear 1300ms both; }
+  #post-row   { animation: fade-in 400ms linear 1700ms both; }
+
+  /* ── NEW · "time gained" line ──────────────────────────────────────────
+     The rally duration, stated as time gained. Deliberately NOT a control:
+     no container, no fill, no shadow, no hover, not focusable. It is set
+     exactly like the haiku — same face, same 14px, same row — and the only
+     thing that distinguishes it is a narrow cream highlight travelling
+     through the letters every 7s. That sweep is the entire treatment; if it
+     ever grows a pill or a border it starts competing with PLAY AGAIN below.
+     Copy is a template: "<duration> of calm, gained". Duration is rounded to
+     one decimal minute; under a minute, say "45 seconds of calm, gained". */
+  #gained-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    width: 1000px; gap: var(--space-l);
+  }
+  @keyframes gained-sweep {
+    from { background-position: 0% 50%; }
+    to   { background-position: 200% 50%; }
+  }
+  .gained {
+    margin: 0;
+    font-size: 14px; line-height: 1.6;
+    /* Fallback colour for engines without background-clip: text. */
+    color: var(--color-lightest-grey);
+    background-image: linear-gradient(100deg,
+      #8A8A8A, #8A8A8A, var(--color-canvas), #8A8A8A,
+      #8A8A8A, #8A8A8A, var(--color-canvas), #8A8A8A);
+    background-size: 200% 100%;
+    animation: gained-sweep 7s linear infinite;
+  }
+  @supports ((background-clip: text) or (-webkit-background-clip: text)) {
+    .gained {
+      background-clip: text; -webkit-background-clip: text;
+      color: transparent; -webkit-text-fill-color: transparent;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* Hold the sweep mid-phrase rather than stopping at either extreme. */
+    .gained { animation: none; background-position: 30% 50%; }
+  }
+
+  /* Right-hand utility cluster: adjust → keep → send. Track is 240px here,
+     not 320, so the three objects stay inside the 1000px canvas width. */
+  #post-row .utils { display: flex; align-items: center; gap: var(--space-xm); }
+  #post-row .track { width: 240px; }
+
+  .trails { z-index: 1; }
+  .trails polyline { opacity: 0.9; }
+
+  /* ── Post-game row: timeline left, actions right ── */
+  #post-row {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 1000px;
+  }
+  #post-row .actions { display: flex; gap: var(--space-xm); }
+
+  /* ── NEW component · timeline scrubber (DESIGN-DELTA.md §5) ──
+     Selects which frame of the accumulated painting to keep. A property
+     of the artwork, not a game control — hence results, not play.
+     UNRESOLVED: DESIGN.md has no slider primitives at all. */
+  #timeline-chip { padding: 0 var(--space-xm); gap: var(--space-xm); }
+  #timeline-chip label { color: var(--color-lightest-grey); }
+  .track {
+    position: relative; width: 320px; height: var(--space-xs);
+    border-radius: var(--space-xs); background: var(--color-bg);
+  }
+  .track .fill {
+    position: absolute; left: 0; top: 0; height: var(--space-xs);
+    border-radius: var(--space-xs); background: var(--color-lightest-grey);
+    width: 49%;
+  }
+  .track .thumb {
+    position: absolute; top: -6px; left: calc(49% - 8px);
+    width: var(--space-xm); height: var(--space-xm); border-radius: 50%;
+    background: var(--color-canvas);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.29);
+    cursor: grab;
+  }
+</style>
+<link rel="stylesheet" href="cta.css">
+</head>
+<body>
+
+  <svg class="logo" width="140" height="27" viewBox="0 0 140 27" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zen Pong">
+<path d="M38.4666 20V7.40002H41.7966L46.4406 15.626H46.5126V7.40002H49.3206V20H45.9726L41.3286 11.828H41.2566V20H38.4666Z" fill="#FFF5E5"/>
+<path d="M24.2402 20V7.40002H33.2402V9.92003H27.0662V12.242H32.6822V14.762H27.0662V17.498H33.2402V20H24.2402Z" fill="#FFF5E5"/>
+<path d="M9.53998 20V17.534L15.552 10.01V9.93802H9.70198V7.40002H19.098V9.90202L13.104 17.408V17.48H19.206V20H9.53998Z" fill="#FFF5E5"/>
+<path d="M123.753 20.162C119.703 20.162 117.651 17.3 117.651 13.718C117.651 10.082 119.703 7.23804 123.753 7.23804C126.975 7.23804 129.063 9.30804 129.333 11.792H126.453C126.255 10.766 125.517 9.79404 123.753 9.79404C121.665 9.79404 120.531 11.18 120.531 13.718C120.531 16.256 121.665 17.624 123.753 17.624C125.445 17.624 126.219 16.706 126.471 15.698H124.113V13.196H129.423V14.618C129.423 17.984 127.047 20.162 123.753 20.162Z" fill="#FFF5E5"/>
+<path d="M101.754 20V7.40002H105.084L109.728 15.626H109.8V7.40002H112.608V20H109.26L104.616 11.828H104.544V20H101.754Z" fill="#FFF5E5"/>
+<path d="M90.5895 20.162C86.5215 20.162 84.4695 17.3 84.4695 13.7C84.4695 10.082 86.5215 7.23804 90.5895 7.23804C94.6395 7.23804 96.7095 10.082 96.7095 13.7C96.7095 17.3 94.6395 20.162 90.5895 20.162ZM90.5895 17.606C92.6775 17.606 93.8295 16.238 93.8295 13.7C93.8295 11.162 92.6775 9.79404 90.5895 9.79404C88.4835 9.79404 87.3495 11.162 87.3495 13.7C87.3495 16.238 88.5015 17.606 90.5895 17.606Z" fill="#FFF5E5"/>
+<path d="M70.26 20V7.40002H75.984C78.558 7.40002 80.142 9.21802 80.142 11.558C80.142 13.97 78.522 15.788 75.984 15.788H73.086V20H70.26ZM73.086 13.268H75.426C76.632 13.268 77.262 12.71 77.262 11.558C77.262 10.478 76.578 9.90202 75.426 9.90202H73.086V13.268Z" fill="#FFF5E5"/>
+<rect width="2" height="27" rx="1" fill="#FFF5E5"/>
+<rect x="138" width="2" height="27" rx="1" fill="#FFF5E5"/>
+<circle cx="60" cy="14" r="3" fill="#FFF5E5"/>
+</svg>
+  <div class="spacer-m"></div>
+
+  <div class="stage">
+    <div class="canvas">
+      <div class="ground"></div>
+      <svg class="grain" width="100%" height="100%" preserveAspectRatio="none" aria-hidden="true">
+        <filter id="grain-res"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3"/></filter>
+        <rect width="100%" height="100%" filter="url(#grain-res)" opacity="0.12"/>
+      </svg>
+      <svg class="trails" viewBox="0 0 1000 630" preserveAspectRatio="none" aria-hidden="true">
+        <polyline stroke="var(--color-pink)"   stroke-width="28" points="10,420 355,95"/>
+        <polyline stroke="var(--color-orange)" stroke-width="22" points="355,95 660,600 900,505"/>
+        <polyline stroke="var(--color-green)"  stroke-width="16" points="0,355 895,415"/>
+        <polyline stroke="var(--color-pink)"   stroke-width="12" points="30,120 940,560"/>
+        <polyline stroke="var(--color-blue)"   stroke-width="26" points="355,560 640,105"/>
+        <polyline stroke="var(--color-cyan)"   stroke-width="18" points="640,105 900,320"/>
+        <polyline stroke="var(--color-blue)"   stroke-width="14" points="360,600 1000,250"/>
+        <polyline stroke="var(--color-orange)" stroke-width="10" points="20,540 620,60"/>
+        <circle cx="240" cy="300" r="12" fill="var(--color-pink)"/>
+        <circle cx="760" cy="180" r="8"  fill="var(--color-cyan)"/>
+        <circle cx="540" cy="470" r="10" fill="var(--color-green)"/>
+      </svg>
+    </div>
+    <div class="frame"></div>
+    <!-- no paddles, no ball, no card — they leave on the final rally frame -->
+  </div>
+
+  <div class="spacer-l"></div>
+
+  <!-- Claim left, haiku right — one row, both flush to the canvas edges. -->
+  <div id="gained-row">
+    <p class="gained">1.5 minutes of calm, gained</p>
+    <p class="haiku">old pond, silent still</p>
+  </div>
+
+  <div class="spacer-m"></div>
+
+  <!-- PLAY AGAIN sits alone under the claim: gaining more calm and playing
+       again are the same thought, so they share the left column. It keeps
+       standard .rbtn styling — it reads as primary by position, not decoration.
+       Timeline, save and share move right as one utility cluster. -->
+  <div id="post-row">
+    <button class="rbtn">play again</button>
+    <div class="utils">
+      <div id="timeline-chip" class="ctrl-chip">
+        <label class="mono" for="tl">timeline</label>
+        <div class="track" id="tl"><div class="fill"></div><div class="thumb"></div></div>
+      </div>
+      <button class="rbtn">save artwork</button>
+      <button class="rbtn">share</button>
+    </div>
+  </div>
+
+<script>
+  // The timeline glow is a scrub state, not a hover state.
+  var tl = document.getElementById('tl');
+  tl.addEventListener('pointerdown', function () { tl.classList.add('scrubbing'); });
+  window.addEventListener('pointerup', function () { tl.classList.remove('scrubbing'); });
+</script>
+</body>
+</html>

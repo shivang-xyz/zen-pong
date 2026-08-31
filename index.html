@@ -390,34 +390,39 @@
      old rule had no such scoping, so it would have kept the shuffle
      turning white on a touch device's "stuck" post-tap hover. */
 
-  /* ── Idle music credit · brief 34 Task 1, repositioned brief 35 Task 4 ──
-     Reuses the mobile gate's own .hint token values (11px Space Mono,
-     natural case, --color-disabled) rather than the shoutier uppercase
-     .mono utility — a name/title, not a label, and "quiet, present not
-     shouting" calls for natural case. A standing credit, not part of
-     Task 2's reveal — sits outside anything gated by [data-idle-step], so
-     it shows in both attract and armed.
-     Brief 35 Task 4 — was `margin-top` inside the centred flex column,
-     which collided with the palette pill once armed: #screen-idle isn't
-     stretched to viewport height (body's own justify-content:center
-     centres the WHOLE idle cluster as one block, same reason Task 4's
-     idle-credit note applies to #screen-mobile-gate/share too), so a
-     flex-flow margin can't reliably reach "the very bottom of the fold" —
-     it just follows however tall the content above it happens to be.
-     position:fixed takes it out of that flow entirely and pins it to the
-     actual viewport bottom regardless of content height; #screen-idle's
-     own [hidden] -> display:none still hides it correctly since display:
-     none on an ancestor suppresses a fixed-position descendant too. */
-  .idle-credit {
-    position: fixed; left: 50%; bottom: var(--space-m);
-    transform: translateX(-50%);
+  /* ── Attribution + contact line · brief 38 Task 1 ──
+     Replaces brief 34/35's idle-only music credit. One shared .attribution
+     class, injected by JS into all 5 target screens (see the JS block near
+     the top of the module script) — desktop screens get it pinned fixed at
+     the bottom (position:fixed, not a flow margin: none of idle/results/
+     share are stretched to viewport height, so a flow margin would just
+     follow however tall the content above happens to be, not reach the
+     actual bottom of the fold — same reasoning brief 35 Task 4 already
+     established for the old idle-credit); mobile screens get it as a
+     normal last-in-column element instead (see the mobile-scoped rule
+     below), since it needs to sit inside a scrolling/wrapping column
+     there, not escape it. */
+  .attribution {
+    margin: 0;
     font-family: 'Space Mono', monospace; font-style: normal;
     font-size: 11px; letter-spacing: 0.06em;
     color: var(--color-disabled);
+    text-align: center;
+  }
+  .attribution a {
+    color: inherit;
     text-decoration: underline; text-decoration-color: rgba(119,119,119,0.5);
     text-underline-offset: 2px;
   }
-  .idle-credit:hover, .idle-credit:focus-visible { color: var(--color-lightest-grey); }
+  .attribution a:hover, .attribution a:focus-visible { color: var(--color-lightest-grey); }
+  .attribution svg { vertical-align: -2px; margin-left: 2px; }
+  #screen-idle > .attribution,
+  #screen-results > .attribution,
+  #screen-share > .attribution {
+    position: fixed; left: 50%; bottom: var(--space-m);
+    transform: translateX(-50%);
+    white-space: nowrap; /* one line on desktop, per the brief */
+  }
 
   /* ── Playing screen control row · DESIGN.md §8 Screen 2 / §10 ──
      3-column grid, 1000px wide: pal-pill left, score-pill centred,
@@ -485,17 +490,70 @@
   @keyframes reveal-ground        { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
   @keyframes reveal-strokes-alpha { from { opacity: 0.70; } to { opacity: 1; } } /* 0.70 = GAME_COMMITTED_ALPHA (JS) — CSS can't read the JS constant, keep them in sync by hand */
   @keyframes fade-in              { from { opacity: 0; } to { opacity: 1; } }
-  .reveal-wipe    { animation: reveal-ground 900ms linear both; }
-  .reveal-strokes { animation: reveal-strokes-alpha 900ms linear both; }
-  .reveal-haiku   { animation: fade-in 400ms linear 1300ms both; }
-  .reveal-postrow { animation: fade-in 400ms linear 1700ms both; }
+  .reveal-wipe       { animation: reveal-ground 900ms linear both; }
+  .reveal-strokes    { animation: reveal-strokes-alpha 900ms linear both; }
+  /* Brief 38 Task 3 — renamed from .reveal-haiku: now applied to the whole
+     #gained-row wrapper (gained claim + haiku together, one fade), not
+     just the haiku <p> alone — same 1300ms timing, lifted verbatim from
+     v3/design/3c-results-time-gained.html. */
+  .reveal-gained-row { animation: fade-in 400ms linear 1300ms both; }
+  .reveal-postrow    { animation: fade-in 400ms linear 1700ms both; }
 
-  /* ── Post-game row: timeline left, actions right (Task 1/6) ── */
+  /* ── "Time gained" line · brief 38 Task 3, v3/design/3c-results-time-
+     gained.html, lifted verbatim ── Deliberately NOT a control: no
+     container, no fill, no shadow, no hover, not focusable — set exactly
+     like the haiku (same face, same 14px, same row), distinguished only
+     by a narrow cream highlight sweeping through the letters every 7s.
+     Copy: "<duration> of calm, gained" — see formatGainedDuration(). */
+  #gained-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    width: 1000px; gap: var(--space-l);
+  }
+  /* #gained-row's own haiku loses the base .haiku rule's centring/max-width
+     (below) — it's now a flex item flush to the row's right edge, not a
+     standalone centred block. #share-haiku (untouched by this brief) keeps
+     the base rule. */
+  #gained-row .haiku { text-align: left; max-width: none; }
+  @keyframes gained-sweep {
+    from { background-position: 0% 50%; }
+    to   { background-position: 200% 50%; }
+  }
+  .gained {
+    margin: 0;
+    font-size: 14px; line-height: 1.6;
+    color: var(--color-lightest-grey); /* fallback for engines without background-clip:text */
+    background-image: linear-gradient(100deg,
+      #8A8A8A, #8A8A8A, var(--color-canvas), #8A8A8A,
+      #8A8A8A, #8A8A8A, var(--color-canvas), #8A8A8A);
+    background-size: 200% 100%;
+    animation: gained-sweep 7s linear infinite;
+  }
+  @supports ((background-clip: text) or (-webkit-background-clip: text)) {
+    .gained {
+      background-clip: text; -webkit-background-clip: text;
+      color: transparent; -webkit-text-fill-color: transparent;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* Hold the sweep mid-phrase rather than stopping at either extreme. */
+    .gained { animation: none; background-position: 30% 50%; }
+  }
+
+  /* ── Post-game row: PLAY AGAIN alone left, utility cluster right
+     (brief 38 Task 3 — was timeline left, actions right; play again moved
+     out of the action group and left, timeline/save/share now share one
+     right-hand cluster) ── */
   #post-row {
     display: flex; align-items: center; justify-content: space-between;
     width: 1000px; /* no max-width — brief 25/26 Task 1: never compress a fixed-width row non-uniformly */
   }
-  #post-row .actions { display: flex; gap: var(--space-xm); }
+  #post-row .utils { display: flex; align-items: center; gap: var(--space-xm); }
+  /* 240px, not the shared .track class's 320px default — keeps timeline +
+     save + share inside the 1000px row alongside PLAY AGAIN. Scoped here
+     rather than changing .track itself, matching the mockup's own scoping
+     (nothing else uses .track today, but this is the correct-by-construction
+     choice regardless). */
+  #post-row .track { width: 240px; }
 
   .rbtn {
     background: var(--color-cta);
@@ -1234,15 +1292,10 @@
       </svg>
     </div>
 
-    <!-- Brief 34 Task 1 — standing credit, not part of Task 2's reveal:
-         placed as a direct child of #screen-idle (a sibling of .stage and
-         #pal-pill, not gated by [data-idle-step]), so it shows in both
-         attract and armed — position:fixed (Task 4, brief 35) means DOM
-         position here no longer determines its visual placement, only
-         which screen's [hidden] toggle controls it. Text shortened to
-         drop the track name (brief 35 Task 4 — there are two tracks now);
-         Bandcamp URL confirmed by Shivang, brief 35. -->
-    <a class="idle-credit" href="https://omnigardens.bandcamp.com/album/moss-king-2" target="_blank" rel="noopener">Music by Omni Gardens</a>
+    <!-- Brief 38 Task 1 — the old standing music-credit line here is gone;
+         the shared .attribution line (JS-injected into this and 4 other
+         screens, see the module script) replaces it, appended as this
+         section's own last child at load. -->
   </section>
 
   <!-- ══════════════════════════ PLAYING SCREEN ══════════════════════════ -->
@@ -1372,22 +1425,30 @@
     </div>
 
     <div class="spacer-l"></div>
-    <p class="haiku" id="results-haiku"></p>
+    <!-- Brief 38 Task 3 — gained claim (left) + haiku (right), one row,
+         both flush to the canvas edges (v3/design/3c-results-time-gained.html). -->
+    <div id="gained-row">
+      <p class="gained" id="results-gained"></p>
+      <p class="haiku" id="results-haiku"></p>
+    </div>
     <div class="spacer-m"></div>
 
+    <!-- Brief 38 Task 3 — PLAY AGAIN alone on the left (gaining more calm
+         and playing again are the same thought, per the mockup); timeline
+         + save + share share one right-hand utility cluster. -->
     <div id="post-row">
-      <div class="ctrl-chip" id="timeline-chip">
-        <label class="mono" for="timeline-track">timeline</label>
-        <div class="track" id="timeline-track" role="slider" tabindex="0"
-             aria-label="Timeline" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
-          <div class="fill" id="timeline-fill"></div>
-          <div class="thumb" id="timeline-thumb"></div>
+      <button class="rbtn" id="btn-play-again">play again</button>
+      <div class="utils">
+        <div class="ctrl-chip" id="timeline-chip">
+          <label class="mono" for="timeline-track">timeline</label>
+          <div class="track" id="timeline-track" role="slider" tabindex="0"
+               aria-label="Timeline" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+            <div class="fill" id="timeline-fill"></div>
+            <div class="thumb" id="timeline-thumb"></div>
+          </div>
         </div>
-      </div>
-      <div class="actions">
         <button class="rbtn" id="btn-save">save artwork</button>
         <button class="rbtn" id="btn-share">share</button>
-        <button class="rbtn" id="btn-play-again">play again</button>
       </div>
     </div>
   </section>
@@ -3098,6 +3159,45 @@ window.addEventListener('error', (e) => {
 });
 window.addEventListener('unhandledrejection', (e) => {
   console.error(`[zenpong] unhandled rejection: ${e.reason}`);
+});
+
+// Brief 38 Task 1 — attribution + contact line, one shared implementation
+// injected into all 5 target screens (idle, results, desktop share,
+// mobile share, gate) rather than five hand-written copies that can
+// drift apart. Replaces the old idle-only music-credit line entirely.
+// Safe to run this early (before setScreen/etc. are defined below) —
+// only needs the target sections to already exist in the parsed DOM,
+// which they do; this whole script sits at the end of <body>.
+function buildAttributionEl() {
+  const el = document.createElement('p');
+  el.className = 'attribution';
+  el.innerHTML =
+    'Created by <a href="https://www.shivangjoshi.xyz" target="_blank" rel="noopener">Shivang Joshi</a>' +
+    ' &nbsp;|&nbsp; ' +
+    '<a href="mailto:hello@shivangjoshi.xyz?subject=Zen%20Pong">Contact ' +
+      '<svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<rect x="2" y="4" width="14" height="10" rx="1.5"/><path d="M2.5 5 L9 10 L15.5 5"/>' +
+      '</svg>' +
+    '</a>' +
+    ' &nbsp;✦&nbsp; ' +
+    'Music by <a href="https://omnigardens.bandcamp.com/album/moss-king-2" target="_blank" rel="noopener">Omni Gardens</a>';
+  return el;
+}
+// mode 'desktop' -> position:fixed bottom-centre (CSS), appended directly
+// to the screen section (matches the old idle-credit's own approach —
+// [hidden]/display:none on the ancestor still suppresses a fixed-position
+// descendant). mode 'mobile' -> normal flow, appended as the LAST child of
+// the screen's own <main> column, after the actions.
+[
+  { screenId: 'screen-idle', mode: 'desktop' },
+  { screenId: 'screen-results', mode: 'desktop' },
+  { screenId: 'screen-share', mode: 'desktop' },
+  { screenId: 'screen-mobile-gate', mode: 'mobile' },
+  { screenId: 'screen-mobile-share', mode: 'mobile' },
+].forEach(({ screenId, mode }) => {
+  const screen = document.getElementById(screenId);
+  const container = mode === 'mobile' ? (screen.querySelector('main') || screen) : screen;
+  container.appendChild(buildAttributionEl());
 });
 
 // Brief 29 Task 3 — "landing with a fragment: decode and go straight to
@@ -4908,13 +5008,46 @@ function checkGameLevel() {
   }
 }
 
+// Brief 38 Task 2 — gentle per-rally speed ramp, app-side only
+// (v3/engine/ untouched — physics.js has no ramp concept). "Base speed"
+// means whatever speed the ENGINE's own physics already gave the ball
+// this frame — level-up increases (checkGameLevel/levelUp above), wall-
+// bounce dynamics, hit-based changes are all untouched. The ramp is a
+// pure multiplicative OVERLAY on top of that, never a replacement:
+// forcing the ball to a value re-derived from a fixed constant (e.g.
+// BASE_SPD) every frame would silently override the level-up system,
+// which the brief's own "the engine still handles bounces/spin; this
+// only rescales the RESULTING speed" line rules out.
+//
+// Tracked as an INCREMENTAL correction, not a reset-to-base: gameRamp
+// AppliedFactor is how much of the current ramp is already baked into
+// gameBall.vx/vy. Each frame (stepGame, below) only the DELTA between
+// that and the new target factor is applied, so the engine's own speed
+// dynamics for that frame — whatever they were — survive untouched.
+const GAME_SPEED_RAMP_HOLD_SEC = 30; // full calm for this long into a rally
+const GAME_SPEED_RAMP_MAX_SEC = 60;  // linear ramp completes by here
+const GAME_SPEED_RAMP_CAP = 1.5;     // capped — tuned by feel, see PROJECT-LOG
+let gameServeStartMs = 0;    // reset every serve — Task 2's ramp clock
+let gameRampAppliedFactor = 1.0;
+let gameFirstServeMs = 0;    // set ONCE per game, in startGame() — Task 3's duration clock
+
+function gameSpeedRampFactor(elapsedSec) {
+  if (elapsedSec <= GAME_SPEED_RAMP_HOLD_SEC) return 1.0;
+  if (elapsedSec >= GAME_SPEED_RAMP_MAX_SEC) return GAME_SPEED_RAMP_CAP;
+  const t = (elapsedSec - GAME_SPEED_RAMP_HOLD_SEC) / (GAME_SPEED_RAMP_MAX_SEC - GAME_SPEED_RAMP_HOLD_SEC);
+  return 1.0 + t * (GAME_SPEED_RAMP_CAP - 1.0);
+}
+
 function spawnGameBall() {
   gameBall = mkBall(gamePhysRng, gameLv, null, [1.0, 2.4], [0.50, 0.68]);
   gamePaintTracker.startTrail(gameBall, gameBall.x, gameBall.y);
   gameServing = false;
+  gameServeStartMs = performance.now(); // brief 38 Task 2 — every serve resets the ramp
+  gameRampAppliedFactor = 1.0;
 }
 
 function startGame() {
+  gameFirstServeMs = performance.now(); // brief 38 Task 3 — whole-game duration clock, set once per game
   // Task 6 — the one permitted Math.random() call, generating this game's
   // single seed; every stream below is makeRng(seed ^ salt), never
   // Math.random() again.
@@ -5002,6 +5135,22 @@ function stepGame() {
   updatePaddleAI(gamePaddleR, targetR, gameAiSpd, Date.now(), 0);
 
   const events = advanceBall(gameBall, gamePaddleL, gamePaddleR, padVelL, gamePhysRng);
+
+  // Brief 38 Task 2 — see the constants/comment above spawnGameBall() for
+  // why this is an incremental correction (relative to gameRampAppliedFactor)
+  // rather than a reset to some fixed base speed: whatever the engine just
+  // did to gameBall.vx/vy this frame (the advanceBall() call above —
+  // bounces, spin, level-up speed) stays fully intact, this only layers
+  // the additional ramp delta on top.
+  const gameRampElapsedSec = (performance.now() - gameServeStartMs) / 1000;
+  const gameRampTarget = gameSpeedRampFactor(gameRampElapsedSec);
+  if (gameRampTarget !== gameRampAppliedFactor) {
+    const rampCorrective = gameRampTarget / gameRampAppliedFactor;
+    gameBall.vx *= rampCorrective;
+    gameBall.vy *= rampCorrective;
+    gameRampAppliedFactor = gameRampTarget;
+  }
+
   const hadHitEvent = events.length > 0; // Task 6 — splatter must never fire on the same frame as a hit
   events.forEach(ev => {
     commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, ev.type);
@@ -5062,6 +5211,7 @@ function stepGame() {
         paintGroundHex: gamePaintPalette.ground, // Cream by default (Task 3) — captured here since gamePaintPalette itself gets replaced by the next startGame()
         resolvedPalette: gamePalPillHexesFor(currentSurface), // brief 29 Task 1 — the 3 actual stroke hexes (post any shuffle), captured now for the same reason as paintGroundHex above
         quote: QUOTES[Math.floor(quoteRng() * QUOTES.length)],
+        durationSec: (performance.now() - gameFirstServeMs) / 1000, // brief 38 Task 3 — whole-game length, first serve to game-over; NOT Task 2's gameServeStartMs, which resets every rally
       };
       setScreen('results');
       startReveal(); // brief 26 — builds ground, resets the scrubber, runs the reveal animation
@@ -5221,6 +5371,18 @@ const resultsStrokesCanvas = document.getElementById('results-strokes-canvas');
 const resultsGroundCx = resultsGroundCanvas.getContext('2d');
 const resultsStrokesCx = resultsStrokesCanvas.getContext('2d');
 const resultsHaikuEl = document.getElementById('results-haiku');
+const resultsGainedEl = document.getElementById('results-gained'); // brief 38 Task 3
+
+// Brief 38 Task 3 — "<duration> of calm, gained" copy. Duration is the
+// WHOLE GAME's length (gameFirstServeMs, set once in startGame() — not
+// Task 2's per-rally gameServeStartMs, which resets every serve). Flat
+// pluralisation ("1.5 minutes", "45 seconds") matching the mockup's own
+// literal examples verbatim — no singular-grammar special case, none was
+// specced.
+function formatGainedDuration(sec) {
+  if (sec >= 60) return `${(sec / 60).toFixed(1)} minutes of calm, gained`;
+  return `${Math.round(sec)} seconds of calm, gained`;
+}
 const timelineTrackEl = document.getElementById('timeline-track');
 const timelineFillEl = document.getElementById('timeline-fill');
 const timelineThumbEl = document.getElementById('timeline-thumb');
@@ -5333,15 +5495,16 @@ function startReveal() {
   updateTimelineUI(Math.round(resultsData.strokes.length * TIMELINE_DEFAULT_FRACTION)); // brief 31 Task 4 — was 100%
 
   resultsHaikuEl.textContent = h.quote;
+  resultsGainedEl.textContent = formatGainedDuration(h.durationSec); // brief 38 Task 3
 
   // Reveal animations — Task 2's specced timings, verbatim. Ground wipe:
   // paint only (paper/chalk keep their ground static, already correct from
   // play — no class, no animation, nothing to reset). Strokes-to-full,
-  // haiku and post-row: all three surfaces, every reveal.
+  // gained-row and post-row: all three surfaces, every reveal.
   resultsGroundCanvas.classList.remove('reveal-wipe');
   if (h.surface === 'paint') restartAnimation(resultsGroundCanvas, 'reveal-wipe');
   restartAnimation(resultsStrokesCanvas, 'reveal-strokes');
-  restartAnimation(resultsHaikuEl, 'reveal-haiku');
+  restartAnimation(document.getElementById('gained-row'), 'reveal-gained-row'); // brief 38 Task 3 — was resultsHaikuEl/reveal-haiku; now the whole row (gained claim + haiku), one fade
   restartAnimation(document.getElementById('post-row'), 'reveal-postrow');
 
   // No fitScreenToViewport() call here (brief 26 had one, since removed):

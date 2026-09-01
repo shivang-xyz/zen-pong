@@ -389,18 +389,42 @@
      old rule had no such scoping, so it would have kept the shuffle
      turning white on a touch device's "stuck" post-tap hover. */
 
-  /* ── Attribution + contact line · brief 38 Task 1 ──
-     Replaces brief 34/35's idle-only music credit. One shared .attribution
-     class, injected by JS into all 5 target screens (see the JS block near
-     the top of the module script) — desktop screens get it pinned fixed at
-     the bottom (position:fixed, not a flow margin: none of idle/results/
-     share are stretched to viewport height, so a flow margin would just
-     follow however tall the content above happens to be, not reach the
-     actual bottom of the fold — same reasoning brief 35 Task 4 already
-     established for the old idle-credit); mobile screens get it as a
-     normal last-in-column element instead (see the mobile-scoped rule
-     below), since it needs to sit inside a scrolling/wrapping column
-     there, not escape it. */
+  /* ── Attribution + contact line · brief 38 Task 1, repositioned brief
+     39 Task 2 ── Replaces brief 34/35's idle-only music credit. One
+     shared .attribution class, injected by JS into all 5 target screens
+     (see the JS block near the top of the module script).
+     Brief 39 Task 2 — was position:fixed, pinned bottom-centre, always
+     visible. Shivang wants it OUT of the fold entirely on desktop:
+     reachable with a small scroll, not sitting over/near the art
+     permanently.
+     Two things tried and rejected first, both caught live before
+     shipping, not assumed correct: (1) a flat margin-top (88px) — too
+     small, idle's own content is short enough that at a common 1280x900
+     viewport it never pushed total height past 900px at all, so the line
+     just sat inside the fold like nothing had changed; (2) `min-height:
+     calc(100dvh + 40px)` on the screen section + `margin-top:auto` on the
+     line (the "textbook" flexbox way to float a footer to the bottom of
+     an oversized container) — measured live and the screen's rendered
+     height came out SHORTER than its own declared min-height (836px
+     against a stated 940px floor), which min-height is specifically
+     supposed to prevent; not confidently explained (possibly an
+     interaction with this element's own flex-shrink inside body's
+     centering, possibly a rendering quirk of the sandbox this was tested
+     in) and not worth shipping on a mechanism that didn't behave as
+     documented in its own test.
+     What's actually here instead: position:absolute against the screen
+     section (position:relative), placed at `top: calc(100dvh + 40px)`.
+     Unlike the flex approach, an absolutely-positioned element's offset
+     from a relative ancestor is a direct, unambiguous calculation — not
+     dependent on how that ancestor's own box height gets resolved — and
+     it still contributes to the page's scrollable overflow (confirmed
+     live: docScrollHeight grows to include it), so "reachable by
+     scrolling, not fixed to the viewport" still holds even though the
+     element itself is out of normal flow. The original content above it
+     is completely unaffected either way, on any screen, since it was
+     never touched. Verified live at 1280x900: the line's own rect sits
+     below window.innerHeight (unreachable without scrolling) where both
+     earlier attempts did not. */
   .attribution {
     margin: 0;
     font-family: 'Space Mono', monospace; font-style: normal;
@@ -414,11 +438,11 @@
     text-underline-offset: 2px;
   }
   .attribution a:hover, .attribution a:focus-visible { color: var(--color-lightest-grey); }
-  .attribution svg { vertical-align: -2px; margin-left: 2px; }
+  #screen-idle, #screen-results, #screen-share { position: relative; }
   #screen-idle > .attribution,
   #screen-results > .attribution,
   #screen-share > .attribution {
-    position: fixed; left: 50%; bottom: var(--space-m);
+    position: absolute; top: calc(100dvh + 40px); left: 50%;
     transform: translateX(-50%);
     white-space: nowrap; /* one line on desktop, per the brief */
   }
@@ -508,17 +532,30 @@
     display: flex; align-items: baseline; justify-content: space-between;
     width: 1000px; gap: var(--space-l);
   }
-  /* #gained-row's own haiku loses the base .haiku rule's centring/max-width
-     (below) — it's now a flex item flush to the row's right edge, not a
-     standalone centred block. #share-haiku (untouched by this brief) keeps
-     the base rule. */
-  #gained-row .haiku { text-align: left; max-width: none; }
+  /* #gained-row's own haiku loses the base .haiku rule's centring (below) —
+     it's now a flex item flush to the row's right edge, not a standalone
+     centred block. #share-haiku (untouched by this brief) keeps the base
+     rule.
+     Brief 39 Task 3 — width fixed to match #post-row .utils' own rendered
+     width EXACTLY: 617px, measured live via getBoundingClientRect() (240px
+     track + chip padding/gap + label + save + share buttons — not
+     independently re-derivable from tokens alone, since button widths
+     depend on the actual rendered label text; hardcoded like .track's own
+     240px already is, matching how the rest of this fixed-width desktop
+     layout works). So the haiku box sits directly above the utility
+     cluster, same left/right edges. Right-aligned so ragged text hugs
+     that shared right edge; wraps onto more lines rather than truncating
+     (no nowrap, no ellipsis — a long haiku growing taller is fine, the
+     row uses align-items:baseline so it doesn't fight the gained line's
+     own single line). */
+  #gained-row .haiku { text-align: right; width: 617px; }
   @keyframes gained-sweep {
     from { background-position: 0% 50%; }
     to   { background-position: 200% 50%; }
   }
   .gained {
     margin: 0;
+    flex-shrink: 0; /* brief 39 Task 3 — never let the row's flex shrink this; it always renders at its own natural (short) width, "never truncate" */
     font-size: 14px; line-height: 1.6;
     color: var(--color-lightest-grey); /* fallback for engines without background-clip:text */
     background-image: linear-gradient(100deg,
@@ -1550,26 +1587,28 @@ window.addEventListener('unhandledrejection', (e) => {
 // Safe to run this early (before setScreen/etc. are defined below) —
 // only needs the target sections to already exist in the parsed DOM,
 // which they do; this whole script sits at the end of <body>.
+// Brief 39 Task 1 — copy simplified, envelope icon dropped entirely:
+// "Created by Shivang Joshi ✦ Music by Omni Gardens ✦ Contact", only the
+// three names/word underlined-as-links, "Created by"/"Music by" plain
+// text, ✦ separator with a single regular space each side (was &nbsp;|
+// &nbsp; and &nbsp;✦&nbsp; — genuinely wide gaps, not just visually airy).
 function buildAttributionEl() {
   const el = document.createElement('p');
   el.className = 'attribution';
   el.innerHTML =
     'Created by <a href="https://www.shivangjoshi.xyz" target="_blank" rel="noopener">Shivang Joshi</a>' +
-    ' &nbsp;|&nbsp; ' +
-    '<a href="mailto:hello@shivangjoshi.xyz?subject=Zen%20Pong">Contact ' +
-      '<svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<rect x="2" y="4" width="14" height="10" rx="1.5"/><path d="M2.5 5 L9 10 L15.5 5"/>' +
-      '</svg>' +
-    '</a>' +
-    ' &nbsp;✦&nbsp; ' +
-    'Music by <a href="https://omnigardens.bandcamp.com/album/moss-king-2" target="_blank" rel="noopener">Omni Gardens</a>';
+    ' ✦ ' +
+    'Music by <a href="https://omnigardens.bandcamp.com/album/moss-king-2" target="_blank" rel="noopener">Omni Gardens</a>' +
+    ' ✦ ' +
+    '<a href="mailto:hello@shivangjoshi.xyz?subject=Zen%20Pong">Contact</a>';
   return el;
 }
-// mode 'desktop' -> position:fixed bottom-centre (CSS), appended directly
-// to the screen section (matches the old idle-credit's own approach —
-// [hidden]/display:none on the ancestor still suppresses a fixed-position
-// descendant). mode 'mobile' -> normal flow, appended as the LAST child of
-// the screen's own <main> column, after the actions.
+// Brief 39 Task 2 — mode 'desktop' used to be position:fixed bottom-centre;
+// now normal flow, appended directly to the screen section same as before
+// (still gets #screen-*'s [hidden]/display:none suppression for free) but
+// styled to sit just past the fold instead of pinned — see the CSS rule's
+// own comment for how. mode 'mobile' unchanged: normal flow, appended as
+// the LAST child of the screen's own <main> column, after the actions.
 [
   { screenId: 'screen-idle', mode: 'desktop' },
   { screenId: 'screen-results', mode: 'desktop' },
@@ -3390,42 +3429,52 @@ function checkGameLevel() {
   }
 }
 
-// Brief 38 Task 2 — gentle per-rally speed ramp, app-side only
-// (v3/engine/ untouched — physics.js has no ramp concept). "Base speed"
-// means whatever speed the ENGINE's own physics already gave the ball
-// this frame — level-up increases (checkGameLevel/levelUp above), wall-
-// bounce dynamics, hit-based changes are all untouched. The ramp is a
-// pure multiplicative OVERLAY on top of that, never a replacement:
+// Brief 38 Task 2, rebuilt brief 39 Task 4 — gentle speed ramp, app-side
+// only (v3/engine/ untouched — physics.js has no ramp concept). "Base
+// speed" means whatever speed the ENGINE's own physics already gave the
+// ball this frame — level-up increases (checkGameLevel/levelUp above),
+// wall-bounce dynamics, hit-based changes are all untouched. The ramp is
+// a pure multiplicative OVERLAY on top of that, never a replacement:
 // forcing the ball to a value re-derived from a fixed constant (e.g.
 // BASE_SPD) every frame would silently override the level-up system,
 // which the brief's own "the engine still handles bounces/spin; this
 // only rescales the RESULTING speed" line rules out.
 //
+// Brief 39 Task 4 — the real bug: brief 38 drove the ramp off
+// gameServeStartMs, reset every serve, so a long game never actually
+// crowded the canvas any less — every point restarted calm. Rebuilt to
+// drive off gameFirstServeMs instead (set ONCE per game, in startGame(),
+// never per serve) — a straight, monotonic climb across the WHOLE game:
+// 1.0x at t=0, linear to 1.5x by t=90s, capped beyond. gameServeStartMs
+// itself is gone — nothing else read it.
+//
 // Tracked as an INCREMENTAL correction, not a reset-to-base: gameRamp
 // AppliedFactor is how much of the current ramp is already baked into
 // gameBall.vx/vy. Each frame (stepGame, below) only the DELTA between
 // that and the new target factor is applied, so the engine's own speed
-// dynamics for that frame — whatever they were — survive untouched.
-const GAME_SPEED_RAMP_HOLD_SEC = 30; // full calm for this long into a rally
-const GAME_SPEED_RAMP_MAX_SEC = 60;  // linear ramp completes by here
+// dynamics for that frame — whatever they were — survive untouched. This
+// is STILL reset to 1.0 on every serve (spawnGameBall, below) — that's
+// not the per-rally bug brief 39 fixes, it's the mechanism that makes a
+// brand-new ball (which spawns at the engine's own unramped base speed,
+// per mkBall) immediately jump to the CURRENT whole-game factor on its
+// first frame, rather than needing several frames to "catch up" — i.e.
+// exactly what makes "a new serve keeps the current game-time factor"
+// (the brief's own words) actually true.
+const GAME_SPEED_RAMP_MAX_SEC = 90;  // linear ramp completes by here (whole-game elapsed)
 const GAME_SPEED_RAMP_CAP = 1.5;     // capped — tuned by feel, see PROJECT-LOG
-let gameServeStartMs = 0;    // reset every serve — Task 2's ramp clock
 let gameRampAppliedFactor = 1.0;
-let gameFirstServeMs = 0;    // set ONCE per game, in startGame() — Task 3's duration clock
+let gameFirstServeMs = 0;    // set ONCE per game, in startGame() — both the ramp's AND Task 3's duration clock now
 
 function gameSpeedRampFactor(elapsedSec) {
-  if (elapsedSec <= GAME_SPEED_RAMP_HOLD_SEC) return 1.0;
   if (elapsedSec >= GAME_SPEED_RAMP_MAX_SEC) return GAME_SPEED_RAMP_CAP;
-  const t = (elapsedSec - GAME_SPEED_RAMP_HOLD_SEC) / (GAME_SPEED_RAMP_MAX_SEC - GAME_SPEED_RAMP_HOLD_SEC);
-  return 1.0 + t * (GAME_SPEED_RAMP_CAP - 1.0);
+  return 1.0 + (elapsedSec / GAME_SPEED_RAMP_MAX_SEC) * (GAME_SPEED_RAMP_CAP - 1.0);
 }
 
 function spawnGameBall() {
   gameBall = mkBall(gamePhysRng, gameLv, null, [1.0, 2.4], [0.50, 0.68]);
   gamePaintTracker.startTrail(gameBall, gameBall.x, gameBall.y);
   gameServing = false;
-  gameServeStartMs = performance.now(); // brief 38 Task 2 — every serve resets the ramp
-  gameRampAppliedFactor = 1.0;
+  gameRampAppliedFactor = 1.0; // brief 39 Task 4 — see the comment above: this reset is kept, on purpose
 }
 
 function startGame() {
@@ -3518,13 +3567,16 @@ function stepGame() {
 
   const events = advanceBall(gameBall, gamePaddleL, gamePaddleR, padVelL, gamePhysRng);
 
-  // Brief 38 Task 2 — see the constants/comment above spawnGameBall() for
-  // why this is an incremental correction (relative to gameRampAppliedFactor)
-  // rather than a reset to some fixed base speed: whatever the engine just
-  // did to gameBall.vx/vy this frame (the advanceBall() call above —
-  // bounces, spin, level-up speed) stays fully intact, this only layers
-  // the additional ramp delta on top.
-  const gameRampElapsedSec = (performance.now() - gameServeStartMs) / 1000;
+  // Brief 38 Task 2, rebuilt brief 39 Task 4 — see the constants/comment
+  // above spawnGameBall() for why this is an incremental correction
+  // (relative to gameRampAppliedFactor) rather than a reset to some fixed
+  // base speed: whatever the engine just did to gameBall.vx/vy this frame
+  // (the advanceBall() call above — bounces, spin, level-up speed) stays
+  // fully intact, this only layers the additional ramp delta on top.
+  // gameFirstServeMs (whole-game clock, never reset per serve) drives the
+  // target now — was gameServeStartMs, which made the ramp restart calm
+  // every single point.
+  const gameRampElapsedSec = (performance.now() - gameFirstServeMs) / 1000;
   const gameRampTarget = gameSpeedRampFactor(gameRampElapsedSec);
   if (gameRampTarget !== gameRampAppliedFactor) {
     const rampCorrective = gameRampTarget / gameRampAppliedFactor;
@@ -3593,7 +3645,7 @@ function stepGame() {
         paintGroundHex: gamePaintPalette.ground, // Cream by default (Task 3) — captured here since gamePaintPalette itself gets replaced by the next startGame()
         resolvedPalette: gamePalPillHexesFor(currentSurface), // brief 29 Task 1 — the 3 actual stroke hexes (post any shuffle), captured now for the same reason as paintGroundHex above
         quote: QUOTES[Math.floor(quoteRng() * QUOTES.length)],
-        durationSec: (performance.now() - gameFirstServeMs) / 1000, // brief 38 Task 3 — whole-game length, first serve to game-over; NOT Task 2's gameServeStartMs, which resets every rally
+        durationSec: (performance.now() - gameFirstServeMs) / 1000, // brief 38 Task 3 — whole-game length, first serve to game-over; brief 39 Task 4 made this the SAME clock the speed ramp now drives off (was a separate gameServeStartMs, since removed)
       };
       setScreen('results');
       startReveal(); // brief 26 — builds ground, resets the scrubber, runs the reveal animation
@@ -3844,6 +3896,15 @@ function renderResultsStrokes(count) {
 // all. Save and share are unaffected — both read whatever the scrubber
 // currently shows, same as before.
 const TIMELINE_DEFAULT_FRACTION = 0.70;
+// Brief 39 Task 5 — the scrubber's current position, tracked at module
+// scope so copyResultsShareLink (share) can read it without threading a
+// parameter through. Save-PNG needs no equivalent: it reads
+// resultsGroundCanvas/resultsStrokesCanvas directly (see btn-save's own
+// handler) — the already-rendered, already-scrubbed canvas pixels — so it
+// was already WYSIWYG to the scrubber before this brief; confirmed by
+// reading the export call site, not assumed.
+let currentTimelineCount = 0;
+
 function updateTimelineUI(count) {
   const total = resultsData.strokes.length;
   const pct = total > 0 ? (count / total) * 100 : 100;
@@ -3851,6 +3912,7 @@ function updateTimelineUI(count) {
   timelineThumbEl.style.left = `calc(${pct}% - 8px)`;
   timelineTrackEl.setAttribute('aria-valuemax', String(total));
   timelineTrackEl.setAttribute('aria-valuenow', String(count));
+  currentTimelineCount = count; // brief 39 Task 5
   renderResultsStrokes(count);
 }
 
@@ -4744,7 +4806,21 @@ async function copyResultsShareLink(e) {
   // shareCopyButtonHandler's own comment, further down this file, for the
   // real bug this caused and how it was caught.
   const btn = e.currentTarget;
-  const raw = encodeArtworkPayload(gameLastEndedStrokes);
+  // Brief 39 Task 5 — share used to encode gameLastEndedStrokes wholesale,
+  // always sending the FULL painting regardless of where the scrubber
+  // sat — "what the scrubber currently shows is what gets shared." Slice
+  // to currentTimelineCount before encoding: strokes[0..n] plus only the
+  // splatter marks that had already landed by then (afterStrokes <= n).
+  // No wire-format change — the decoder already handles any stroke count,
+  // this is just fewer of them. Everything else (seed, surface,
+  // paintGroundHex, quote, durationSec) is unchanged — slicing strokes
+  // doesn't change how long the game took or what haiku it drew.
+  const slicedForShare = {
+    ...gameLastEndedStrokes,
+    strokes: gameLastEndedStrokes.strokes.slice(0, currentTimelineCount),
+    splatterMarks: gameLastEndedStrokes.splatterMarks.filter(m => m.afterStrokes <= currentTimelineCount),
+  };
+  const raw = encodeArtworkPayload(slicedForShare);
   const decoded = decodeArtworkPayload(raw);
   if (!decoded) { console.warn('[share] own payload failed to decode — this should never happen'); return; }
 
@@ -4752,7 +4828,9 @@ async function copyResultsShareLink(e) {
   history.replaceState(null, '', '#a=' + fragment);
 
   // Task 1 Verification (brief 29): "Report the measured payload size per surface."
-  console.log(`[share] ${gameLastEndedStrokes.surface}: ${raw.length}B raw -> ${fragment.length} base64url chars (${gameLastEndedStrokes.strokes.length} strokes, decimation N=${SHARE_DECIMATE_N})`);
+  // Brief 39 Task 5 — logs the SLICED count now, matching what was
+  // actually encoded, not the full game's stroke total.
+  console.log(`[share] ${slicedForShare.surface}: ${raw.length}B raw -> ${fragment.length} base64url chars (${slicedForShare.strokes.length}/${gameLastEndedStrokes.strokes.length} strokes, decimation N=${SHARE_DECIMATE_N})`);
 
   // Same shared clipboard mechanism AND the same "Copied!"/3s success
   // callback already used by desktop share's and mobile share's copy-link
@@ -4843,6 +4921,29 @@ function shareCopyButtonHandler(btn) {
   btnShareCopyEl.addEventListener('click', () => shareCopyButtonHandler(btnShareCopyEl));
 }
 
+// Brief 39 Task 8 — one-tap native share, MOBILE ONLY (the mobile share
+// screen's and the gate's own Copy Link buttons — desktop's
+// btn-share-copy above is untouched, per the brief's explicit "desktop
+// copy-link is unchanged"). Tries the OS share sheet (AirDrop, Messages,
+// etc.) with the same URL the button already copies — sharing the LINK,
+// not an image, so the recipient opens the live interactive artwork, not
+// a flat picture of it. Falls back to the existing clipboard-copy
+// behaviour verbatim if navigator.share is unavailable, or if it fails
+// for any reason OTHER than the user cancelling — AbortError is a
+// deliberate no-op (cancelling a share is not an error; the button just
+// stays normal, same as copy never firing a spurious success state on a
+// failed write).
+function mobileShareOrCopyLink(url, onCopyFallback) {
+  if (navigator.share) {
+    navigator.share({ url }).catch((e) => {
+      if (e && e.name === 'AbortError') return;
+      onCopyFallback();
+    });
+    return;
+  }
+  onCopyFallback();
+}
+
 /* ────────────────────────────────────────────────────────────────────────
    Brief 32 — mobile screens. Task 2 (mobile share, incl. the rotated
    fullscreen view) and Task 3 (the gate) flows.
@@ -4864,7 +4965,9 @@ document.getElementById('btn-mobile-share-download').addEventListener('click', (
 });
 {
   const btnMobileShareCopyEl = document.getElementById('btn-mobile-share-copy');
-  btnMobileShareCopyEl.addEventListener('click', () => shareCopyButtonHandler(btnMobileShareCopyEl));
+  btnMobileShareCopyEl.addEventListener('click', () => {
+    mobileShareOrCopyLink(location.href, () => shareCopyButtonHandler(btnMobileShareCopyEl)); // brief 39 Task 8
+  });
 }
 
 // ── Rotated fullscreen artwork view (Task 2) ──────────────────────────
@@ -4953,13 +5056,15 @@ const gateHintEl = document.getElementById('gate-hint');
 const GATE_COPY_LABEL_DEFAULT = gateCopyLabelEl.textContent;
 const GATE_HINT_DEFAULT = gateHintEl.textContent;
 gateCopyBtn.addEventListener('click', () => {
-  copyLinkToClipboard(location.href, () => {
-    gateCopyLabelEl.textContent = 'link copied';
-    gateHintEl.textContent = 'paste it into your desktop browser';
-    setTimeout(() => {
-      gateCopyLabelEl.textContent = GATE_COPY_LABEL_DEFAULT;
-      gateHintEl.textContent = GATE_HINT_DEFAULT;
-    }, 3200);
+  mobileShareOrCopyLink(location.href, () => { // brief 39 Task 8
+    copyLinkToClipboard(location.href, () => {
+      gateCopyLabelEl.textContent = 'link copied';
+      gateHintEl.textContent = 'paste it into your desktop browser';
+      setTimeout(() => {
+        gateCopyLabelEl.textContent = GATE_COPY_LABEL_DEFAULT;
+        gateHintEl.textContent = GATE_HINT_DEFAULT;
+      }, 3200);
+    });
   });
 });
 
@@ -5487,6 +5592,21 @@ function beginGame() {
   if (idleEl.dataset.idleStep !== 'armed') return;
   setScreen('playing');
   startGame(); // brief 22 Task 3 — real game, replacing the brief-18/19/20/21 stub
+  // Brief 39 Task 7 — the share-arrival path (PAINT/PLAY YOUR OWN ->
+  // goToIdleArmed(), below) never calls armIdle(), so startBGM() may never
+  // have run at all yet on this page load: actx/bgmBusGain don't exist,
+  // and setBGMLevel() a few lines down would silently no-op (it early-
+  // returns without them) — BGM stayed dead until the mute button
+  // happened to be the first thing that ever created actx. Ensure it's
+  // actually started here too, but ONLY if it never started —
+  // bgmActiveIdx===-1 is the exact same "never started" check startBGM()
+  // itself uses for its own coin flip. Calling startBGM() again on an
+  // ALREADY-playing track would restart it from t=0 with a fresh 2.5s
+  // fade (goToIdleArmed's own comment already flags exactly this as wrong
+  // for ITS case; the same would be true here on every normal cold-start
+  // game, where armIdle() already started it correctly) — the guard is
+  // what keeps this fix scoped to the actually-broken path only.
+  if (bgmActiveIdx === -1) startBGM();
   setBGMLevel(BGM_LEVEL_DUCKED); // brief 28 Task 5b
 }
 

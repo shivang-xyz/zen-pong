@@ -308,3 +308,34 @@ re-verified, check before picking up:
   traces + browser/device, and slots straight into the existing handlers — a
   ~10-min add whenever error visibility is wanted before/around a wider
   launch. *Surfaced: brief 38, 2026-08-29.*
+- **Mobile-gate doodle reported frozen in Chrome devtools device-emulation
+  — real-browser reproduction NOT performed, classification still open.**
+  Brief 39 Task 6 explicitly required reproducing this on a genuine
+  narrow desktop browser window (real Chrome/Firefox/Safari, resized via
+  the OS window manager) BEFORE touching any gate/doodle code — this
+  session had no such browser available (`list_connected_browsers`
+  returned empty; only this sandbox's own emulated preview pane, which
+  the brief already named as unable to reliably reproduce the report).
+  Gate/doodle code was deliberately NOT changed, per the brief's own
+  instruction not to blind-fix. What WAS checked, as real (if partial)
+  evidence: (1) in this session's own emulated pane, at the gate's actual
+  trigger width (≤600px), the doodle animates correctly — no freeze
+  observed, for whatever that's worth given it's a different emulation
+  engine than Chrome devtools; (2) reading `doodleLoop()`
+  (`v3/app/index.html`) surfaces one concrete, checkable hypothesis:
+  the gate deliberately HOLDS a single still frame (no `stepDoodle()`,
+  no redraw) whenever `prefers-reduced-motion: reduce` matches — by
+  design, not a bug — so if the desktop machine used for the devtools
+  test has OS-level "reduce motion" on, EVERY page in that browser
+  (emulated or not) would show this held-still behaviour, which could
+  read as "frozen." A real iPhone with that setting off would correctly
+  animate, matching exactly what Shivang reported. Fast to rule in/out:
+  check `matchMedia('(prefers-reduced-motion: reduce)').matches` in that
+  same Chrome devtools session, or check the OS's own Reduce Motion
+  accessibility setting. If reduce-motion is OFF and the freeze still
+  reproduces on a genuine narrow desktop window, it's a real bug (likely
+  canvas-sizing or loop-gating around `#screen-idle`'s `display:none`,
+  per the brief's own hypothesis) and needs its own fix pass; if it's
+  ON, or the freeze doesn't reproduce outside devtools specifically,
+  it's a devtools-emulation artifact and this can be closed without a
+  code change. *Surfaced: brief 39 Task 6, 2026-08-31.*

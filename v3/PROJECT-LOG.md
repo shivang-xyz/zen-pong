@@ -5,6 +5,153 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-08-31 — Brief 39 built on `feature/v3-delights-2`. Delights round 2: corrections + share/audio fixes.
+
+New branch off `main` (38 merged). Shipped directly per the brief's own
+"no plan-review step" — self-verified, merged this session. Two brief
+drafts existed in `v3/briefs/` (`39-delights-corrections.md` and
+`39-delights-fixes.md`), overlapping and conflicting in real places
+(results text-wrap direction, ball-ramp tuning, whether save-PNG needed
+a fix, whether the gate was in scope). Built `-fixes.md` exactly, per
+Shivang's explicit instruction naming that file and its task numbers;
+both docs committed to `main` for the record, neither deleted.
+
+**Task 1/2 — attribution.** Copy simplified (envelope icon dropped,
+single-space `✦` separators, only the three names/word linked).
+Repositioning took real iteration, not a single clean pass — logged
+honestly: a flat `margin-top` (88px) looked right in isolation but
+measured live at 1280×900 and failed outright (idle's own content is
+short enough that total height never crossed the viewport, so the line
+just sat inside the fold unchanged). A `min-height` + `margin-top:auto`
+flex trick (the textbook way to float a footer to a container's bottom)
+was tried next and ALSO failed a live measurement — the screen's
+rendered height came out shorter than its own stated min-height, which
+min-height is specifically supposed to prevent; not confidently
+explained, not shipped on a mechanism that didn't behave as documented.
+Landed on `position:absolute` against a `position:relative` screen
+section, `top: calc(100dvh + 40px)` — unambiguous regardless of the
+ancestor's own box-height resolution, confirmed live to still register
+in the page's scrollable overflow (not fixed/sticky, per the brief).
+Verified live on idle/results/desktop-share at 1280×900: original
+content's bottom edge unchanged, attribution's own rect sits below
+`window.innerHeight`, `document.documentElement.scrollHeight` grows by
+~120-160px past the viewport (a small scroll, not a long one). Mobile
+(gate/mobile-share) untouched, confirmed still in-flow and unaffected.
+
+**Task 3 — results text widths.** `.gained` already had no
+nowrap/ellipsis in the shipped brief-38 code (confirmed by reading
+before assuming); added `flex-shrink:0` defensively so the row can never
+squeeze it. The haiku box: measured `#post-row .utils`'s real rendered
+width live via `getBoundingClientRect()` (617px, not derivable from
+tokens alone since it depends on rendered button label widths) and set
+`#gained-row .haiku` to that exact width, right-aligned. Verified live:
+right edges align to within 0.3px, a long test haiku wrapped to 2 lines
+and never crossed the shared right edge, `overflow-x:visible` +
+`white-space:normal` confirmed (no truncation).
+
+**Task 4 — ball ramp, whole-game time** *(risk task — evidence below)*.
+Root cause confirmed by reading the brief-38 code: the ramp was driven
+by `gameServeStartMs`, reset every serve, so a long game never actually
+uncrowded the canvas — every point restarted calm. Rebuilt to drive off
+`gameFirstServeMs` (set once per game, never per serve): 1.0x at t=0,
+linear to 1.5x by t=90s, capped. Kept the per-serve
+`gameRampAppliedFactor=1.0` reset in `spawnGameBall()` on purpose — that
+reset is what makes a freshly-spawned ball (which starts at the engine's
+own unramped speed) immediately jump to the CURRENT whole-game factor on
+its first frame, which is what "a new serve keeps the current game-time
+factor" actually requires mechanically. `gameServeStartMs` removed
+entirely (nothing else read it).
+
+**Measured evidence (t=0/30/60/90s, monotonic, never resets on a fresh
+serve):**
+```
+t=0s:  factor 1.000  speed 4.66
+t=30s: factor 1.167  speed 5.44  -> fresh serve at same t: factor STAYS 1.167, new ball speed 6.31
+t=60s: factor 1.333  speed 7.21  -> fresh serve at same t: factor STAYS 1.333, new ball speed 7.43
+t=90s: factor 1.500  speed 8.36  (cap)
+t=150s (past cap): factor 1.500  speed 8.32  (holds, doesn't exceed)
+```
+`git diff --stat main -- v3/engine/` empty — app-side only, confirmed.
+
+**Task 5 — share/save capture the scrubbed frame** *(risk task —
+evidence below)*. Checked save-PNG's actual code before assuming
+either brief draft was right: `btn-save`'s handler passes
+`resultsGroundCanvas`/`resultsStrokesCanvas` — the same live canvases
+`renderResultsStrokes(count)` already draws onto — directly to the
+exporter. Save-PNG was ALREADY correct (reads rendered pixels, already
+WYSIWYG to the scrubber); confirmed via source reading, not assumed, and
+left untouched. Share was the real bug: `copyResultsShareLink` encoded
+`gameLastEndedStrokes` wholesale regardless of scrubber position. Fixed
+by tracking `currentTimelineCount` (set inside `updateTimelineUI`) and
+slicing `strokes`/`splatterMarks` (by `afterStrokes <= n`) before
+encoding. No wire-format change.
+
+**Evidence — real round-trip, not just decoded-count matching:**
+scrubbed to 40% of a 16-stroke paint game (6 strokes), shared, decoded
+the resulting fragment, rendered it via the real `renderSharePage()`,
+and visually compared the composited canvases pixel-by-pixel by eye —
+identical: same 6 strokes, same splatter marks, same positions. Repeated
+leaving the scrubber untouched (default 70%): an 8-stroke game shared
+exactly 6 strokes (70% of 8, matching what was on screen), not the full
+8. Screenshots sent in the session report.
+
+**Task 6 — mobile-gate freeze, investigated not fixed.** No real
+(non-emulated) browser was available in this session
+(`list_connected_browsers` returned empty) — could not perform the
+brief's own required test (genuine narrow desktop Chrome/Firefox/Safari,
+OS-resized, not devtools emulation). Gate/doodle code deliberately left
+untouched, per the brief's explicit instruction. Logged to `BACKLOG.md`
+with what WAS checked (this session's own emulated pane animates
+correctly at the gate's trigger width — weak evidence, different engine
+than Chrome devtools) and a concrete, fast-to-check hypothesis found by
+reading `doodleLoop()`: the gate deliberately holds a single still frame
+under `prefers-reduced-motion: reduce` — by design — which would explain
+"frozen in devtools, fine on a real iPhone" if the desktop machine used
+for the devtools test has OS-level reduce-motion on. Classification
+still open; needs Shivang's own real-browser check.
+
+**Task 7 — BGM on share-arrival.** Traced the actual bug: `goToIdleArmed()`
+(the share-screen "PLAY YOUR OWN" destination) never calls `armIdle()`,
+so on a page load that lands directly on the share screen,
+`startBGM()`/`actx` may never run at all — `setBGMLevel()` then silently
+no-ops (early-returns without `actx`/`bgmBusGain`), leaving BGM dead
+until mute-toggle happened to be the first thing that ever created
+`actx`. Fixed in `beginGame()`: calls `startBGM()` if-and-only-if
+`bgmActiveIdx === -1` (never started) — the same "never started" check
+`startBGM()` itself already uses for its own coin flip — so the normal
+cold-start path (where `armIdle()` already started it correctly) is
+untouched, only the actually-broken path gets the extra call.
+
+**Evidence:** simulated the share-arrival path directly
+(`goToIdleArmed()` without ever calling `armIdle()`, then `beginGame()`)
+— `actx`/`bgmActiveIdx` stayed null/-1 straight through `goToIdleArmed()`
+(confirming the bug reproduces exactly as diagnosed), then flipped to a
+real running `actx` + a chosen track the instant `beginGame()` ran
+(confirming the fix). Repeated the NORMAL cold-start path
+(`armIdle()` then `beginGame()`) and confirmed `bgmActiveIdx` does NOT
+change between the two calls — no double-restart regression.
+
+**Task 8 — native share on mobile.** New `mobileShareOrCopyLink(url,
+onCopyFallback)`: tries `navigator.share({url})` first, falls back to
+the existing clipboard-copy behaviour verbatim if unavailable or if it
+fails for any reason other than the user cancelling (`AbortError` is a
+deliberate no-op). Wired into the mobile share screen's and the gate's
+own Copy Link buttons only — desktop's `btn-share-copy` untouched, per
+the brief's explicit "desktop copy-link is unchanged." This sandbox has
+no `navigator.share`/`navigator.clipboard`, so only the fallback branch
+could be exercised live; confirmed it fires without throwing.
+
+Desktop regression: multiple full games (paper, paint) reach results
+cleanly, zero unexpected console errors (only the known, harmless
+Cloudflare CORS failure from brief 37). `node v3/build.js` twice
+byte-identical. `git diff --stat main -- v3/engine/ v3/labs/` empty.
+
+### Next
+Task 6's real classification (needs Shivang's real-browser check).
+Sentry (logged, brief 38) whenever remote error visibility is wanted.
+
+---
+
 ## 2026-08-31 — Brief 38 built on `feature/v3-delights`. Attribution, gentle ball-speed ramp, time-gained results.
 
 New branch off `main` (37 merged). Shipped directly per the brief's own

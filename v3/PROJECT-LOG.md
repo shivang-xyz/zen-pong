@@ -5,6 +5,64 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-10-26 — Brief 40 built on `feature/v3-fixes-40`. Gate freeze, splatter colour/rate, results styling, surface order.
+
+Shipped directly per the brief; every change followed its exact code.
+
+**Task 1 — gate freeze.** `doodleLoop()` restructured exactly as specced: the
+gate branch now runs whenever `isMobileBlocked()` is true, regardless of
+`screenState` (previously the whole body sat inside `screenState==='idle'`,
+so a mid-game resize showed the gate screen over a loop that skipped every
+frame). Desktop idle path unchanged. **Evidence (this session's emulated
+preview pane — NOT a real Chrome/Firefox window; no real browser was
+connected):** desktop game started (`screenState 'playing'`, 200 real
+frames stepped), viewport narrowed 1280→500 with no reload: gate active
+(`mobile-gate-active`, gate screen `display:flex`, `screenState` still
+`playing`) and over 2s of sampling the gate canvas showed 3 distinct states
+and the gate paddle 3 distinct positions — animating. Cold gate at 500px:
+3 distinct canvas states. Desktop idle at 1280: doodle strokes accumulate
+(4 distinct states). No pre-fix control run was done; the root cause was
+confirmed in the brief itself. Real-window confirmation is still Shivang's.
+
+**Task 2 — splatter.** 2a: live mark colour is now
+`gameColourFor(currentSurface, gameStrokeIndex)` (the live stroke's accent);
+`weightedPick`/`gameSplatterColorWeights` removed as dead code, `weightedPick`
+dropped from the rng import. Share encoder untouched (still resolves via
+`indexOf`, no version bump). 2b: cooldown 16→30, cap 28→14, `BASE_P`
+0.115→**0.075** (the brief's ~0.06 measured mean 8.25 over 20 games — tuned
+up toward the middle of the 8–12 target). **Measured at 0.075, 30 headless
+paint games (synthetic mouse):** mean **9.1**, min 2, max 14, 13/30 in 8–12;
+short games (very few rallies) land at 2–5, long ones hit the 14 cap.
+**Colour check:** 273 marks across those 30 games, 0 mismatches against
+the live stroke's accent; screenshot of a finished paint canvas shows red
+marks beside red strokes, blue beside blue, green beside green.
+
+**Task 3.** `#btn-play-again` is now `.rbtn-primary` with `.inner` (rainbow
+hairline + glow states from existing CSS); handler untouched — verified it
+still lands on idle-armed. Sits correctly on the left of `#post-row`; no
+spacing change needed.
+
+**Task 4.** Tiles reordered paper, paint, chalk; paper still default.
+Verified each of the three selects correctly (`aria-pressed` flips).
+
+**Task 5.** The pill is a WRAPPER (`.gained-pill`) around `.gained`, not
+styling on `.gained` itself — `.gained`'s own background IS the travelling
+gradient (`background-clip:text` clips the whole element background to the
+glyphs), so a fill on the same element would be clipped away with it.
+Pill: `rgba(0,0,0,0.16)`, 12px radius, `6px 14px`, 1px `rgba(255,255,255,0.04)`
+hairline; `#gained-row` now `align-items:center`. Verified: gradient sweep
+still active inside (`background-clip:text`, `gained-sweep` 7s), pill and
+haiku vertical centres match to 0.004px.
+
+`node v3/build.js` twice byte-identical. `git diff --stat main -- v3/engine/
+v3/labs/` empty. Console clean except the known Cloudflare sandbox CORS.
+
+**Push note:** at the time of this brief, `git push origin main` failed
+with "Invalid username or token" (stale osxkeychain GitHub credential) —
+see the report for whether it was retried successfully.
+
+---
+
 ## 2026-08-31 — Brief 39 built on `feature/v3-delights-2`. Delights round 2: corrections + share/audio fixes.
 
 New branch off `main` (38 merged). Shipped directly per the brief's own

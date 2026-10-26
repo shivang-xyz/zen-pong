@@ -530,7 +530,7 @@
      by a narrow cream highlight sweeping through the letters every 7s.
      Copy: "<duration> of calm, gained" — see formatGainedDuration(). */
   #gained-row {
-    display: flex; align-items: baseline; justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between; /* brief 40 Task 5 — was baseline; centre keeps the pill and the haiku balanced */
     width: 1000px; gap: var(--space-l);
   }
   /* #gained-row's own haiku loses the base .haiku rule's centring (below) —
@@ -553,6 +553,22 @@
   @keyframes gained-sweep {
     from { background-position: 0% 50%; }
     to   { background-position: 200% 50%; }
+  }
+  /* Brief 40 Task 5 — a quiet pill behind the line, as a WRAPPER
+     (.gained-pill), not styling on .gained itself: .gained's own
+     background IS the travelling gradient (background-clip:text clips the
+     whole element background to the glyphs), so a fill on the same element
+     would be clipped away with it. Pill: slightly darker than --color-bg
+     (#383838), no hard border (a 1px near-invisible hairline only),
+     inline-block so it hugs the text. The text keeps its own gradient
+     sweep, untouched. #gained-row switches to align-items:center so the
+     pill's padding doesn't skew the baseline against the haiku. */
+  .gained-pill {
+    display: inline-block; flex-shrink: 0;
+    padding: 6px 14px;
+    border-radius: var(--radius-small);
+    background: rgba(0,0,0,0.16);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.04);
   }
   .gained {
     margin: 0;
@@ -1299,11 +1315,12 @@
           <button class="tile" data-pick="paper" aria-pressed="true">
             <i class="swatch sw-paper"></i><span class="mono">paper</span>
           </button>
-          <button class="tile" data-pick="chalk" aria-pressed="false">
-            <i class="swatch sw-chalk"></i><span class="mono">chalkboard</span>
-          </button>
+<!-- brief 40 Task 4 — order is paper, paint, chalkboard (was paper, chalk, paint); handlers read data-pick, not DOM order -->
           <button class="tile" data-pick="paint" aria-pressed="false">
             <i class="swatch sw-paint"></i><span class="mono">paint</span>
+          </button>
+          <button class="tile" data-pick="chalk" aria-pressed="false">
+            <i class="swatch sw-chalk"></i><span class="mono">chalkboard</span>
           </button>
         </div>
       </div>
@@ -1465,7 +1482,7 @@
     <!-- Brief 38 Task 3 — gained claim (left) + haiku (right), one row,
          both flush to the canvas edges (v3/design/3c-results-time-gained.html). -->
     <div id="gained-row">
-      <p class="gained" id="results-gained"></p>
+      <div class="gained-pill"><p class="gained" id="results-gained"></p></div>
       <p class="haiku" id="results-haiku"></p>
     </div>
     <div class="spacer-m"></div>
@@ -1474,7 +1491,7 @@
          and playing again are the same thought, per the mockup); timeline
          + save + share share one right-hand utility cluster. -->
     <div id="post-row">
-      <button class="rbtn" id="btn-play-again">play again</button>
+      <button class="rbtn-primary" id="btn-play-again"><span class="inner">play again</span></button> <!-- brief 40 Task 3 — was .rbtn; now the primary rainbow-hairline CTA, same structure as #btn-share-cta -->
       <div class="utils">
         <div class="ctrl-chip" id="timeline-chip">
           <label class="mono" for="timeline-track">timeline</label>
@@ -3163,7 +3180,7 @@ function simulateGame({
   return { DEFAULT_PALETTE, simulateGame };
 })();
 
-const { makeRng, weightedPick } = __engine.rng;
+const { makeRng } = __engine.rng;
 const { W, H, BR, PH, PAD_MIN, PAD_MAX, WIN, BASE_SPD, MAX_SPD, mkBall, advanceBall, ballBall, levelUp, pickTargetY, updatePaddleAI } = __engine.physics;
 const { jitterPath, renderStroke, DEFAULT_STROKE_PARAMS } = __engine.strokes;
 const { buildSurface } = __engine.surface;
@@ -4535,28 +4552,30 @@ let gateFrameFrozen = false;
 let wasGateActive = false;
 prefersReducedMotionMQ.addEventListener('change', () => { gateFrameFrozen = false; });
 
+// Brief 40 Task 1 — the gate animation now runs whenever the gate is
+// ACTIVE, regardless of screenState. Root cause of the "frozen gate": this
+// whole body used to sit inside `if (screenState === 'idle')`, so a viewport
+// that switched to mobile WHILE a game was playing (screenState 'playing',
+// reachable only by resizing mid-game — real phones can't play) showed the
+// gate screen via updateMobileScreens() while the loop skipped every frame.
+// Desktop idle is unchanged: gate inactive -> the screenState==='idle' path,
+// identical to before. The gate branch deliberately draws drawGateFrame()
+// only — the desktop doodle-a/doodle-b canvases are invisible (display:none
+// ancestor) the entire time gated, so painting them too would be wasted work.
 function doodleLoop() {
-  if (screenState === 'idle') {
-    const gateActive = isMobileBlocked();
-    if (gateActive && !wasGateActive) gateFrameFrozen = false; // re-arm every time the gate is (re)entered
-    wasGateActive = gateActive;
-
-    if (gateActive && prefersReducedMotionMQ.matches) {
-      if (!gateFrameFrozen) {
-        fastForwardDoodleForStill();
-        drawGateFrame();
-        updateGatePaddleDOM();
-        gateFrameFrozen = true;
-      }
-      // else: hold — no stepDoodle, no redraw, "no loop" per the brief.
-    } else if (gateActive) {
-      stepDoodle();
-      drawGateFrame();       // NOT drawFrame() too — the desktop doodle-a/
-      updateGatePaddleDOM(); // doodle-b canvases are invisible (display:none
-    } else {                 // ancestor) the entire time gated; painting them
-      stepDoodle();          // as well would be pure wasted work on a phone.
-      drawFrame();
+  const gateActive = isMobileBlocked();
+  if (gateActive) {
+    if (!wasGateActive) gateFrameFrozen = false; // re-arm every time the gate is (re)entered
+    wasGateActive = true;
+    if (prefersReducedMotionMQ.matches) {
+      if (!gateFrameFrozen) { fastForwardDoodleForStill(); drawGateFrame(); updateGatePaddleDOM(); gateFrameFrozen = true; }
+      // else: hold — no stepDoodle, no redraw, "no loop" per brief 32.
+    } else {
+      stepDoodle(); drawGateFrame(); updateGatePaddleDOM();
     }
+  } else {
+    wasGateActive = false;
+    if (screenState === 'idle') { stepDoodle(); drawFrame(); }
   }
   requestAnimationFrame(doodleLoop);
 }
@@ -4789,10 +4808,10 @@ let gameLastEndedStrokes = null; // handoff for brief 26 (results/reveal) — {s
 // target's own upper bound for exactly that reason — 18 through brief 31,
 // now 28. BASE_P retuned against 20 real headless games at these settings
 // — see the session report for the measured distribution shipped.
-const GAME_SPLATTER_COOLDOWN_FRAMES = 16; // was 24 (brief 31: was 40)
-const GAME_SPLATTER_CAP = 28; // was 18 (brief 31: was 10) — the target's own upper bound, not "target + headroom" (see above)
+const GAME_SPLATTER_COOLDOWN_FRAMES = 30; // brief 40 Task 2b — was 16 (brief 34), 24 (brief 31's start 40)
+const GAME_SPLATTER_CAP = 14; // brief 40 Task 2b — was 28 (brief 34), 18, 10 — was 18 (brief 31: was 10) — the target's own upper bound, not "target + headroom" (see above)
 const GAME_SPLATTER_SPIN_REF = 0.15; // |ball.spin| normalisation — see physics.js's sweptHit/finishWallBounce for typical magnitudes
-const GAME_SPLATTER_BASE_P = 0.115; // brief 34 Task 4a — retuned from 0.017: at the new cooldown (16) and target (18-28), the old value measured mean 3.4/game against a realistic mouse-driven test harness (was 0.017, brief 31's own tuning for the old 10-18 target). Measured at 0.115 across 20 real headless paint games (synthetic sine-wave mouse movement, since spin comes from paddle VELOCITY transfer on hit and a stationary mouse artificially suppresses it to near-zero): mean 20.6, 13/20 landed in [18,28], 7/20 hit the 28 cap (doing real work here, same pattern brief 31 measured at its own cap). Some low outliers (min 5) on short rallies — accepted per brief 31's own precedent rather than pushed higher, which would mean most games simply hit the cap.
+const GAME_SPLATTER_BASE_P = 0.075; // brief 40 Task 2b — was 0.115 (brief 34). Tuned against 20 headless paint games per candidate (synthetic mouse): 0.06 measured mean 8.25 (min 2, max 14); 0.075 retuned toward the middle of the 8-12 target — final measured numbers in PROJECT-LOG. // brief 34 Task 4a — retuned from 0.017: at the new cooldown (16) and target (18-28), the old value measured mean 3.4/game against a realistic mouse-driven test harness (was 0.017, brief 31's own tuning for the old 10-18 target). Measured at 0.115 across 20 real headless paint games (synthetic sine-wave mouse movement, since spin comes from paddle VELOCITY transfer on hit and a stationary mouse artificially suppresses it to near-zero): mean 20.6, 13/20 landed in [18,28], 7/20 hit the 28 cap (doing real work here, same pattern brief 31 measured at its own cap). Some low outliers (min 5) on short rallies — accepted per brief 31's own precedent rather than pushed higher, which would mean most games simply hit the cap.
 // ~60/40 drops:flung baseline, spin-skewed same as before, but no longer
 // THE ONLY source of variation in the mix — see buildLiveSplatterMark's own
 // jitter term, added so two games with similar spin don't converge on the
@@ -4825,19 +4844,6 @@ let gameSplatterRng; // own stream, salted off the per-game seed like every othe
 let gameSplatterCooldown = 0;
 let gameSplatterMarks = []; // { mark, afterStrokes } — see maybeEmitSplatter's brief-26 comment
 
-// Brief 31 Task 2a — "no black splatter": drops the ink entry entirely.
-// Was mirroring splatter.js's private splatterColorWeights(palette), which
-// includes ink at a minor weight alongside the 3 accents; the app now
-// diverges from it on purpose — splatter draws only from the 3 accents, at
-// their own palette weights, never ink. (The ball marker itself stays
-// solid ink/black in paint mode — brief 24's legibility decision, separate
-// from this and not affected by it.)
-function gameSplatterColorWeights(palette) {
-  return [
-    ...palette.accents.map(a => ({ value: a.hex, weight: a.weight })),
-  ];
-}
-
 // Builds one mark descriptor at the ball's CURRENT position, offset
 // perpendicular to travel (brief: "far enough that it lands clear of the
 // trail... a mark that lands on top of the stroke reads as a blob in the
@@ -4845,7 +4851,7 @@ function gameSplatterColorWeights(palette) {
 // orients a flung mark ALONG the local stroke tangent, for density-placed
 // marks found after the fact) — a live mark is oriented perpendicular,
 // away from the line it's leaving, matching "flung off the ball" physically.
-function buildLiveSplatterMark(ball, palette, rng) {
+function buildLiveSplatterMark(ball, rng) {
   const spd = Math.hypot(ball.vx, ball.vy) || 1;
   const tx = ball.vx / spd, ty = ball.vy / spd; // travel direction (unit)
   const nx = -ty, ny = tx;                      // perpendicular to travel (unit)
@@ -4853,7 +4859,13 @@ function buildLiveSplatterMark(ball, palette, rng) {
   const offset = GAME_SPLATTER_OFFSET_MIN + rng() * GAME_SPLATTER_OFFSET_RANGE;
   const mx = ball.x + nx * sign * offset, my = ball.y + ny * sign * offset;
 
-  const colorHex = weightedPick(rng, gameSplatterColorWeights(palette));
+  // Brief 40 Task 2a — the mark takes the colour of the stroke the ball is
+  // painting RIGHT NOW (gameStrokeIndex is the uncommitted live stroke's
+  // index — the same value drawGameFrame's live-trail render uses), not a
+  // random palette pick: a splatter could previously be red while the ball
+  // was painting green. Always one of the 3 accents, so the share encoder's
+  // indexOf into paletteWithInk still resolves — no format change.
+  const colorHex = gameColourFor(currentSurface, gameStrokeIndex);
 
   // High spin favours 'flung' (brief 24 Task 6), oriented perpendicular to
   // travel — not the ~60/40 flat ratio alone. Brief 31 Task 2a adds a
@@ -4924,7 +4936,7 @@ function maybeEmitSplatter() {
   const p = GAME_SPLATTER_BASE_P * spinNorm * (0.4 + 0.6 * speedNorm);
   if (gameSplatterRng() >= p) return;
 
-  const mark = buildLiveSplatterMark(gameBall, gamePaintPalette, gameSplatterRng);
+  const mark = buildLiveSplatterMark(gameBall, gameSplatterRng);
   // Splatter is artwork, not chrome (brief 24 Task 6) — into gameStrokesCx,
   // so it dims with everything else during play and comes up to full at
   // game end (Task 4), same as a committed stroke.
@@ -5995,7 +6007,7 @@ function encodeArtworkPayload(h) {
     w.u16(Math.max(0, Math.min(65535, Math.round(mark.x))));
     w.u16(Math.max(0, Math.min(65535, Math.round(mark.y))));
     // colour: 0=ink, 1/2/3=accent A/B/C — splatter's own colour weighting
-    // (gameSplatterColorWeights) only ever picks from those 4, matching
+    // (the live mark takes its stroke's colour, brief 40) is always one of those 4, matching
     // resolvedPalette (accents) + INK_HEX.
     const paletteWithInk = [INK_HEX, ...h.resolvedPalette];
     w.u8(Math.max(0, paletteWithInk.indexOf(mark.colorHex)));

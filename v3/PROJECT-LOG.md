@@ -5,6 +5,98 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-11-16 — Brief 41 built on `feature/v3-ipad-41`. iPad / tablet playability: touch paddle, two-axis fit, phones-only gate.
+
+Spec: `v3/briefs/41-ipad-playability.md`. Code in `v3/app/index.html` only;
+`v3/engine/` and `v3/labs/` byte-identical to `main`; `node v3/build.js` twice
+byte-identical.
+
+**Verification caveat, read first:** everything below was checked in this
+session's emulated browser pane, NOT on a real iPad or in real Safari. The
+pane only emulates touch below 768px wide, so for the tablet and phone-
+landscape sizes `(pointer: coarse)` was simulated by overriding
+`matchMedia` in the page, and touch input was synthetic `PointerEvent`s
+(`pointerType:'touch'`), not a real finger. The size/layout maths, listener
+wiring and gate logic are real; real-hardware behaviour (Safari URL-bar
+height changes, true multi-touch pinch, rubber-banding) is still Shivang's to
+confirm. A 15px classic scrollbar in the pane also made `clientWidth` 753 not
+768 at 768 wide in a couple of probes; a real iPad uses overlay scrollbars.
+
+**Why it was blocked.** `isTouchDevice()` (`clientWidth <= 600` OR
+`hover:none + pointer:coarse`) caught every touch device at any width, and
+v3 had no touch paddle input. Done in the brief's order:
+
+**Task 1 — pointer input.** The one `mousemove` listener became a
+`pointermove` listener (`{passive:false}`, `preventDefault()` only while
+`screenState==='playing'`), same rect-based mapping so the Task 2 scale is
+handled for free. No second mouse handler. Measured on a synthetic touch drag
+at 768x1024 (scale 0.686): court Y 13 / 158 / 315 / 472 / 617 at 2 / 25 / 50 /
+75 / 98% of the board, paddle clamped 40..526, every event `defaultPrevented`,
+page `scrollY` stayed 0. Real mouse at 1440x900: within 1px of expected. Note:
+`preventDefault` on a pointermove does not by itself stop scrolling (the
+browser decides at pointerdown from `touch-action`) — Task 5's CSS is what
+actually does that; the call is belt-and-braces per the brief.
+
+**Task 2 — two-axis fit.** `fitScreenToViewport()` now returns early only for
+`isPhone()`, and clamps `min(availW / fitW, availH / height, 1)`; the
+reset-before-measure and negative `marginBottom` flow fix are reused;
+`orientationchange` added next to `resize` (verified: clearing the transform
+and firing only `orientationchange` re-applied it). Results stays exempt.
+**Two deliberate deviations from the brief's formula**, both because its own
+acceptance line says "no clipped edges, no horizontal overflow":
+(a) `fitW` is NOT just the `.screen` box — the paddles' end-dots and the
+playing "you" label hang 20–60px outside the board by design (measured live
+from `.paddle, .paddle *`), and with the literal formula the board filled a
+768 viewport edge to edge and those got clipped / caused sideways scroll.
+Overhang is reserved symmetrically (scale pivots top-centre). (b) a 16px
+minimum side margin (`--gutter-mobile`) so paddle-less screens (share) never
+touch the viewport edge. **Consequence:** a desktop window narrower than about
+1040–1075px now scales a few percent while playing instead of clipping the
+dots; 1180x820 and up is scale 1, untouched ("desktop >=1000px unchanged" is
+true from ~1075px up, not from exactly 1000).
+Measured playing-screen results (all with coarse pointer, mid-game resizes):
+768x1024 scale .686; 820x1180 .733; 834x1194 .746; 1024x1366 .919; landscape
+1024x768 .919; 1180x820, 1194x834, 1366x1024, 1440x900 scale 1. Every size:
+`fullyVisible`, no overflowX/Y, stage centred (offset 0), touch mapped 13/617.
+
+**Task 3 — `isPhone()`.** `coarse pointer && min(clientWidth, clientHeight) <
+700`. `isTouchDevice()` deleted. Its three real call sites (the only ones —
+every other mention was a comment, rewritten): `isMobileBlocked()` -> now
+`isPhone()` (playability); `updateMobileScreens()` mobileShare line -> now
+`isPhone()` (an iPad gets the normal desktop share/results, scaled, not the
+rotated phone share); `fitScreenToViewport()` early return -> now `isPhone()`.
+No call site wanted the old "is this a touch device" meaning, so nothing was
+kept for non-gating use; the share-decode flash-guard and the "cheap enough
+not to gate" comment were not playability checks and only had their wording
+updated. Verified: gate on 390x844 and 430x932 (pane's own mobile emulation
+reports a real coarse pointer there), and on 932x430 and 844x390 (pointer
+simulated, size real — proves it isn't a width rule); no gate at any tablet
+size; a 650px window with a fine pointer is NOT gated and scales to .592.
+Share links: phone still gets the mobile share (gate exempt); the same link
+at 768x1024 shows the normal desktop share screen, scaled .905, mobile share
+and gate both off. Known edge: iPad Split View / Slide Over narrower than
+700px short side reads as a phone and gets the gate.
+
+**Task 4 — gate copy (Shivang's call, flagged for tweaking).** Headline
+"best on a bigger screen". Sub: "Zen Pong wants room to breathe — play on a
+tablet, laptop or desktop. your shared paintings still open here." COPY LINK,
+footer and share behaviour unchanged. The small hint under COPY LINK still
+reads "copy the link to shift to your desktop" (brief said leave it).
+
+**Task 5 — touch hygiene.** `body[data-screen="playing"] { touch-action:none;
+user-select:none; -webkit-user-select:none; -webkit-touch-callout:none }`. On
+body rather than only `.stage`: `touch-action` is intersected up the ancestor
+chain and a finger that starts in the margin beside the board or on the HUD
+row is still a play gesture. Scoped by `data-screen` so idle/results/share
+keep normal scroll, select and zoom (computed values flip to `none` on playing
+and back to `auto` on idle). Viewport `<meta>` untouched. Real clicks through
+the scaled layout: mute toggled (aria-pressed false -> true, label Mute ->
+Unmute), home returned to idle, restart click landed (still playing), idle
+paint tile selected without starting a game. A real two-finger pinch could not
+be emulated — covered by `touch-action:none`, unverified on hardware.
+
+Console: only the known Cloudflare analytics CORS error from the sandbox.
+
 ## 2026-10-26 — Brief 40 built on `feature/v3-fixes-40`. Gate freeze, splatter colour/rate, results styling, surface order.
 
 Shipped directly per the brief; every change followed its exact code.
@@ -57,9 +149,10 @@ haiku vertical centres match to 0.004px.
 `node v3/build.js` twice byte-identical. `git diff --stat main -- v3/engine/
 v3/labs/` empty. Console clean except the known Cloudflare sandbox CORS.
 
-**Push note:** at the time of this brief, `git push origin main` failed
-with "Invalid username or token" (stale osxkeychain GitHub credential) —
-see the report for whether it was retried successfully.
+**Push note:** the first `git push origin main` failed ("Invalid username or
+token", stale osxkeychain credential); Shivang re-authenticated in their own
+terminal and the push landed (`1079067..2895900`); Pages was serving the new
+build within ~20 seconds.
 
 ---
 

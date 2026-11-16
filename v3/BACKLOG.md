@@ -48,6 +48,28 @@ triaging this whole list, not before.
 
 ## App port (v3)
 
+- **Idle copy still says "press space or click to begin" on touch devices.**
+  Seen on the tablet idle screen in brief 41 ("Choose a surface, then press
+  space or click to begin"). A tablet has no spacebar; a touch-aware variant
+  ("tap to begin") needs a product-voice call, so not changed in brief 41.
+  Surfaced brief 41, 2026-11-16.
+- **Touch: first contact doesn't move the paddle until the finger moves.**
+  Brief 41 replaced `mousemove` with `pointermove` as specced; a touch only
+  emits pointermove after movement, so a tap-and-hold without drag leaves the
+  paddle where it was. A `pointerdown` mapping would snap it to the finger
+  immediately. Not in the brief; judge on a real iPad first. Surfaced brief 41.
+- **Real-iPad pass for brief 41.** Everything was verified in an emulated
+  pane with simulated coarse pointer and synthetic touch events. On hardware:
+  Safari URL-bar height changes vs `window.innerHeight` in the fit, true
+  two-finger pinch mid-rally, rubber-banding, orientation-change timing, and
+  iPad Split View (a pane <700px short side is treated as a phone and gated).
+- **Tablet board could be a few % bigger.** The fit reserves the wider paddle
+  overhang symmetrically (the "you" label is ~37px left, the dot ~20px right);
+  an asymmetric shift would recover ~4% scale on portrait iPads. Cosmetic.
+- **Desktop windows 1000–1075px wide now scale slightly while playing**
+  (side effect of reserving the paddle overhang in the brief 41 fit; see the
+  PROJECT-LOG entry). Revisit only if it's noticed.
+
 - **Promote the app's baked-width paint ribbon renderer into `paint.js`.**
   Briefs 19-21 built `drawPaintRibbon` + the bake-on-append helpers in
   `v3/app/index.html` because `renderPaintStroke` cannot draw a *growing*

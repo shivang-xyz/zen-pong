@@ -991,6 +991,38 @@
     position: absolute; inset: 0; width: 100%; height: 100%;
   }
   #full .frame { border-width: var(--frame-mobile); }
+  /* Brief 42 Task 3 — mid-rally rotation pause. A direct child of <body>,
+     position:fixed — NOT inside the playing screen — because that screen
+     carries a transform:scale() on a tablet, and a fixed element inside a
+     transformed ancestor is positioned against that ancestor, not the
+     viewport (and its text would shrink with the board). Same data-open
+     idiom as #full. Calm: a dim scrim and the intro card's own treatment. */
+  #reorient {
+    position: fixed; inset: 0; z-index: 30;
+    background: rgba(56,56,56,0.55);
+    display: none; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  #reorient[data-open="true"] { display: flex; animation: zp-full-fade 200ms ease-out both; }
+  #reorient .reorient-card {
+    background: var(--color-cta);
+    border: 0;
+    border-radius: var(--radius-small);
+    padding: var(--space-m) var(--space-xl);
+    box-shadow: var(--shadow-chip);
+    font: inherit; font-size: 14px;
+    color: var(--color-canvas);
+    cursor: pointer;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #reorient[data-open="true"] { animation: none; }
+  }
+  /* A rotation event can be evaluated against a stale viewport and pause a
+     rally that the settled layout then reads as a phone (iPad Split View
+     narrowed under 700px mid-game). Never paint the pause over the gate or
+     the mobile share screen; the pause itself simply waits for a tap. */
+  html.mobile-gate-active #reorient,
+  html.mobile-share-active #reorient { display: none !important; }
   #full .close {
     position: absolute; top: calc(var(--space-xm) + env(safe-area-inset-top)); right: var(--space-xm);
     width: 44px; height: 44px;
@@ -1293,6 +1325,14 @@
       </div>
     </div>
     <button class="close" id="btn-full-close" aria-label="Close">✕</button>
+  </div>
+
+  <!-- Brief 42 Task 3 — shown only for a live rally rotated on a tablet
+       (see pauseForReorient() in the JS section). Direct child of <body>
+       for the same reason as #full: position:fixed must not sit inside the
+       playing screen's scale transform. -->
+  <div id="reorient" data-open="false" role="status">
+    <button class="reorient-card" id="btn-reorient-resume">You rotated — tap to continue</button>
   </div>
 
   <!-- ══════════════════════════ IDLE SCREEN ══════════════════════════ -->
@@ -3325,7 +3365,12 @@ const screens = {
   share: document.getElementById('screen-share'), // brief 29 — the screens/setScreen machinery was already generic, no special-casing needed for a 4th
 };
 let screenState = 'idle';
+// Brief 42 Task 3 — see pauseForReorient()/resumeFromReorient() below. Declared
+// up here, not beside the game state, because setScreen() (just below) clears it.
+let gameReorientPaused = false;
+const reorientEl = document.getElementById('reorient');
 function setScreen(next) {
+  clearReorientPause(); // leaving the rally for any screen must never strand the overlay
   screenState = next;
   document.body.dataset.screen = next; // brief 25 Task 5 — scopes body's padding to the active screen (see the body[data-screen="playing"] CSS rule)
   Object.entries(screens).forEach(([k, el]) => { el.hidden = (k !== next); });
@@ -3449,20 +3494,27 @@ function fitScreenToViewport() {
   updateMobileScreens();
   if (isPhone()) return;
 
-  // Brief 28 Task 4 — results deliberately does NOT get the fit clamp: it's
-  // a resting screen, allowed to be taller than the viewport and scroll.
-  // The three style resets above still run (clears any transform left over
-  // from a PREVIOUS screen, since scale()/margin are set directly on
-  // whichever `.screen` was visible then, not on results specifically —
-  // but results itself never had them applied, so this is a harmless no-op
-  // for it) before returning, so nothing lingers from a stale playing/idle
-  // state should DOM order or timing ever change.
-  if (screenState === 'results') return;
+  // Brief 28 Task 4 exempted results from the fit entirely: a resting
+  // screen, allowed to be taller than the viewport and scroll. That was
+  // right for desktop (results fits the width there) and wrong for a tablet
+  // in portrait, where the fixed-1000px results screen is wider than the
+  // viewport with nothing to scale it. Brief 42 Task 2: results now gets a
+  // WIDTH-only clamp (below) — never a height clamp, it still scrolls.
+  const isResults = screenState === 'results';
   const bodyStyle = getComputedStyle(document.body);
   const vPad = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
   const hPad = parseFloat(bodyStyle.paddingLeft) + parseFloat(bodyStyle.paddingRight);
-  const availH = window.innerHeight - vPad;
-  const availW = document.documentElement.clientWidth - hPad;
+  // Brief 42 Task 1 — visualViewport when present: it tracks the real
+  // visible area through a rotation and iOS's dynamic toolbar more reliably
+  // than innerHeight/clientWidth, which can keep reporting the PRE-rotation
+  // size for a frame or more. Multiplied by .scale: visualViewport shrinks
+  // as the user pinch-zooms in, and without this a zoom would read as "the
+  // viewport got smaller" and shrink the board to compensate; width*scale
+  // is the layout viewport at any zoom (and is just width/height at the
+  // normal scale of 1).
+  const vv = window.visualViewport;
+  const availH = (vv ? vv.height * vv.scale : window.innerHeight) - vPad;
+  const availW = (vv ? vv.width * vv.scale : document.documentElement.clientWidth) - hPad;
   const rect = visible.getBoundingClientRect();
   // The paddles' end-dots (and playing's "you" label) hang OUTSIDE the
   // board by design — up to ~20px (idle) / ~37px (playing) past each side,
@@ -3482,7 +3534,9 @@ function fitScreenToViewport() {
   });
   const fitW = rect.width + 2 * overhang;
   const scale = (availW > 0 && availH > 0 && fitW > 0 && rect.height > 0)
-    ? Math.min(availW / fitW, availH / rect.height, 1)
+    ? (isResults
+        ? Math.min(availW / fitW, 1)                          // width-only — results scrolls, never height-clamped
+        : Math.min(availW / fitW, availH / rect.height, 1))
     : 1;
   if (scale < 1) {
     visible.style.transform = `scale(${scale})`;
@@ -3492,13 +3546,35 @@ function fitScreenToViewport() {
     // page would still show a scrollbar for space that's visually empty.
     // A negative bottom margin pulls the next box up by exactly the
     // height the scale removed, so the flow height matches what's drawn.
-    visible.style.marginBottom = `${-(rect.height * (1 - scale))}px`;
+    // Brief 42 Task 2: not applied to results (spec) — it keeps its natural
+    // flow height and just scrolls.
+    if (!isResults) visible.style.marginBottom = `${-(rect.height * (1 - scale))}px`;
   }
 }
-window.addEventListener('resize', fitScreenToViewport);
+// Brief 42 Task 1 — the viewport events no longer call the fit directly.
+// On iPadOS/iOS, window.innerHeight, clientWidth and getBoundingClientRect()
+// can keep reporting the PRE-rotation viewport for a frame or more after
+// orientationchange/resize fire, so a synchronous fit measured the old
+// orientation's size and left the board over/under-scaled and offset. The
+// scheduler waits for the viewport to settle and re-measures: on the second
+// animation frame (layout is one frame past the event), and again ~300ms
+// later (iPadOS often only reports correct dimensions after a late settle).
+// One pending rAF handle + one pending timeout, both cleared before re-arming
+// — also coalesces the burst of resize events iOS fires during one rotation
+// into a single fit. fitScreenToViewport() is idempotent (it resets its own
+// transform/margin before measuring), so 2-3 runs per rotation are safe.
+let fitRaf = 0, fitTimer = 0;
+function scheduleFit() {
+  cancelAnimationFrame(fitRaf);
+  clearTimeout(fitTimer);
+  fitRaf = requestAnimationFrame(() => { fitRaf = requestAnimationFrame(fitScreenToViewport); });
+  fitTimer = setTimeout(fitScreenToViewport, 300);
+}
+window.addEventListener('resize', scheduleFit);
 // Brief 41 Task 2 — iOS fires resize on rotate too, but the explicit
-// listener makes the re-fit immediate and reliable.
-window.addEventListener('orientationchange', fitScreenToViewport);
+// listener makes the re-fit reliable.
+window.addEventListener('orientationchange', scheduleFit);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleFit);
 document.body.dataset.screen = 'idle'; // initial state — setScreen() isn't called for the starting idle screen
 fitScreenToViewport();
 
@@ -4827,6 +4903,7 @@ let gameBall, gamePaddleL, gamePaddleR;
 let gamePs = 0, gameAs = 0, gameLv = 1, gameAiSpd = 2.6;
 let gameMouseY = H / 2, gamePrevMouseY = H / 2;
 let gameServing = false; // true during the short beat between a miss and the next spawn
+let gameServeTimer = 0;  // brief 42 — handle for that beat's spawn, so a resume/restart can cancel a stale one
 let gameLastEndedStrokes = null; // handoff for brief 26 (results/reveal) — {strokes, seed, surface}
 
 // ── Task 6 (brief 24) — live splatter, paint only ──────────────────────
@@ -5168,6 +5245,8 @@ function spawnGameBall() {
 }
 
 function startGame() {
+  clearTimeout(gameServeTimer); // brief 42 — a restart must not inherit the previous game's pending serve
+  clearReorientPause();
   gameFirstServeMs = performance.now(); // brief 38 Task 3 — whole-game duration clock, set once per game
   // Task 6 — the one permitted Math.random() call, generating this game's
   // single seed; every stream below is makeRng(seed ^ salt), never
@@ -5343,7 +5422,7 @@ function stepGame() {
     }
 
     gameServing = true;
-    setTimeout(() => { if (screenState === 'playing') spawnGameBall(); }, 550); // brief serve beat — a rally game, not a menu
+    gameServeTimer = setTimeout(() => { if (screenState === 'playing') spawnGameBall(); }, 550); // brief serve beat — a rally game, not a menu
     return; // a miss this frame — no splatter (see maybeEmitSplatter's call site below)
   }
 
@@ -5399,7 +5478,9 @@ function drawGameFrame() {
 }
 
 function gameLoop() {
-  if (screenState === 'playing') {
+  // Brief 42 Task 3 — frozen (not blank) while a rotation pause is up: the
+  // canvas keeps its last painted pixels, nothing steps, no stroke commits.
+  if (screenState === 'playing' && !gameReorientPaused) {
     stepGame();
     drawGameFrame();
   }
@@ -5458,6 +5539,55 @@ document.getElementById('pg-restart').addEventListener('click', () => {
   // not return to idle. startGame() already does exactly this.
   startGame();
 });
+
+// ── Brief 42 Task 3 — graceful mid-rally rotation ─────────────────────
+// Even with the re-fit fixed, the ball keeps moving through the ~0.3-1s a
+// rotation takes while the player has no control of the paddle — a point
+// can be lost to the act of rotating. So a rotation DURING a live rally
+// freezes the game behind a calm overlay; the board re-fits behind it
+// (scheduleFit still runs) and a tap resumes. Only a real orientationchange
+// on a tablet (coarse pointer, not a phone) — never plain resize, so a
+// desktop window drag can't trigger it, and never idle/results/share, which
+// just re-fit silently.
+let reorientPausedAt = 0;
+function pauseForReorient() {
+  if (screenState !== 'playing' || gameReorientPaused) return;
+  if (isPhone() || !matchMedia('(pointer: coarse)').matches) return;
+  gameReorientPaused = true;
+  reorientPausedAt = performance.now();
+  reorientEl.dataset.open = 'true';
+}
+function clearReorientPause() {
+  gameReorientPaused = false;
+  reorientEl.dataset.open = 'false';
+}
+// Re-serve, not resume-in-place: the ball's pre-rotation position/velocity
+// may be stale or off-screen. Whatever the ball had already painted since
+// its last commit is folded into the artwork first ('overflow' is the
+// existing mid-flight-chop type), so the painting keeps what was on screen;
+// skipped during a serve beat, when the old ball's trail is already
+// committed. Score is untouched. A serve already pending from before the
+// pause is cancelled so the ball can't spawn twice.
+function resumeFromReorient() {
+  if (!gameReorientPaused) return;
+  // An orientation change is a ~0.3-0.5s gesture — a touch that lands while
+  // the device is still turning is the rotation, not a decision to resume.
+  if (performance.now() - reorientPausedAt < 350) return;
+  clearReorientPause();
+  if (screenState !== 'playing') return;
+  if (!gameServing && gameBall && gameBall.pts.length >= 2) {
+    commitGameStroke(gameBall.pts, gameBall.wt, gameBall.op, 'overflow');
+  }
+  // The pause must not count as game time: durationSec ("calm, gained") and
+  // the whole-game speed ramp both run off this clock.
+  gameFirstServeMs += performance.now() - reorientPausedAt;
+  gamePrevMouseY = gameMouseY; // no paddle-velocity spike from a finger that moved while paused
+  gameServing = true;
+  clearTimeout(gameServeTimer);
+  gameServeTimer = setTimeout(() => { if (screenState === 'playing') spawnGameBall(); }, 550);
+}
+window.addEventListener('orientationchange', pauseForReorient);
+reorientEl.addEventListener('click', resumeFromReorient);
 // Brief 25 Task 2 — two real icon states, plus aria-pressed/aria-label kept
 // honest for a screen reader, not just the eye.
 const pgMuteBtn = document.getElementById('pg-mute');

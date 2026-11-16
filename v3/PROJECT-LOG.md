@@ -5,6 +5,98 @@ reads this to know exactly where the project stands.
 
 ---
 
+## 2026-11-16 — Brief 42 built on `feature/v3-orient-42`. Orientation reflow: settled re-fit, results scaling, mid-rally pause.
+
+Spec: `v3/briefs/42-orientation-reflow.md`. Code in `v3/app/index.html` only;
+`v3/engine/` and `v3/labs/` byte-identical to `main`; `node v3/build.js` twice
+byte-identical.
+
+**Verification caveat, read first:** same as brief 41. This was checked in the
+emulated pane, NOT on a real iPad. `resize_window` does not fire page
+`resize`/`orientationchange` events, so every rotation here was a viewport
+change plus manually dispatched events; `(pointer: coarse)` on tablet sizes
+was simulated by overriding `matchMedia`; the pane throttles
+`requestAnimationFrame` to ~1-4 fps, so timing and game-loop tests shimmed
+rAF with a 16ms timer. The real iPadOS stale-dimension behaviour (Bug A) was
+SIMULATED (below), not observed. The rotation animation, real URL-bar height
+changes and real multi-touch are Shivang's to confirm on hardware.
+
+**Task 1 — `scheduleFit()`.** Listeners for `resize`, `orientationchange` and
+`visualViewport` `resize` now call `scheduleFit()`: one pending double-rAF
+fit plus one trailing 300ms fit, both cleared before re-arming. The initial
+direct `fitScreenToViewport()` call and `setScreen()`'s direct call are
+unchanged. `fitScreenToViewport()` reads `visualViewport` when present.
+**Deviation:** `availW/availH` use `vv.width * vv.scale` / `vv.height *
+vv.scale`, not bare `vv.width/height` as the brief wrote — `visualViewport`
+shrinks as the user pinch-zooms, so the bare form would read a zoom as "the
+viewport got smaller" and shrink the board to compensate (idle/results allow
+pinch). At scale 1 the two are identical.
+Measured: a 7-event burst (6 resize + 1 orientationchange over 120ms) produced
+exactly 2 fits, at 155ms (second frame after the last event) and 422ms (last
+event + 300ms). Simulated the stale read: after a portrait->landscape change,
+`visualViewport` reported the OLD 768x1024 for 250ms — the first fit (36ms)
+produced `scale(0.699)`, wrong; the trailing fit (301ms) produced the correct
+`scale(0.919)`. Pre-fix, nothing would have re-measured.
+
+**Task 2 — results width-fit.** The `screenState === 'results'` early return
+is gone. Results now gets `min(availW / fitW, 1)` (width only, never height),
+`transform: scale()` + `top center` when < 1, and NO negative-margin flow
+correction, as specced. Measured on results, no horizontal overflow at any
+size, last content reachable by scrolling: 768x1024 scale .730; 820x1180 .780;
+834x1194 .794; 1024x1366 .978; 1024x768 .978 (these two include the pane's
+15px scrollbar); 1180x820, 1194x834, 1366x1024 scale 1 (unchanged from before).
+Trade-off of the literal spec, worth knowing: without the flow correction the
+document keeps results' UNscaled height, so a scaled results leaves
+`height * (1 - scale)` of blank scroll below it. On tablets that is small
+(~20px at 1024x768 landscape, none in portrait where the page is viewport-tall
+anyway); it would be ~300px+ only in a very narrow desktop window. If that
+ever bothers anyone, applying the same negative margin to results is a one-line
+change that keeps it scrollable. **Brief correction:** it says `#screen-results`
+already has an `overflow-y:auto` fallback at ~line 793; that rule belongs to
+`#screen-mobile-gate`/`#screen-mobile-share`. Results scrolls via the normal
+document scroll, which is what the brief needs, so nothing depended on it.
+
+**Task 3 — mid-rally pause.** `orientationchange` handler `pauseForReorient()`
+(playing + not phone + coarse pointer only) sets `gameReorientPaused`, opens a
+fixed `#reorient` overlay (direct child of `<body>`, because a fixed element
+inside the playing screen's scale transform would be positioned/scaled with
+the board — verified the card is full-size and centred in the viewport).
+`gameLoop()` skips step+draw while paused (last frame stays painted).
+Copy, flagged for Shivang: **"You rotated — tap to continue"** (brief's
+example, used verbatim). Reduced motion: no fade.
+Resume (tap anywhere on the overlay) clears the pause, folds the ball's
+uncommitted trail into the painting as an `'overflow'`-type stroke (skipped
+during a serve beat, when it's already committed), then re-serves through the
+existing 550ms `spawnGameBall` beat. **The brief says "re-serve from centre":
+`spawnGameBall()` is the normal serve, which spawns from an edge** (mkBall's
+four-edge spawn) — used as the brief's own "reuse the existing serve" says.
+Additions beyond the spec, each small and deliberate: (a) `gameServeTimer`
+handle so a resume (or a restart) cancels a serve already pending — without
+it a rotation during a serve beat spawns two balls; `startGame()` clears it
+too; (b) a 350ms guard so a touch landing while the device is still turning
+isn't taken as "continue"; (c) `gameFirstServeMs` is advanced by the pause
+length so paused time doesn't inflate `durationSec` ("calm, gained") or the
+whole-game speed ramp; (d) `gamePrevMouseY` re-synced on resume so a finger
+that moved while paused doesn't give the paddle a velocity spike; (e) CSS
+hides the overlay while the phone gate / mobile share is showing — found
+because switching to 390px mid-game fired an `orientationchange` evaluated
+against the stale tablet-sized viewport and put the overlay on top of the
+gate; the pause simply waits for a tap and reappears if the viewport returns
+to tablet size (verified both ways).
+Measured (1024x768, rAF shimmed): ball frozen across 5 samples while paused
+(873,87 steady), score and stroke count unchanged, scale re-fit to .919 behind
+the overlay; tap resumed with serve beat then a new ball; 4 consecutive
+rotations incl. 2 landing inside a serve beat: every early tap ignored, every
+resume worked, exactly 4 `spawnGameBall` calls (none doubled), score
+unchanged, overlay closed. No overlay on: results, idle, a plain `resize` on a
+tablet, or a fine-pointer (desktop) `orientationchange`.
+
+**Task 4.** Phones still gated (390x844: gate on, no overlay); brief-41 touch
+mapping still 13/617 at tablet sizes; desktop 1440x900 scale 1. No viewport
+meta change, `touch-action:none` from brief 41 untouched.
+
+Console: only the known Cloudflare analytics CORS error from the sandbox.
+
 ## 2026-11-16 — Brief 41 built on `feature/v3-ipad-41`. iPad / tablet playability: touch paddle, two-axis fit, phones-only gate.
 
 Spec: `v3/briefs/41-ipad-playability.md`. Code in `v3/app/index.html` only;

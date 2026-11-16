@@ -48,6 +48,19 @@ triaging this whole list, not before.
 
 ## App port (v3)
 
+- **Real-iPad pass for brief 42.** The re-fit timing (Bug A) was verified by
+  simulating the stale-viewport read, not observed on real iPadOS; confirm on
+  hardware that the double-rAF + 300ms trailing fit lands in time (if iPadOS
+  ever settles later than ~300ms, add a second trailing fit), that the pause
+  overlay appears reliably on a real rotation, and that results fits in both
+  orientations.
+- **Results leaves blank scroll below it when scaled** (brief 42 followed the
+  spec and skipped the negative-margin flow correction for results). Tiny on
+  tablets; only noticeable in a very narrow desktop window. One-line fix if
+  wanted: apply the same `marginBottom` to results.
+- **Pause copy** "You rotated — tap to continue" is the brief's example text,
+  unreviewed for product voice (rest of the app is mostly lowercase).
+
 - **Idle copy still says "press space or click to begin" on touch devices.**
   Seen on the tablet idle screen in brief 41 ("Choose a surface, then press
   space or click to begin"). A tablet has no spacebar; a touch-aware variant

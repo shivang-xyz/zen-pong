@@ -117,6 +117,19 @@
      to data-screen (set by setScreen()) rather than changed globally.
      Idle stays untouched (--space-l, the bare :root default above). */
   body[data-screen="playing"] { padding: var(--space-xm) 0; }
+  /* Brief 41 Task 5 — touch-play hygiene, scoped to the playing screen
+     only (results/idle/share keep normal scroll, select and zoom). A finger
+     drag drives the paddle (the pointermove listener, JS), so the browser
+     must never claim it for scroll, pinch or double-tap-zoom, and a fast
+     drag must not select the "you" label or HUD text. Set on body, not
+     just .stage: touch-action is intersected up the ancestor chain, and a
+     finger that STARTS in the margin beside the board (or on the HUD row)
+     is still a play gesture — scoping to .stage alone would let that drag
+     scroll the page. touch-action only constrains browser GESTURES, so
+     taps on the HUD chips/buttons still fire click normally. The viewport
+     <meta> is deliberately untouched — no user-scalable=no, which would
+     take pinch-zoom away on every other screen. */
+  body[data-screen="playing"] { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   /* Brief 28 Task 4 reverses brief 26 Task 1's choice to give results the
      SAME tight rhythm as playing — reviewed and found crammed. Results is
      a resting screen, not a live one: air instead (64px above the logo,
@@ -1200,9 +1213,9 @@
         <div class="frame"></div>
       </div>
       <div class="card">
-        <h1>this one needs a mouse</h1>
+        <h1>best on a bigger screen</h1>
         <hr>
-        <p>the paddle follows your hand — best on a desktop or laptop. come back and play.</p>
+        <p>Zen Pong wants room to breathe — play on a tablet, laptop or desktop. your shared paintings still open here.</p>
       </div>
       <div class="actions">
         <button class="rbtn-primary" id="btn-gate-copy">
@@ -3320,23 +3333,27 @@ function setScreen(next) {
 }
 
 // ── Brief 30 Task 3 — mobile ────────────────────────────────────────────
-// v3 has no touch paddle control at all (root has cv.addEventListener
-// ('touchmove', ...); v3 only wires touchstart as a generic start-gesture
-// — porting touchmove is real, separate work, backlogged for brief 31).
-// That makes the detection question bigger than "narrow viewport": a
-// tablet (iPad, 768-1024px) sits well above any reasonable pixel
-// breakpoint, so a width-only check would let it through with no overlay
-// and a paddle that never moves — silently unplayable, not just cramped.
-// Raising the pixel breakpoint doesn't fix this without also blocking
-// narrow DESKTOP windows, which must stay playable. Detect the actual
-// capability instead of guessing from width:
-function isTouchDevice() {
-  // document.documentElement.clientWidth, not window.innerWidth — the
-  // layout viewport width is what CSS media queries and actual rendering
-  // are based on; innerWidth can disagree with it (scrollbar accounting,
-  // and some emulated/embedded viewport contexts report it inflated by a
-  // fixed zoom-like factor even though clientWidth stays correct).
-  return document.documentElement.clientWidth <= 600 || matchMedia('(hover: none) and (pointer: coarse)').matches;
+// Brief 41 — rewritten. v3 now has touch/pen paddle control (the
+// pointermove listener, below), so the old "any touch-with-no-hover device
+// is unplayable" rule (isTouchDevice(): clientWidth <= 600 OR hover:none +
+// pointer:coarse) is gone — it was what kept every iPad out at any width.
+// The gate is now phones only, by SIZE, not by input capability: coarse
+// pointer AND the SHORTER viewport side under 700px. A width-only line
+// can't separate the two — iPad mini portrait is 768 wide while an iPhone
+// Pro Max landscape is 932 — but every iPad is >=768 on its short side and
+// every phone is <=~430, so the short side is orientation-proof.
+// (pointer: coarse) is false for a desktop's mouse and for a touchscreen
+// laptop whose primary pointer is its trackpad, so a narrow DESKTOP window
+// is never gated — it scales instead (fitScreenToViewport, below).
+// document.documentElement.clientWidth/clientHeight, not window.innerWidth/
+// innerHeight — the layout viewport is what CSS media queries and actual
+// rendering are based on; innerWidth can disagree with it (scrollbar
+// accounting, and some emulated/embedded viewport contexts report it
+// inflated by a fixed zoom-like factor even though clientWidth stays
+// correct).
+function isPhone() {
+  const shortSide = Math.min(document.documentElement.clientWidth, document.documentElement.clientHeight);
+  return matchMedia('(pointer: coarse)').matches && shortSide < 700;
 }
 
 // The one flag every mobile decision (which mobile screen shows,
@@ -3357,9 +3374,9 @@ function isTouchDevice() {
 // clause fired again and suppressed the gate permanently — the worst of
 // the five brief-33 mobile bugs, since it showed the unplayable desktop
 // screen to a phone visitor with no way off it short of a resize event
-// crossing isTouchDevice()'s own width/pointer checks by accident.
+// crossing isPhone()'s own size/pointer checks by accident.
 function isMobileBlocked() {
-  if (!isTouchDevice()) return false;
+  if (!isPhone()) return false;
   if (screenState === 'share') return false;
   if (screenState === 'idle' && landingWithSharePayload) return false;
   return true;
@@ -3374,10 +3391,12 @@ function isMobileBlocked() {
 // underneath to click through, so no pointer-events trick is needed.
 // mobileShare is its own condition, not just "not blocked": Task 1 says
 // BOTH mobile screens are single-fold/no-scroll, so the scroll lock now
-// applies to isTouchDevice() as a whole, not just the blocked case.
+// applies to isPhone() as a whole, not just the blocked case. Brief 41:
+// a tablet opening a share link gets the normal desktop share/results
+// screen (scaled to fit), never the rotated phone share screen.
 function updateMobileScreens() {
   const gate = isMobileBlocked();
-  const mobileShare = isTouchDevice() && screenState === 'share';
+  const mobileShare = isPhone() && screenState === 'share';
   document.documentElement.classList.toggle('mobile-gate-active', gate);
   document.documentElement.classList.toggle('mobile-share-active', mobileShare);
   // Brief 33 Task 5b — the hard overflow:hidden lock that used to live
@@ -3406,13 +3425,20 @@ function updateMobileScreens() {
 // so getBoundingClientRect() on the screen doesn't include it) from the
 // viewport height, then scales the screen to fit what's left.
 //
-// Mobile no longer needs any of this (brief 32) — the two mobile screens
+// Phones no longer need any of this (brief 32) — the two mobile screens
 // are fluid CSS (width:100%, aspect-ratio:1000/630), not the desktop's
 // fixed-1000px layout scaled down by a JS transform, so there is nothing
-// left to compute here for a touch visitor. updateMobileScreens() picks
-// the right screen; this function returns immediately after, on purpose —
-// not relying on getBoundingClientRect() happening to return a 0x0 rect
-// for a real-display:none desktop .screen the way a deleted branch would.
+// left to compute here for a phone. updateMobileScreens() picks the right
+// screen; this function returns immediately after, on purpose — not
+// relying on getBoundingClientRect() happening to return a 0x0 rect for a
+// real-display:none desktop .screen the way a deleted branch would.
+//
+// Brief 41 Task 2 — height-only became two-axis, and now runs for tablets
+// (it used to early-return for every touch device): the board is a fixed
+// 1000px wide, so an iPad mini portrait (768) overflows without a WIDTH
+// clamp, not just a height one. One uniform scale from the tighter axis,
+// never one axis alone (same non-uniform-compression rule as above).
+// Desktop >=1000px wide and tall enough resolves to scale 1 — unchanged.
 function fitScreenToViewport() {
   const visible = screens[screenState];
   if (!visible) return;
@@ -3421,7 +3447,7 @@ function fitScreenToViewport() {
   visible.style.marginBottom = '';
 
   updateMobileScreens();
-  if (isTouchDevice()) return;
+  if (isPhone()) return;
 
   // Brief 28 Task 4 — results deliberately does NOT get the fit clamp: it's
   // a resting screen, allowed to be taller than the viewport and scroll.
@@ -3434,10 +3460,31 @@ function fitScreenToViewport() {
   if (screenState === 'results') return;
   const bodyStyle = getComputedStyle(document.body);
   const vPad = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
-  const available = window.innerHeight - vPad;
+  const hPad = parseFloat(bodyStyle.paddingLeft) + parseFloat(bodyStyle.paddingRight);
+  const availH = window.innerHeight - vPad;
+  const availW = document.documentElement.clientWidth - hPad;
   const rect = visible.getBoundingClientRect();
-  if (available > 0 && rect.height > available) {
-    const scale = available / rect.height;
+  // The paddles' end-dots (and playing's "you" label) hang OUTSIDE the
+  // board by design — up to ~20px (idle) / ~37px (playing) past each side,
+  // none of which is part of the .screen's own box. Measured, not
+  // hard-coded: without reserving it the board would fill a tablet's width
+  // edge to edge and the overhang would be clipped / force sideways scroll.
+  // Symmetric (the scale pivots on top-center), so the wider side wins.
+  // Cost: a desktop window narrower than ~1040-1075px now scales a few %
+  // instead of clipping the dots; anything wider than ~1075px is untouched
+  // (scale 1).
+  // Floored at --gutter-mobile (16px) so a screen with no paddles (share)
+  // never lands flush against the viewport edges either.
+  let overhang = 16;
+  visible.querySelectorAll('.paddle, .paddle *').forEach((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width > 0) overhang = Math.max(overhang, rect.left - r.left, r.right - rect.right);
+  });
+  const fitW = rect.width + 2 * overhang;
+  const scale = (availW > 0 && availH > 0 && fitW > 0 && rect.height > 0)
+    ? Math.min(availW / fitW, availH / rect.height, 1)
+    : 1;
+  if (scale < 1) {
     visible.style.transform = `scale(${scale})`;
     visible.style.transformOrigin = 'top center';
     // transform:scale() is paint-only — it does NOT shrink the element's
@@ -3449,6 +3496,9 @@ function fitScreenToViewport() {
   }
 }
 window.addEventListener('resize', fitScreenToViewport);
+// Brief 41 Task 2 — iOS fires resize on rotate too, but the explicit
+// listener makes the re-fit immediate and reliable.
+window.addEventListener('orientationchange', fitScreenToViewport);
 document.body.dataset.screen = 'idle'; // initial state — setScreen() isn't called for the starting idle screen
 fitScreenToViewport();
 
@@ -5016,11 +5066,21 @@ const GUARD_HEIGHT = 2;
 // so the cursor tracks correctly even over the paddles/frame, mapped into
 // canvas coordinate space via getBoundingClientRect. Gated to the playing
 // screen only.
-document.addEventListener('mousemove', (e) => {
+// Brief 41 Task 1 — Pointer Events, not mousemove: one listener drives the
+// paddle from a mouse, a finger or a stylus alike (a second mousemove
+// handler alongside would double-fire on a mouse). getBoundingClientRect()
+// is the ON-SCREEN rect, so the tablet fit's scale transform (brief 41
+// Task 2) is already accounted for in the mapping. passive:false so
+// preventDefault() can take effect while playing; the gesture itself is
+// kept off the browser's scroll/zoom by body[data-screen="playing"]
+// { touch-action:none } (CSS above) — touch-action is what actually
+// decides that, preventDefault here is belt-and-braces.
+document.addEventListener('pointermove', (e) => {
   if (screenState !== 'playing') return;
+  e.preventDefault();
   const r = gameCanvas.getBoundingClientRect();
   gameMouseY = (e.clientY - r.top) * (H / r.height);
-});
+}, { passive: false });
 
 // Brief 27 Task 5 — root's own idiom (~lines 1198-1211): read the OLD value
 // off the DOM text itself before overwriting it, so only the side that
@@ -6394,7 +6454,7 @@ function renderSharePage(decoded) {
 
   // Brief 32 Task 2 — same blit, mobile share's own pair. Both canvas
   // pairs stay in sync regardless of which is actually visible; simpler
-  // and cheap enough not to bother gating on isTouchDevice().
+  // and cheap enough not to bother gating on isPhone().
   mobileShareGroundCx.clearRect(0, 0, mobileShareGroundCanvas.width, mobileShareGroundCanvas.height);
   mobileShareGroundCx.drawImage(shareGroundCvFull, 0, 0, mobileShareGroundCanvas.width, mobileShareGroundCanvas.height);
   mobileShareStrokesCx.clearRect(0, 0, mobileShareStrokesCanvas.width, mobileShareStrokesCanvas.height);
@@ -6620,7 +6680,7 @@ function isLandscapeViewport() {
 // min(innerHeight-32, (innerWidth-32) * 1000/630) — MOBILE-NOTES.md §4 /
 // the design's own sizeRot(). clientWidth/clientHeight, not innerWidth/
 // innerHeight — same viewport-reporting mismatch documented on
-// isTouchDevice() applies here too.
+// isPhone() applies here too.
 function sizeFullRot() {
   if (isLandscapeViewport()) {
     fullRotEl.style.transform = 'translate(-50%, -50%)'; // skip the rotation, fit width
